@@ -536,8 +536,20 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    msg1 += "  └ Süre: " + ago_str + "\n";
    msg1 += "- Swing High: " + DoubleToString(h_m1, _Digits) + "\n";
    msg1 += "- Swing Low: " + DoubleToString(l_m1, _Digits) + "\n";
-   if(p_m1 <= 10.0 && mp_m1 <= 10.0) msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Trend Şişkin, Düzeltme Bekleniyor)\n";
-   else msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 0) + " ↑↑%" + DoubleToString(mp_m1, 0) + ")\n\n";
+   if(p_m1 == 0 && mp_m1 == 0)
+     {
+      string temp_dir = (t_m1 == 1) ? "SELL" : "BUY";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + "\n";
+      msg1 += "⚠️ DİKKAT: Trend şişkin! M1 için kısa süreli düzeltme hareketi (" + temp_dir + ") fırsatı beklenebilir.\n\n";
+     }
+   else if(p_m1 <= 10.0 && mp_m1 <= 10.0)
+     {
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Trend Şişkin, Düzeltme Bekleniyor)\n\n";
+     }
+   else
+     {
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 0) + " ↑↑%" + DoubleToString(mp_m1, 0) + ")\n\n";
+     }
 
    msg1 += "🧭 MAKRO TREND (H1/M30)\n";
    msg1 += "Durum: " + (bull_pressure >= 50 ? "🟢 YÜKSELİŞ" : "🔴 DÜŞÜŞ") + " (%" + DoubleToString(bull_pressure, 0) + " Boğa Baskısı)\n";
