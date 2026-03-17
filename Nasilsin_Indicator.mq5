@@ -1273,7 +1273,7 @@ int OnCalculate(const int rates_total,
             g_last_alert_trend = g_state_curr.maj_tr;
            }
 
-         bool trig1 = (live_pct >= InpTriggerLevel1 && live_pct < 100.0 && !g_level1_triggered);
+         bool trig1 = (live_pct >= InpTriggerLevel1 && live_pct < InpTriggerLevel2 && !g_level1_triggered);
          bool trig2 = (live_pct >= InpTriggerLevel2 && live_pct < 100.0 && !g_level2_triggered);
 
          if(trig1 || trig2 || InpTestMode)
