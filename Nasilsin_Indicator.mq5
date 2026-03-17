@@ -376,6 +376,7 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    st.trig_h  = high[0]; st.trig_l  = low[0];
    st.tmp_h   = high[0]; st.tmp_h_i = 0; st.tmp_l   = low[0]; st.tmp_l_i = 0;
    st.min_tr  = (close[0] > rates[0].open) ? 1 : -1;
+
    st.maj_h = EMPTY_VALUE; st.maj_l = EMPTY_VALUE; st.maj_tr = 0; st.maj_st = 0; st.bos_i = 0;
 
    for(int i = 1; i < copied; i++)
@@ -1192,62 +1193,8 @@ int OnCalculate(const int rates_total,
 
    if(prev_calculated == 0)
      {
-      double base_days = GetDaysForTF(Period());
-      double tf_days = base_days;
-      bool structure_found = false;
-      int max_attempts = 15; // En fazla 15 gün daha geriye git
-      int start_idx = 0;
-
-      for(int attempt = 0; attempt < max_attempts; attempt++)
-        {
-         g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
-         start_idx = 0;
-         for(int k=0; k<rates_total; k++) {
-            if(time[k] >= g_anchor_time) {
-               start_idx = k;
-               break;
-            }
-         }
-
-         SState temp_state;
-         temp_state.min_h   = high[start_idx];
-         temp_state.min_h_i = start_idx;
-         temp_state.min_l   = low[start_idx];
-         temp_state.min_l_i = start_idx;
-         temp_state.trig_h  = high[start_idx];
-         temp_state.trig_l  = low[start_idx];
-         temp_state.tmp_h   = high[start_idx];
-         temp_state.tmp_h_i = start_idx;
-         temp_state.tmp_l   = low[start_idx];
-         temp_state.tmp_l_i = start_idx;
-         temp_state.min_tr  = (close[start_idx] > open[start_idx]) ? 1 : -1;
-         temp_state.anc_i   = start_idx;
-         temp_state.anc_v   = close[start_idx];
-         temp_state.lp_i    = start_idx;
-         temp_state.lp_p    = close[start_idx];
-         temp_state.maj_h = EMPTY_VALUE;
-         temp_state.maj_l = EMPTY_VALUE;
-         temp_state.maj_tr = 0;
-         temp_state.maj_st = 0;
-         temp_state.bos_i = start_idx;
-
-         for(int i = start_idx + 1; i < rates_total - 1; i++)
-           {
-            bool inside = (high[i] <= high[i-1]) && (low[i] >= low[i-1]);
-            if(!inside)
-              {
-               ProcessBarMathOnly(i, high, low, close, temp_state);
-              }
-           }
-
-         if(temp_state.maj_tr != 0)
-           {
-            structure_found = true;
-            break; // Geçerli yapı bulundu
-           }
-
-         tf_days += 1.0; // Bulunamadıysa 1 gün daha geriye git
-        }
+      double tf_days = GetDaysForTF(Period());
+      g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
 
       g_counter = 0;
       g_last_alert_maj_h = 0;
@@ -1261,6 +1208,14 @@ int OnCalculate(const int rates_total,
       ObjectsDeleteAll(0, "Major_");
       ObjectsDeleteAll(0, "HLine_");
       ObjectsDeleteAll(0, "LiveLeg_");
+
+      int start_idx = 0;
+      for(int k=0; k<rates_total; k++) {
+         if(time[k] >= g_anchor_time) {
+            start_idx = k;
+            break;
+         }
+      }
 
       g_state_hist.min_h   = high[start_idx];
       g_state_hist.min_h_i = start_idx;
@@ -1278,11 +1233,26 @@ int OnCalculate(const int rates_total,
       g_state_hist.lp_i    = start_idx;
       g_state_hist.lp_p    = close[start_idx];
 
-      g_state_hist.maj_h = EMPTY_VALUE;
-      g_state_hist.maj_l = EMPTY_VALUE;
-      g_state_hist.maj_tr = 0;
-      g_state_hist.maj_st = 0;
+      // Başlangıçta yapının (maj) boş kalmaması için ince bir ATR aralığında yapay swing oluşturuluyor.
+      double initial_atr = 0;
+      double atr_arr[];
+      // Optimizasyon & Hata Engelleme: start_idx dizinin sonlarına doğruysa
+      // iATR 0 noktasından (anlık bar) almak yerine rates_total-start_idx posizyonundan almalıdır
+      // Daha güvenli çözüm: Başlangıç barının yüksekliği (veya bir önceki bar) ATR yerine kullanılır,
+      // gereksiz Handle oluşturma engellenir.
+      initial_atr = (high[start_idx] - low[start_idx]);
+      if(initial_atr == 0) initial_atr = Point() * 10;
+
+      double tiny_gap = initial_atr * 0.1; // "İnce kesilmiş tırnak" kadar boşluk
+
+      g_state_hist.maj_h = high[start_idx] + tiny_gap;
+      g_state_hist.maj_l = low[start_idx] - tiny_gap;
+      g_state_hist.maj_tr = g_state_hist.min_tr; // Trendi minör yöne bağla
+      g_state_hist.maj_st = 1;
       g_state_hist.bos_i = start_idx;
+
+      g_state_hist.maj_h_i = start_idx;
+      g_state_hist.maj_l_i = start_idx;
 
       limit = start_idx + 1;
      }
