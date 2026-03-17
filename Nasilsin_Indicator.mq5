@@ -34,6 +34,7 @@ input double InpMomentumMinPeak  = 30.0;
 input double InpMomentumMinBounce= 20.0;
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
+input bool   InpNotificationFilter = false;          // Bildirim Filtresi (True: Sadece Swing İçi, False: Kırılımdan İtibaren)
 input bool   InpTestMode         = false;
 
 //--- Globals ---
@@ -216,15 +217,17 @@ string GetUniqueName(string prefix)
 
 double GetDaysForTF(ENUM_TIMEFRAMES tf)
   {
-   if(tf == PERIOD_M1) return InpDaysM1;
-   if(tf == PERIOD_M3) return InpDaysM3;
-   if(tf == PERIOD_M5) return InpDaysM5;
-   if(tf == PERIOD_M15) return InpDaysM15;
-   if(tf == PERIOD_M30) return InpDaysM30;
-   if(tf == PERIOD_H1) return InpDaysH1;
-   if(tf == PERIOD_H4) return InpDaysH4;
-   if(tf == PERIOD_D1) return InpDaysD1;
-   return InpDaysM1;
+   double days = InpDaysM1;
+   if(tf == PERIOD_M1) days = InpDaysM1;
+   else if(tf == PERIOD_M3) days = InpDaysM3;
+   else if(tf == PERIOD_M5) days = InpDaysM5;
+   else if(tf == PERIOD_M15) days = InpDaysM15;
+   else if(tf == PERIOD_M30) days = InpDaysM30;
+   else if(tf == PERIOD_H1) days = InpDaysH1;
+   else if(tf == PERIOD_H4) days = InpDaysH4;
+   else if(tf == PERIOD_D1) days = InpDaysD1;
+
+   return days;
   }
 
 void ProcessBarMathOnly(int i, const double &high[], const double &low[], const double &close[], SState &state)
@@ -1189,8 +1192,62 @@ int OnCalculate(const int rates_total,
 
    if(prev_calculated == 0)
      {
-      double tf_days = GetDaysForTF(Period());
-      g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
+      double base_days = GetDaysForTF(Period());
+      double tf_days = base_days;
+      bool structure_found = false;
+      int max_attempts = 15; // En fazla 15 gün daha geriye git
+      int start_idx = 0;
+
+      for(int attempt = 0; attempt < max_attempts; attempt++)
+        {
+         g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
+         start_idx = 0;
+         for(int k=0; k<rates_total; k++) {
+            if(time[k] >= g_anchor_time) {
+               start_idx = k;
+               break;
+            }
+         }
+
+         SState temp_state;
+         temp_state.min_h   = high[start_idx];
+         temp_state.min_h_i = start_idx;
+         temp_state.min_l   = low[start_idx];
+         temp_state.min_l_i = start_idx;
+         temp_state.trig_h  = high[start_idx];
+         temp_state.trig_l  = low[start_idx];
+         temp_state.tmp_h   = high[start_idx];
+         temp_state.tmp_h_i = start_idx;
+         temp_state.tmp_l   = low[start_idx];
+         temp_state.tmp_l_i = start_idx;
+         temp_state.min_tr  = (close[start_idx] > open[start_idx]) ? 1 : -1;
+         temp_state.anc_i   = start_idx;
+         temp_state.anc_v   = close[start_idx];
+         temp_state.lp_i    = start_idx;
+         temp_state.lp_p    = close[start_idx];
+         temp_state.maj_h = EMPTY_VALUE;
+         temp_state.maj_l = EMPTY_VALUE;
+         temp_state.maj_tr = 0;
+         temp_state.maj_st = 0;
+         temp_state.bos_i = start_idx;
+
+         for(int i = start_idx + 1; i < rates_total - 1; i++)
+           {
+            bool inside = (high[i] <= high[i-1]) && (low[i] >= low[i-1]);
+            if(!inside)
+              {
+               ProcessBarMathOnly(i, high, low, close, temp_state);
+              }
+           }
+
+         if(temp_state.maj_tr != 0)
+           {
+            structure_found = true;
+            break; // Geçerli yapı bulundu
+           }
+
+         tf_days += 1.0; // Bulunamadıysa 1 gün daha geriye git
+        }
 
       g_counter = 0;
       g_last_alert_maj_h = 0;
@@ -1204,14 +1261,6 @@ int OnCalculate(const int rates_total,
       ObjectsDeleteAll(0, "Major_");
       ObjectsDeleteAll(0, "HLine_");
       ObjectsDeleteAll(0, "LiveLeg_");
-
-      int start_idx = 0;
-      for(int k=0; k<rates_total; k++) {
-         if(time[k] >= g_anchor_time) {
-            start_idx = k;
-            break;
-         }
-      }
 
       g_state_hist.min_h   = high[start_idx];
       g_state_hist.min_h_i = start_idx;
@@ -1312,8 +1361,19 @@ int OnCalculate(const int rates_total,
             g_last_alert_trend = g_state_curr.maj_tr;
            }
 
-         bool trig1 = (live_pct >= InpTriggerLevel1 && !g_level1_triggered);
-         bool trig2 = (live_pct >= InpTriggerLevel2 && !g_level2_triggered);
+         bool trig1 = false;
+         bool trig2 = false;
+
+         if (InpNotificationFilter)
+           {
+            trig1 = (live_pct >= InpTriggerLevel1 && live_pct < InpTriggerLevel2 && !g_level1_triggered);
+            trig2 = (live_pct >= InpTriggerLevel2 && live_pct < 100.0 && !g_level2_triggered);
+           }
+         else
+           {
+            trig1 = (live_pct >= InpTriggerLevel1 && !g_level1_triggered);
+            trig2 = (live_pct >= InpTriggerLevel2 && !g_level2_triggered);
+           }
 
          if(trig1 || trig2 || InpTestMode)
            {
