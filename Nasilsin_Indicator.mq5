@@ -409,16 +409,8 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
         {
          if(live_p >= st.maj_h || st.maj_st == 0)
            {
-            double dyn_range = st.tmp_h - st.maj_l;
-            if(dyn_range > 0)
-              {
-               pct = ((st.tmp_h - live_p) / dyn_range) * 100.0;
-               max_pct = ((st.tmp_h - st.tmp_l) / dyn_range) * 100.0;
-              }
-            else
-              {
-               pct = 0; max_pct = 0;
-              }
+            pct = 0;
+            max_pct = 0;
            }
          else
            {
@@ -430,16 +422,8 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
         {
          if(live_p <= st.maj_l || st.maj_st == 0)
            {
-            double dyn_range = st.maj_h - st.tmp_l;
-            if(dyn_range > 0)
-              {
-               pct = ((live_p - st.tmp_l) / dyn_range) * 100.0;
-               max_pct = ((st.tmp_h - st.tmp_l) / dyn_range) * 100.0;
-              }
-            else
-              {
-               pct = 0; max_pct = 0;
-              }
+            pct = 0;
+            max_pct = 0;
            }
          else
            {
