@@ -409,7 +409,9 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
         {
          if(live_p >= st.maj_h || st.maj_st == 0)
            {
-            pct = 0;
+            double dyn_range = st.tmp_h - st.maj_l;
+            if(dyn_range > 0) pct = ((st.tmp_h - live_p) / dyn_range) * 100.0;
+            else pct = 0;
             max_pct = 0;
            }
          else
@@ -422,7 +424,9 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
         {
          if(live_p <= st.maj_l || st.maj_st == 0)
            {
-            pct = 0;
+            double dyn_range = st.maj_h - st.tmp_l;
+            if(dyn_range > 0) pct = ((live_p - st.tmp_l) / dyn_range) * 100.0;
+            else pct = 0;
             max_pct = 0;
            }
          else
@@ -1294,6 +1298,13 @@ int OnCalculate(const int rates_total,
              g_state_curr.maj_l != g_last_alert_maj_l ||
              g_state_curr.maj_tr != g_last_alert_trend)
            {
+            if (g_last_alert_trend != 0 && g_state_curr.maj_tr != g_last_alert_trend)
+              {
+               string new_dir = (g_state_curr.maj_tr == 1) ? "YUKARI" : "AŞAĞI";
+               string trend_msg = "🚨 [" + Symbol() + "] M1 Trend Döndü! Yeni Yön: " + new_dir;
+               if(InpAlertPopup) Alert(trend_msg);
+               if(InpAlertPush)  SendNotification(trend_msg);
+              }
             g_level1_triggered = false;
             g_level2_triggered = false;
             g_last_alert_maj_h = g_state_curr.maj_h;
