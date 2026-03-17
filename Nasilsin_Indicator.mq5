@@ -377,7 +377,17 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    st.tmp_h   = high[0]; st.tmp_h_i = 0; st.tmp_l   = low[0]; st.tmp_l_i = 0;
    st.min_tr  = (close[0] > rates[0].open) ? 1 : -1;
 
-   st.maj_h = EMPTY_VALUE; st.maj_l = EMPTY_VALUE; st.maj_tr = 0; st.maj_st = 0; st.bos_i = 0;
+   double initial_gap = (high[0] - low[0]);
+   if(initial_gap == 0) initial_gap = Point() * 10;
+   double tiny_gap = initial_gap * 0.1;
+
+   st.maj_h = high[0] + tiny_gap;
+   st.maj_l = low[0] - tiny_gap;
+   st.maj_tr = st.min_tr;
+   st.maj_st = 1;
+   st.bos_i = 0;
+   st.maj_h_i = 0;
+   st.maj_l_i = 0;
 
    for(int i = 1; i < copied; i++)
      {
