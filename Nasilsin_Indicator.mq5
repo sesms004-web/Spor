@@ -407,13 +407,45 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
       double range = st.maj_h - st.maj_l;
       if(trend == 1)
         {
-         pct = ((st.maj_h - live_p) / range) * 100.0;
-         max_pct = ((st.maj_h - st.tmp_l) / range) * 100.0;
+         if(live_p >= st.maj_h || st.maj_st == 0)
+           {
+            double dyn_range = st.tmp_h - st.maj_l;
+            if(dyn_range > 0)
+              {
+               pct = ((st.tmp_h - live_p) / dyn_range) * 100.0;
+               max_pct = ((st.tmp_h - st.tmp_l) / dyn_range) * 100.0;
+              }
+            else
+              {
+               pct = 0; max_pct = 0;
+              }
+           }
+         else
+           {
+            pct = ((st.maj_h - live_p) / range) * 100.0;
+            max_pct = ((st.maj_h - st.tmp_l) / range) * 100.0;
+           }
         }
       else if(trend == -1)
         {
-         pct = ((live_p - st.maj_l) / range) * 100.0;
-         max_pct = ((st.tmp_h - st.maj_l) / range) * 100.0;
+         if(live_p <= st.maj_l || st.maj_st == 0)
+           {
+            double dyn_range = st.maj_h - st.tmp_l;
+            if(dyn_range > 0)
+              {
+               pct = ((live_p - st.tmp_l) / dyn_range) * 100.0;
+               max_pct = ((st.tmp_h - st.tmp_l) / dyn_range) * 100.0;
+              }
+            else
+              {
+               pct = 0; max_pct = 0;
+              }
+           }
+         else
+           {
+            pct = ((live_p - st.maj_l) / range) * 100.0;
+            max_pct = ((st.tmp_h - st.maj_l) / range) * 100.0;
+           }
         }
      }
 
@@ -1273,8 +1305,8 @@ int OnCalculate(const int rates_total,
             g_last_alert_trend = g_state_curr.maj_tr;
            }
 
-         bool trig1 = (live_pct >= InpTriggerLevel1 && live_pct < InpTriggerLevel2 && !g_level1_triggered);
-         bool trig2 = (live_pct >= InpTriggerLevel2 && live_pct < 100.0 && !g_level2_triggered);
+         bool trig1 = (live_pct >= InpTriggerLevel1 && !g_level1_triggered);
+         bool trig2 = (live_pct >= InpTriggerLevel2 && !g_level2_triggered);
 
          if(trig1 || trig2 || InpTestMode)
            {
