@@ -1322,37 +1322,48 @@ int OnCalculate(const int rates_total,
       double dmy_mpct;
       if (GetMTFPullback(PERIOD_M1, live_trend, live_pct, dmy_mpct, time[last_idx], dmy_h, dmy_l, dmy_th, dmy_tl))
         {
-         // Reset triggers if swing changed
-         if (g_state_curr.maj_h != g_last_alert_maj_h ||
-             g_state_curr.maj_l != g_last_alert_maj_l ||
-             g_state_curr.maj_tr != g_last_alert_trend)
+         // Reset triggers if swing changed (only when fully confirmed by a bar close / definitive state update)
+         // Kullanıcının Spam ve Kapanış talebi: "swing çizgisinin üstünde altında BİR KERE KAPANIŞ OLUR 1 kere atar"
+         // Anlık iğnelerde (tick) spam atmasını engellemek için kapanışı bekliyoruz (inside_last == false) veya
+         // sadece bar kapandığında state güncellendiği için geçmiş history tablosunu (g_state_hist) referans alıyoruz.
+
+         if (g_state_hist.maj_h != g_last_alert_maj_h ||
+             g_state_hist.maj_l != g_last_alert_maj_l ||
+             g_state_hist.maj_tr != g_last_alert_trend)
            {
-            if (g_last_alert_trend != 0 && g_state_curr.maj_tr != g_last_alert_trend)
+            // g_state_hist kapanışta işlendiği için burada kırılım onaylıdır. Oyalanma anındaki iğneler tetiklemez.
+            if (g_last_alert_trend != 0 && g_state_hist.maj_tr != g_last_alert_trend)
               {
-               string new_dir = (g_state_curr.maj_tr == 1) ? "YUKARI" : "AŞAĞI";
+               string new_dir = (g_state_hist.maj_tr == 1) ? "YUKARI" : "AŞAĞI";
                string trend_msg = "🚨 [" + Symbol() + "] M1 Trend Döndü! Yeni Yön: " + new_dir;
                if(InpAlertPopup) Alert(trend_msg);
                if(InpAlertPush)  SendNotification(trend_msg);
               }
             g_level1_triggered = false;
             g_level2_triggered = false;
-            g_last_alert_maj_h = g_state_curr.maj_h;
-            g_last_alert_maj_l = g_state_curr.maj_l;
-            g_last_alert_trend = g_state_curr.maj_tr;
+            g_last_alert_maj_h = g_state_hist.maj_h;
+            g_last_alert_maj_l = g_state_hist.maj_l;
+            g_last_alert_trend = g_state_hist.maj_tr;
            }
 
          bool trig1 = false;
          bool trig2 = false;
 
-         if (InpNotificationFilter)
+         // "100'e gelince bildirim atıyor onu kökten çöz"
+         // live_pct >= 98.0 demek artık trendin sınırında olması demektir. Bu durumda %100 veya %99 pull back
+         // spam bildirim atmamalı. Çünkü bu an kırılımdır ve "Trend Döndü!" mesajı atılmalıdır.
+         if(live_pct < 98.0)
            {
-            trig1 = (live_pct >= InpTriggerLevel1 && live_pct < InpTriggerLevel2 && !g_level1_triggered);
-            trig2 = (live_pct >= InpTriggerLevel2 && live_pct < 100.0 && !g_level2_triggered);
-           }
-         else
-           {
-            trig1 = (live_pct >= InpTriggerLevel1 && !g_level1_triggered);
-            trig2 = (live_pct >= InpTriggerLevel2 && !g_level2_triggered);
+            if (InpNotificationFilter)
+              {
+               trig1 = (live_pct >= InpTriggerLevel1 && live_pct < InpTriggerLevel2 && !g_level1_triggered);
+               trig2 = (live_pct >= InpTriggerLevel2 && !g_level2_triggered);
+              }
+            else
+              {
+               trig1 = (live_pct >= InpTriggerLevel1 && !g_level1_triggered);
+               trig2 = (live_pct >= InpTriggerLevel2 && !g_level2_triggered);
+              }
            }
 
          if(trig1 || trig2 || InpTestMode)
