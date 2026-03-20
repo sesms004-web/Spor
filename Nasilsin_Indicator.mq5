@@ -1337,9 +1337,9 @@ int OnCalculate(const int rates_total,
          int sz_h = g_state_curr.st_h.Size();
          int sz_l = g_state_curr.st_l.Size();
 
-         // Bullish QML: Ana trend 1 (YUKARI) iken, düzeltme (pullback) aşağı doğru olur.
-         // Düzeltme içinde düşen minör yapı (L1, H1, L2, H2) aranır.
-         // Zamanlama (Index) kontrolü: L1 < H1 < L2 < H2 olmalıdır!
+         // Bullish QML: Ana trend YUKARI (1) iken minör düzeltmenin aşağı yönlü zikzaklarından
+         // dönüş aranır. (Sol omuz = L1, Baş = L2, Sağ Omuz/Kırılım = H2)
+         // Kullanıcı isteği: Basitleştir, zaman kontrollerini esnet ki ekranda rahatça görünsün.
          if(live_trend == 1 && sz_h >= 2 && sz_l >= 2)
            {
             double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
@@ -1347,25 +1347,18 @@ int OnCalculate(const int rates_total,
             double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
             double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
 
-            int iH2 = g_state_curr.st_h.GetIdx(sz_h - 1);
-            int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
-            int iL2 = g_state_curr.st_l.GetIdx(sz_l - 1);
             int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
 
-            // Fiyat koşulu: Lower Low (L2 < L1) ve Higher High (H2 > H1)
-            // Zaman koşulu (kronolojik olarak son oluşan bar H2 olmalı): iL1 < iH1 < iL2 < iH2
-            if(L2 < L1 && H2 > H1 && iL1 < iH1 && iH1 < iL2 && iL2 < iH2)
+            // Sadece fiyatsal QML (Daha düşük dip ve ardından gelen Daha Yüksek Tepe) şartı
+            if(L2 < L1 && H2 > H1)
               {
                string qml_name = "QML_Bull_" + IntegerToString(time[iL1]);
-               // Aynı isimde obje yoksa çizilir (böylece silinme problemi olmaz, geçmiş test edilebilir)
-               // Kullanıcı talebi: Çizgiler biraz daha kalın ve belirgin olsun (3 seviye), renk daha parlak mor (Magenta)
                if(ObjectFind(0, qml_name) < 0)
                   DrawLine(qml_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*5, L1, clrMagenta, 3, STYLE_SOLID, true);
               }
            }
-         // Bearish QML: Ana trend -1 (AŞAĞI) iken, düzeltme yukarı doğrudur.
-         // Düzeltme içinde yükselen minör yapı (H1, L1, H2, L2) aranır.
-         // Zamanlama (Index) kontrolü: H1 < L1 < H2 < L2 olmalıdır!
+         // Bearish QML: Ana trend AŞAĞI (-1) iken minör düzeltmenin yukarı yönlü zikzaklarından
+         // dönüş aranır. (Sol omuz = H1, Baş = H2, Sağ Omuz/Kırılım = L2)
          else if(live_trend == -1 && sz_h >= 2 && sz_l >= 2)
            {
             double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
@@ -1373,14 +1366,10 @@ int OnCalculate(const int rates_total,
             double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
             double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
 
-            int iH2 = g_state_curr.st_h.GetIdx(sz_h - 1);
             int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
-            int iL2 = g_state_curr.st_l.GetIdx(sz_l - 1);
-            int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
 
-            // Fiyat koşulu: Higher High (H2 > H1) ve Lower Low (L2 < L1)
-            // Zaman koşulu: iH1 < iL1 < iH2 < iL2
-            if(H2 > H1 && L2 < L1 && iH1 < iL1 && iL1 < iH2 && iH2 < iL2)
+            // Sadece fiyatsal QML (Daha yüksek tepe ve ardından gelen Daha Düşük Dip) şartı
+            if(H2 > H1 && L2 < L1)
               {
                string qml_name = "QML_Bear_" + IntegerToString(time[iH1]);
                if(ObjectFind(0, qml_name) < 0)
