@@ -48,6 +48,8 @@ double g_last_alert_maj_l = 0;
 int g_last_alert_trend = 0;
 bool g_level1_triggered = false;
 bool g_level2_triggered = false;
+bool g_level1_missed = false;
+bool g_level2_missed = false;
 
 void DrawLine(string name, datetime time1, double price1, datetime time2, double price2, color clr, int width, ENUM_LINE_STYLE style, bool ray_right=false)
   {
@@ -497,7 +499,7 @@ string PctToText(double pct, double max_pct, datetime swing_time, datetime curre
 //+------------------------------------------------------------------+
 //| MTF Alert System (Smart Algorithmic Decision Engine)             |
 //+------------------------------------------------------------------+
-bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int triggered_level)
+bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int triggered_level, bool is_revisit=false)
   {
 
    int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
@@ -542,6 +544,11 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    string lvl_text = (triggered_level == 2) ? DoubleToString(InpTriggerLevel2,0) : DoubleToString(InpTriggerLevel1,0);
    string msg1 = "🚨 [" + Symbol() + "] M1 Hedef Seviyede! (BÖLÜM 1/2)\n";
    if(InpTestMode) msg1 = "🧪 [TEST MODU - " + Symbol() + "] (BÖLÜM 1/2)\n";
+
+   if(is_revisit)
+     {
+      msg1 += "⚠️ DİKKAT: Fiyat hedefi sert geçmişti. Bu bir geri dönüş (Re-visit) bildirimidir!\n\n";
+     }
 
    string swing_dir = t_m1 == 1 ? "🟢 YUKARI" : "🔴 AŞAĞI";
    datetime start_t = t_m1 == 1 ? tl_m1 : th_m1;
@@ -1212,6 +1219,8 @@ int OnCalculate(const int rates_total,
       g_last_alert_trend = 0;
       g_level1_triggered = false;
       g_level2_triggered = false;
+      g_level1_missed = false;
+      g_level2_missed = false;
 
       ObjectsDeleteAll(0, "Structure_");
       ObjectsDeleteAll(0, "Minor_");
@@ -1341,6 +1350,8 @@ int OnCalculate(const int rates_total,
               }
             g_level1_triggered = false;
             g_level2_triggered = false;
+            g_level1_missed = false;
+            g_level2_missed = false;
             g_last_alert_maj_h = g_state_hist.maj_h;
             g_last_alert_maj_l = g_state_hist.maj_l;
             g_last_alert_trend = g_state_hist.maj_tr;
@@ -1348,31 +1359,47 @@ int OnCalculate(const int rates_total,
 
          bool trig1 = false;
          bool trig2 = false;
+         bool is_revisit_1 = false;
+         bool is_revisit_2 = false;
 
          // "100'e gelince bildirim atıyor onu kökten çöz"
          // live_pct >= 98.0 demek artık trendin sınırında olması demektir. Bu durumda %100 veya %99 pull back
          // spam bildirim atmamalı. Çünkü bu an kırılımdır ve "Trend Döndü!" mesajı atılmalıdır.
          if(live_pct < 98.0)
            {
+            // Fiyatın hedeften (örn 40) çok uzakta (örn 88) olması durumunda sahte "40" bildirimini engellemek için,
+            // tetiklenme şartını (live_pct) hedefe olan belli bir toleransla sınırlandırıyoruz.
+            // Toleransı (örneğin hedef + 10 puan) yapıyoruz ki hem çok hızlı geçen/atlayan barlarda bildirimi yakalayabilsin
+            // hem de sertçe 88'e çıkan bir fiyat, geri çekilip 40'a geldiğinde hakkı yanmadığı için (g_level_triggered=true yapmadık)
+            // tekrar kesinlikle bildirim atabilsin.
+
+            // Eğer fiyat tolerans bandını çoktan geçmişse (örn: 80'deyse) ve bildirim atmadıysa "missed" bayrağı kalkar.
+            if(live_pct > InpTriggerLevel1 + 10.0 && !g_level1_triggered) g_level1_missed = true;
+            if(live_pct > InpTriggerLevel2 + 10.0 && !g_level2_triggered) g_level2_missed = true;
+
             if (InpNotificationFilter)
               {
                trig1 = (live_pct >= InpTriggerLevel1 && live_pct < InpTriggerLevel2 && !g_level1_triggered);
-               trig2 = (live_pct >= InpTriggerLevel2 && !g_level2_triggered);
+               trig2 = (live_pct >= InpTriggerLevel2 && live_pct < 100.0 && !g_level2_triggered);
               }
             else
               {
-               trig1 = (live_pct >= InpTriggerLevel1 && !g_level1_triggered);
-               trig2 = (live_pct >= InpTriggerLevel2 && !g_level2_triggered);
+               trig1 = (live_pct >= InpTriggerLevel1 && live_pct <= InpTriggerLevel1 + 10.0 && !g_level1_triggered);
+               trig2 = (live_pct >= InpTriggerLevel2 && live_pct <= InpTriggerLevel2 + 10.0 && !g_level2_triggered);
               }
+
+            if(trig1 && g_level1_missed) is_revisit_1 = true;
+            if(trig2 && g_level2_missed) is_revisit_2 = true;
            }
 
          if(trig1 || trig2 || InpTestMode)
            {
             int trigger_lvl = trig2 ? 2 : 1;
-            bool success = TriggerMTFAlert(last_idx, time[last_idx], close[last_idx], trigger_lvl);
+            bool is_revisit = (trigger_lvl == 2) ? is_revisit_2 : is_revisit_1;
+            bool success = TriggerMTFAlert(last_idx, time[last_idx], close[last_idx], trigger_lvl, is_revisit);
             if(success && !InpTestMode) {
-               if(trig1) g_level1_triggered = true;
-               if(trig2) g_level2_triggered = true;
+               if(trig1) { g_level1_triggered = true; g_level1_missed = false; }
+               if(trig2) { g_level2_triggered = true; g_level2_missed = false; }
             }
            }
         }
