@@ -1331,62 +1331,60 @@ int OnCalculate(const int rates_total,
       double dmy_mpct;
       if (GetMTFPullback(PERIOD_M1, live_trend, live_pct, dmy_mpct, time[last_idx], dmy_h, dmy_l, dmy_th, dmy_tl))
         {
-         // QML (Quasimodo) Arama Mantığı (%40 seviyesi aşıldıysa aktif)
+         // QML (Quasimodo) Arama Mantığı (Kullanıcının isteği: Test için %40 vs çekilme şartı KESİNLİKLE OLMASIN, her zaman çiz)
          // Kullanıcının "Doğru mu yanlış mı kontrol edebilmek için çizgiler çiz" talebi
-         if (live_pct >= InpTriggerLevel1)
+
+         int sz_h = g_state_curr.st_h.Size();
+         int sz_l = g_state_curr.st_l.Size();
+
+         // Bullish QML: Ana trend 1 (YUKARI) iken, düzeltme (pullback) aşağı doğru olur.
+         // Düzeltme içinde düşen minör yapı (L1, H1, L2, H2) aranır.
+         // Zamanlama (Index) kontrolü: L1 < H1 < L2 < H2 olmalıdır!
+         if(live_trend == 1 && sz_h >= 2 && sz_l >= 2)
            {
-            int sz_h = g_state_curr.st_h.Size();
-            int sz_l = g_state_curr.st_l.Size();
+            double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
+            double H1 = g_state_curr.st_h.GetVal(sz_h - 2);
+            double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
+            double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
 
-            // Bullish QML: Ana trend 1 (YUKARI) iken, düzeltme (pullback) aşağı doğru olur.
-            // Düzeltme içinde düşen minör yapı (L1, H1, L2, H2) aranır.
-            // Zamanlama (Index) kontrolü: L1 < H1 < L2 < H2 olmalıdır!
-            if(live_trend == 1 && sz_h >= 2 && sz_l >= 2)
+            int iH2 = g_state_curr.st_h.GetIdx(sz_h - 1);
+            int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
+            int iL2 = g_state_curr.st_l.GetIdx(sz_l - 1);
+            int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
+
+            // Fiyat koşulu: Lower Low (L2 < L1) ve Higher High (H2 > H1)
+            // Zaman koşulu (kronolojik olarak son oluşan bar H2 olmalı): iL1 < iH1 < iL2 < iH2
+            if(L2 < L1 && H2 > H1 && iL1 < iH1 && iH1 < iL2 && iL2 < iH2)
               {
-               double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
-               double H1 = g_state_curr.st_h.GetVal(sz_h - 2);
-               double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
-               double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
-
-               int iH2 = g_state_curr.st_h.GetIdx(sz_h - 1);
-               int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
-               int iL2 = g_state_curr.st_l.GetIdx(sz_l - 1);
-               int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
-
-               // Fiyat koşulu: Lower Low (L2 < L1) ve Higher High (H2 > H1)
-               // Zaman koşulu (kronolojik olarak son oluşan bar H2 olmalı): iL1 < iH1 < iL2 < iH2
-               if(L2 < L1 && H2 > H1 && iL1 < iH1 && iH1 < iL2 && iL2 < iH2)
-                 {
-                  string qml_name = "QML_Bull_" + IntegerToString(time[iL1]);
-                  // Aynı isimde obje yoksa çizilir (böylece silinme problemi olmaz, geçmiş test edilebilir)
-                  // Kullanıcı talebi: Çizgiler biraz daha kalın ve belirgin olsun (3 seviye), renk daha parlak mor (Magenta)
-                  if(ObjectFind(0, qml_name) < 0)
-                     DrawLine(qml_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*5, L1, clrMagenta, 3, STYLE_SOLID, true);
-                 }
+               string qml_name = "QML_Bull_" + IntegerToString(time[iL1]);
+               // Aynı isimde obje yoksa çizilir (böylece silinme problemi olmaz, geçmiş test edilebilir)
+               // Kullanıcı talebi: Çizgiler biraz daha kalın ve belirgin olsun (3 seviye), renk daha parlak mor (Magenta)
+               if(ObjectFind(0, qml_name) < 0)
+                  DrawLine(qml_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*5, L1, clrMagenta, 3, STYLE_SOLID, true);
               }
-            // Bearish QML: Ana trend -1 (AŞAĞI) iken, düzeltme yukarı doğrudur.
-            // Düzeltme içinde yükselen minör yapı (H1, L1, H2, L2) aranır.
-            // Zamanlama (Index) kontrolü: H1 < L1 < H2 < L2 olmalıdır!
-            else if(live_trend == -1 && sz_h >= 2 && sz_l >= 2)
+           }
+         // Bearish QML: Ana trend -1 (AŞAĞI) iken, düzeltme yukarı doğrudur.
+         // Düzeltme içinde yükselen minör yapı (H1, L1, H2, L2) aranır.
+         // Zamanlama (Index) kontrolü: H1 < L1 < H2 < L2 olmalıdır!
+         else if(live_trend == -1 && sz_h >= 2 && sz_l >= 2)
+           {
+            double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
+            double H1 = g_state_curr.st_h.GetVal(sz_h - 2);
+            double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
+            double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
+
+            int iH2 = g_state_curr.st_h.GetIdx(sz_h - 1);
+            int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
+            int iL2 = g_state_curr.st_l.GetIdx(sz_l - 1);
+            int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
+
+            // Fiyat koşulu: Higher High (H2 > H1) ve Lower Low (L2 < L1)
+            // Zaman koşulu: iH1 < iL1 < iH2 < iL2
+            if(H2 > H1 && L2 < L1 && iH1 < iL1 && iL1 < iH2 && iH2 < iL2)
               {
-               double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
-               double H1 = g_state_curr.st_h.GetVal(sz_h - 2);
-               double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
-               double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
-
-               int iH2 = g_state_curr.st_h.GetIdx(sz_h - 1);
-               int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
-               int iL2 = g_state_curr.st_l.GetIdx(sz_l - 1);
-               int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
-
-               // Fiyat koşulu: Higher High (H2 > H1) ve Lower Low (L2 < L1)
-               // Zaman koşulu: iH1 < iL1 < iH2 < iL2
-               if(H2 > H1 && L2 < L1 && iH1 < iL1 && iL1 < iH2 && iH2 < iL2)
-                 {
-                  string qml_name = "QML_Bear_" + IntegerToString(time[iH1]);
-                  if(ObjectFind(0, qml_name) < 0)
-                     DrawLine(qml_name, time[iH1], H1, time[last_idx] + PeriodSeconds()*5, H1, clrMagenta, 3, STYLE_SOLID, true);
-                 }
+               string qml_name = "QML_Bear_" + IntegerToString(time[iH1]);
+               if(ObjectFind(0, qml_name) < 0)
+                  DrawLine(qml_name, time[iH1], H1, time[last_idx] + PeriodSeconds()*5, H1, clrMagenta, 3, STYLE_SOLID, true);
               }
            }
 
