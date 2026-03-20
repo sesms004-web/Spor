@@ -1359,8 +1359,9 @@ int OnCalculate(const int rates_total,
                  {
                   string qml_name = "QML_Bull_" + IntegerToString(time[iL1]);
                   // Aynı isimde obje yoksa çizilir (böylece silinme problemi olmaz, geçmiş test edilebilir)
+                  // Kullanıcı talebi: Çizgiler biraz daha kalın ve belirgin olsun (3 seviye), renk daha parlak mor (Magenta)
                   if(ObjectFind(0, qml_name) < 0)
-                     DrawLine(qml_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*5, L1, clrPurple, 2, STYLE_SOLID, true);
+                     DrawLine(qml_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*5, L1, clrMagenta, 3, STYLE_SOLID, true);
                  }
               }
             // Bearish QML: Ana trend -1 (AŞAĞI) iken, düzeltme yukarı doğrudur.
@@ -1384,7 +1385,7 @@ int OnCalculate(const int rates_total,
                  {
                   string qml_name = "QML_Bear_" + IntegerToString(time[iH1]);
                   if(ObjectFind(0, qml_name) < 0)
-                     DrawLine(qml_name, time[iH1], H1, time[last_idx] + PeriodSeconds()*5, H1, clrPurple, 2, STYLE_SOLID, true);
+                     DrawLine(qml_name, time[iH1], H1, time[last_idx] + PeriodSeconds()*5, H1, clrMagenta, 3, STYLE_SOLID, true);
                  }
               }
            }
