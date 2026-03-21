@@ -1310,8 +1310,8 @@ int OnCalculate(const int rates_total,
                   // İşleme giriş yeri (H1) için ufak kırılım çizgisi (sonsuza uzamaz)
                   DrawLine(min_name, time[iH1], H1, time[i] + PeriodSeconds()*10, H1, clrMagenta, 3, STYLE_SOLID, false);
                   // "Üst, Alt, Üst" (H1->L1->H2) zig-zag çizgileri
-                  DrawLine(min_name+"_z1", time[iH1], H1, time[iL1], L1, clrMagenta, 1, STYLE_DOT, false);
-                  DrawLine(min_name+"_z2", time[iL1], L1, time[iH2], H2, clrMagenta, 1, STYLE_DOT, false);
+                  DrawLine(min_name+"_z1", time[iH1], H1, time[iL1], L1, clrMagenta, 3, STYLE_SOLID, false);
+                  DrawLine(min_name+"_z2", time[iL1], L1, time[iH2], H2, clrMagenta, 3, STYLE_SOLID, false);
                  }
               }
            }
@@ -1333,8 +1333,8 @@ int OnCalculate(const int rates_total,
                   // İşleme giriş yeri (L1) için ufak kırılım çizgisi (sonsuza uzamaz)
                   DrawLine(min_name, time[iL1], L1, time[i] + PeriodSeconds()*10, L1, clrMagenta, 3, STYLE_SOLID, false);
                   // "Alt, Üst, Alt" (L1->H1->L2) zig-zag çizgileri
-                  DrawLine(min_name+"_z1", time[iL1], L1, time[iH1], H1, clrMagenta, 1, STYLE_DOT, false);
-                  DrawLine(min_name+"_z2", time[iH1], H1, time[iL2], L2, clrMagenta, 1, STYLE_DOT, false);
+                  DrawLine(min_name+"_z1", time[iL1], L1, time[iH1], H1, clrMagenta, 3, STYLE_SOLID, false);
+                  DrawLine(min_name+"_z2", time[iH1], H1, time[iL2], L2, clrMagenta, 3, STYLE_SOLID, false);
                  }
               }
            }
@@ -1411,8 +1411,8 @@ int OnCalculate(const int rates_total,
                   // Kısa kırılım çizgisi (ray_right = false)
                   DrawLine(min_name, time[iH1], H1, time[last_idx] + PeriodSeconds()*10, H1, clrMagenta, 3, STYLE_SOLID, false);
                   // "Üst, Alt, Üst" (H1->L1->H2(Canlı Fiyat)) yapısını gösteren zig-zag çizgileri
-                  DrawLine(min_name+"_z1", time[iH1], H1, time[iL1], L1, clrMagenta, 1, STYLE_DOT, false);
-                  DrawLine(min_name+"_z2", time[iL1], L1, time[last_idx], close[last_idx], clrMagenta, 1, STYLE_DOT, false);
+                  DrawLine(min_name+"_z1", time[iH1], H1, time[iL1], L1, clrMagenta, 3, STYLE_SOLID, false);
+                  DrawLine(min_name+"_z2", time[iL1], L1, time[last_idx], close[last_idx], clrMagenta, 3, STYLE_SOLID, false);
                  }
               }
            }
@@ -1436,8 +1436,8 @@ int OnCalculate(const int rates_total,
                   // Kısa kırılım çizgisi (ray_right = false)
                   DrawLine(min_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*10, L1, clrMagenta, 3, STYLE_SOLID, false);
                   // "Alt, Üst, Alt" (L1->H1->L2(Canlı Fiyat)) yapısını gösteren zig-zag çizgileri
-                  DrawLine(min_name+"_z1", time[iL1], L1, time[iH1], H1, clrMagenta, 1, STYLE_DOT, false);
-                  DrawLine(min_name+"_z2", time[iH1], H1, time[last_idx], close[last_idx], clrMagenta, 1, STYLE_DOT, false);
+                  DrawLine(min_name+"_z1", time[iL1], L1, time[iH1], H1, clrMagenta, 3, STYLE_SOLID, false);
+                  DrawLine(min_name+"_z2", time[iH1], H1, time[last_idx], close[last_idx], clrMagenta, 3, STYLE_SOLID, false);
                  }
               }
            }
