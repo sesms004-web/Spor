@@ -1287,6 +1287,35 @@ int OnCalculate(const int rates_total,
       if(!inside)
         {
          ProcessBar(i, open, high, low, close, time, g_state_hist, true);
+
+         // Geçmişe dönük Minör Kırılım Çizgilerini Oluştur (Backtest / Gözlem İçin)
+         int sz_h = g_state_hist.st_h.Size();
+         int sz_l = g_state_hist.st_l.Size();
+
+         if(g_state_hist.maj_tr == 1 && sz_h >= 2)
+           {
+            double H2 = g_state_hist.st_h.GetVal(sz_h - 1);
+            double H1 = g_state_hist.st_h.GetVal(sz_h - 2);
+            int iH1 = g_state_hist.st_h.GetIdx(sz_h - 2);
+            if(H2 > H1)
+              {
+               string min_name = "Min_Break_Up_" + IntegerToString(time[iH1]);
+               if(ObjectFind(0, min_name) < 0)
+                  DrawLine(min_name, time[iH1], H1, time[i] + PeriodSeconds()*5, H1, clrMagenta, 3, STYLE_SOLID, true);
+              }
+           }
+         else if(g_state_hist.maj_tr == -1 && sz_l >= 2)
+           {
+            double L2 = g_state_hist.st_l.GetVal(sz_l - 1);
+            double L1 = g_state_hist.st_l.GetVal(sz_l - 2);
+            int iL1 = g_state_hist.st_l.GetIdx(sz_l - 2);
+            if(L2 < L1)
+              {
+               string min_name = "Min_Break_Dn_" + IntegerToString(time[iL1]);
+               if(ObjectFind(0, min_name) < 0)
+                  DrawLine(min_name, time[iL1], L1, time[i] + PeriodSeconds()*5, L1, clrMagenta, 3, STYLE_SOLID, true);
+              }
+           }
         }
      }
 
@@ -1340,14 +1369,14 @@ int OnCalculate(const int rates_total,
          int sz_l = g_state_curr.st_l.Size();
 
          // Yükselen Trendde Düzeltme (Aşağı): Minör "Üst(H1), Alt(L1), En Son Üst(H2)" yapar. H2 > H1 olduğunda minör kırılır.
-         if(live_trend == 1 && sz_h >= 2)
+         // GERÇEK ZAMANLI KIRILIM: H2 tepe olarak kaydedilmese bile anlık (live) fiyat H1'i geçtiği an (alir almaz) çiz!
+         if(live_trend == 1 && sz_h >= 1)
            {
-            double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
-            double H1 = g_state_curr.st_h.GetVal(sz_h - 2);
-            int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
+            double H1 = g_state_curr.st_h.GetVal(sz_h - 1);
+            int iH1 = g_state_curr.st_h.GetIdx(sz_h - 1);
 
-            // "En son üst, bir önceki üstü alır almaz"
-            if(H2 > H1)
+            // Eğer anlık fiyat (close[last_idx] veya high[last_idx]) son tepeyi H1'i kırdıysa:
+            if(close[last_idx] > H1)
               {
                string min_name = "Min_Break_Up_" + IntegerToString(time[iH1]);
                if(ObjectFind(0, min_name) < 0)
@@ -1356,14 +1385,14 @@ int OnCalculate(const int rates_total,
            }
 
          // Düşen Trendde Düzeltme (Yukarı): Minör "Alt(L1), Üst(H1), En Son Alt(L2)" yapar. L2 < L1 olduğunda minör kırılır.
-         else if(live_trend == -1 && sz_l >= 2)
+         // GERÇEK ZAMANLI KIRILIM: L2 dip olarak kaydedilmese bile anlık (live) fiyat L1'i geçtiği an (alir almaz) çiz!
+         else if(live_trend == -1 && sz_l >= 1)
            {
-            double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
-            double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
-            int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
+            double L1 = g_state_curr.st_l.GetVal(sz_l - 1);
+            int iL1 = g_state_curr.st_l.GetIdx(sz_l - 1);
 
-            // "En son alt, bir önceki altı alır almaz"
-            if(L2 < L1)
+            // Eğer anlık fiyat (close[last_idx] veya low[last_idx]) son dibi L1'i kırdıysa:
+            if(close[last_idx] < L1)
               {
                string min_name = "Min_Break_Dn_" + IntegerToString(time[iL1]);
                if(ObjectFind(0, min_name) < 0)
