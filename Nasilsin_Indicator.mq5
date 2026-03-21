@@ -808,6 +808,7 @@ void OnDeinit(const int reason)
    ObjectsDeleteAll(0, "Major_");
    ObjectsDeleteAll(0, "HLine_");
    ObjectsDeleteAll(0, "LiveLeg_");
+   ObjectsDeleteAll(0, "Min_Break_");
   }
 
 //+------------------------------------------------------------------+
@@ -1331,49 +1332,42 @@ int OnCalculate(const int rates_total,
       double dmy_mpct;
       if (GetMTFPullback(PERIOD_M1, live_trend, live_pct, dmy_mpct, time[last_idx], dmy_h, dmy_l, dmy_th, dmy_tl))
         {
-         // QML (Quasimodo) Arama Mantığı (Kullanıcının isteği: Test için %40 vs çekilme şartı KESİNLİKLE OLMASIN, her zaman çiz)
-         // Kullanıcının "Doğru mu yanlış mı kontrol edebilmek için çizgiler çiz" talebi
+         // Kullanıcının "QML muhabbeti yerine basitleştirilmiş minör kırılım" talebi:
+         // Düşen trendde (düzeltme yukarıyken): Alt, Üst, En Son Alt (L2 < L1 kırılımı)
+         // Yükselen trendde (düzeltme aşağıyken): Üst, Alt, En Son Üst (H2 > H1 kırılımı)
 
          int sz_h = g_state_curr.st_h.Size();
          int sz_l = g_state_curr.st_l.Size();
 
-         // Bullish QML: Ana trend YUKARI (1) iken minör düzeltmenin aşağı yönlü zikzaklarından
-         // dönüş aranır. (Sol omuz = L1, Baş = L2, Sağ Omuz/Kırılım = H2)
-         // Kullanıcı isteği: Basitleştir, zaman kontrollerini esnet ki ekranda rahatça görünsün.
-         if(live_trend == 1 && sz_h >= 2 && sz_l >= 2)
+         // Yükselen Trendde Düzeltme (Aşağı): Minör "Üst(H1), Alt(L1), En Son Üst(H2)" yapar. H2 > H1 olduğunda minör kırılır.
+         if(live_trend == 1 && sz_h >= 2)
            {
             double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
             double H1 = g_state_curr.st_h.GetVal(sz_h - 2);
-            double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
-            double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
-
-            int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
-
-            // Sadece fiyatsal QML (Daha düşük dip ve ardından gelen Daha Yüksek Tepe) şartı
-            if(L2 < L1 && H2 > H1)
-              {
-               string qml_name = "QML_Bull_" + IntegerToString(time[iL1]);
-               if(ObjectFind(0, qml_name) < 0)
-                  DrawLine(qml_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*5, L1, clrMagenta, 3, STYLE_SOLID, true);
-              }
-           }
-         // Bearish QML: Ana trend AŞAĞI (-1) iken minör düzeltmenin yukarı yönlü zikzaklarından
-         // dönüş aranır. (Sol omuz = H1, Baş = H2, Sağ Omuz/Kırılım = L2)
-         else if(live_trend == -1 && sz_h >= 2 && sz_l >= 2)
-           {
-            double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
-            double H1 = g_state_curr.st_h.GetVal(sz_h - 2);
-            double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
-            double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
-
             int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
 
-            // Sadece fiyatsal QML (Daha yüksek tepe ve ardından gelen Daha Düşük Dip) şartı
-            if(H2 > H1 && L2 < L1)
+            // "En son üst, bir önceki üstü alır almaz"
+            if(H2 > H1)
               {
-               string qml_name = "QML_Bear_" + IntegerToString(time[iH1]);
-               if(ObjectFind(0, qml_name) < 0)
-                  DrawLine(qml_name, time[iH1], H1, time[last_idx] + PeriodSeconds()*5, H1, clrMagenta, 3, STYLE_SOLID, true);
+               string min_name = "Min_Break_Up_" + IntegerToString(time[iH1]);
+               if(ObjectFind(0, min_name) < 0)
+                  DrawLine(min_name, time[iH1], H1, time[last_idx] + PeriodSeconds()*5, H1, clrMagenta, 3, STYLE_SOLID, true);
+              }
+           }
+
+         // Düşen Trendde Düzeltme (Yukarı): Minör "Alt(L1), Üst(H1), En Son Alt(L2)" yapar. L2 < L1 olduğunda minör kırılır.
+         else if(live_trend == -1 && sz_l >= 2)
+           {
+            double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
+            double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
+            int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
+
+            // "En son alt, bir önceki altı alır almaz"
+            if(L2 < L1)
+              {
+               string min_name = "Min_Break_Dn_" + IntegerToString(time[iL1]);
+               if(ObjectFind(0, min_name) < 0)
+                  DrawLine(min_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*5, L1, clrMagenta, 3, STYLE_SOLID, true);
               }
            }
 
