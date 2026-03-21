@@ -1292,47 +1292,61 @@ int OnCalculate(const int rates_total,
          int sz_h = g_state_hist.st_h.Size();
          int sz_l = g_state_hist.st_l.Size();
 
-         if(g_state_hist.maj_tr == 1 && sz_h >= 1 && sz_l >= 1)
+         // Yükselen Trendde (Düzeltme Aşağı): "Alt, Üst, Daha Düşük Alt, Kırılım"
+         // Yani L1 (Sol Omuz Likiditesi), H1 (İşlem Yeri), L2 (Sweep), Kırılım (i)
+         if(g_state_hist.maj_tr == 1 && sz_h >= 1 && sz_l >= 2)
            {
             double H1 = g_state_hist.st_h.GetVal(sz_h - 1);
             int iH1 = g_state_hist.st_h.GetIdx(sz_h - 1);
 
-            double L1 = g_state_hist.st_l.GetVal(sz_l - 1);
-            int iL1 = g_state_hist.st_l.GetIdx(sz_l - 1);
+            double L2 = g_state_hist.st_l.GetVal(sz_l - 1);
+            int iL2 = g_state_hist.st_l.GetIdx(sz_l - 1);
+            double L1 = g_state_hist.st_l.GetVal(sz_l - 2);
+            int iL1 = g_state_hist.st_l.GetIdx(sz_l - 2);
 
-            // Kronolojik sıra: Önce H1 (Üst), Sonra L1 (Alt), Sonra "Kırılım Zamanı" (i)
-            if(close[i] > H1 && iH1 < iL1 && iL1 < i && (i - iH1) < 15)
+            // Kronolojik sıra: L1 -> H1 -> L2 -> Kırılım (i)
+            // Likidite Alımı (Sweep): L2 < L1
+            // Kırılım: close[i] > H1
+            if(close[i] > H1 && L2 < L1 && iL1 < iH1 && iH1 < iL2 && iL2 < i && (i - iL1) < 45)
               {
                string min_name = "Min_Break_Up_" + IntegerToString(time[iH1]);
                if(ObjectFind(0, min_name) < 0)
                  {
                   // İşleme giriş yeri (H1) için ufak kırılım çizgisi
                   DrawLine(min_name, time[iH1], H1, time[i] + PeriodSeconds()*10, H1, clrMagenta, 3, STYLE_SOLID, false);
-                  // "Üst, Alt, Kırılım" zig-zag çizgileri (H1 -> L1 -> Kırılım Barı)
-                  DrawLine(min_name+"_z1", time[iH1], H1, time[iL1], L1, clrMagenta, 3, STYLE_SOLID, false);
-                  DrawLine(min_name+"_z2", time[iL1], L1, time[i], close[i], clrMagenta, 3, STYLE_SOLID, false);
+                  // "Alt, Üst, En Son Alt (Likidite Alınan), Kırılım" zig-zag çizgileri
+                  DrawLine(min_name+"_z1", time[iL1], L1, time[iH1], H1, clrMagenta, 3, STYLE_SOLID, false);
+                  DrawLine(min_name+"_z2", time[iH1], H1, time[iL2], L2, clrMagenta, 3, STYLE_SOLID, false);
+                  DrawLine(min_name+"_z3", time[iL2], L2, time[i], close[i], clrMagenta, 3, STYLE_SOLID, false);
                  }
               }
            }
-         else if(g_state_hist.maj_tr == -1 && sz_l >= 1 && sz_h >= 1)
+         // Düşen Trendde (Düzeltme Yukarı): "Üst, Alt, Daha Yüksek Üst, Kırılım"
+         // Yani H1 (Sol Omuz Likiditesi), L1 (İşlem Yeri), H2 (Sweep), Kırılım (i)
+         else if(g_state_hist.maj_tr == -1 && sz_l >= 1 && sz_h >= 2)
            {
             double L1 = g_state_hist.st_l.GetVal(sz_l - 1);
             int iL1 = g_state_hist.st_l.GetIdx(sz_l - 1);
 
-            double H1 = g_state_hist.st_h.GetVal(sz_h - 1);
-            int iH1 = g_state_hist.st_h.GetIdx(sz_h - 1);
+            double H2 = g_state_hist.st_h.GetVal(sz_h - 1);
+            int iH2 = g_state_hist.st_h.GetIdx(sz_h - 1);
+            double H1 = g_state_hist.st_h.GetVal(sz_h - 2);
+            int iH1 = g_state_hist.st_h.GetIdx(sz_h - 2);
 
-            // Kronolojik sıra: Önce L1 (Alt), Sonra H1 (Üst), Sonra "Kırılım Zamanı" (i)
-            if(close[i] < L1 && iL1 < iH1 && iH1 < i && (i - iL1) < 15)
+            // Kronolojik sıra: H1 -> L1 -> H2 -> Kırılım (i)
+            // Likidite Alımı (Sweep): H2 > H1
+            // Kırılım: close[i] < L1
+            if(close[i] < L1 && H2 > H1 && iH1 < iL1 && iL1 < iH2 && iH2 < i && (i - iH1) < 45)
               {
                string min_name = "Min_Break_Dn_" + IntegerToString(time[iL1]);
                if(ObjectFind(0, min_name) < 0)
                  {
                   // İşleme giriş yeri (L1) için ufak kırılım çizgisi
                   DrawLine(min_name, time[iL1], L1, time[i] + PeriodSeconds()*10, L1, clrMagenta, 3, STYLE_SOLID, false);
-                  // "Alt, Üst, Kırılım" zig-zag çizgileri (L1 -> H1 -> Kırılım Barı)
-                  DrawLine(min_name+"_z1", time[iL1], L1, time[iH1], H1, clrMagenta, 3, STYLE_SOLID, false);
-                  DrawLine(min_name+"_z2", time[iH1], H1, time[i], close[i], clrMagenta, 3, STYLE_SOLID, false);
+                  // "Üst, Alt, En Son Üst (Likidite Alınan), Kırılım" zig-zag çizgileri
+                  DrawLine(min_name+"_z1", time[iH1], H1, time[iL1], L1, clrMagenta, 3, STYLE_SOLID, false);
+                  DrawLine(min_name+"_z2", time[iL1], L1, time[iH2], H2, clrMagenta, 3, STYLE_SOLID, false);
+                  DrawLine(min_name+"_z3", time[iH2], H2, time[i], close[i], clrMagenta, 3, STYLE_SOLID, false);
                  }
               }
            }
@@ -1388,53 +1402,52 @@ int OnCalculate(const int rates_total,
          int sz_h = g_state_curr.st_h.Size();
          int sz_l = g_state_curr.st_l.Size();
 
-         // Yükselen Trendde Düzeltme (Aşağı): Minör "Üst(H1), Alt(L1), En Son Üst(H2)" yapar. H2 > H1 olduğunda minör kırılır.
-         // GERÇEK ZAMANLI KIRILIM: H2 tepe olarak kaydedilmese bile anlık (live) fiyat H1'i geçtiği an (alir almaz) çiz!
-         if(live_trend == 1 && sz_h >= 1 && sz_l >= 1)
+         // Yükselen Trendde Düzeltme (Aşağı): Minör "Alt, Üst, Daha Düşük Alt(Sweep), Kırılım" yapar.
+         // GERÇEK ZAMANLI KIRILIM: L2 (sweep) sonrası anlık fiyat (live) H1'i geçtiği an (alir almaz) Live_ ön ekiyle çiz!
+         if(live_trend == 1 && sz_h >= 1 && sz_l >= 2)
            {
             double H1 = g_state_curr.st_h.GetVal(sz_h - 1);
             int iH1 = g_state_curr.st_h.GetIdx(sz_h - 1);
 
-            double L1 = g_state_curr.st_l.GetVal(sz_l - 1);
-            int iL1 = g_state_curr.st_l.GetIdx(sz_l - 1);
+            double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
+            int iL2 = g_state_curr.st_l.GetIdx(sz_l - 1);
+            double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
+            int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
 
-            // Kronolojik sıra: Önce H1 (Üst), Sonra L1 (Alt), Sonra "Kırılım Zamanı" (last_idx)
-            if(close[last_idx] > H1 && iH1 < iL1 && iL1 < last_idx && (last_idx - iH1) < 15)
+            // Kronolojik sıra ve Sweep (L2 < L1): Önce L1, Sonra H1, Sonra L2, Sonra "Kırılım Zamanı" (last_idx)
+            if(close[last_idx] > H1 && L2 < L1 && iL1 < iH1 && iH1 < iL2 && iL2 < last_idx && (last_idx - iL1) < 45)
               {
-               string min_name = "Min_Break_Up_" + IntegerToString(time[iH1]);
-               if(ObjectFind(0, min_name) < 0)
-                 {
-                  // İşleme giriş yeri (H1) için ufak kırılım çizgisi
-                  DrawLine(min_name, time[iH1], H1, time[last_idx] + PeriodSeconds()*10, H1, clrMagenta, 3, STYLE_SOLID, false);
-                  // "Üst, Alt, Kırılım" zig-zag çizgileri (H1 -> L1 -> Kırılım Barı)
-                  DrawLine(min_name+"_z1", time[iH1], H1, time[iL1], L1, clrMagenta, 3, STYLE_SOLID, false);
-                  DrawLine(min_name+"_z2", time[iL1], L1, time[last_idx], close[last_idx], clrMagenta, 3, STYLE_SOLID, false);
-                 }
+               string min_name = "Live_Min_Break_Up_" + IntegerToString(time[iH1]);
+               // Eğer isimli obje yoksa (yeni kırılım anıysa), veya varsa bile güncel fiyatla yenile
+               // Live ön eki, bar kapanıp fakeout olursa OnCalculate içindeki ObjectsDeleteAll(0, "Live_") ile otomatik silinmesini sağlar.
+               DrawLine(min_name, time[iH1], H1, time[last_idx] + PeriodSeconds()*10, H1, clrMagenta, 3, STYLE_SOLID, false);
+               DrawLine(min_name+"_z1", time[iL1], L1, time[iH1], H1, clrMagenta, 3, STYLE_SOLID, false);
+               DrawLine(min_name+"_z2", time[iH1], H1, time[iL2], L2, clrMagenta, 3, STYLE_SOLID, false);
+               DrawLine(min_name+"_z3", time[iL2], L2, time[last_idx], close[last_idx], clrMagenta, 3, STYLE_SOLID, false);
               }
            }
 
-         // Düşen Trendde Düzeltme (Yukarı): Minör "Alt(L1), Üst(H1), En Son Alt(L2)" yapar. L2 < L1 olduğunda minör kırılır.
-         // GERÇEK ZAMANLI KIRILIM: L2 dip olarak kaydedilmese bile anlık (live) fiyat L1'i geçtiği an (alir almaz) çiz!
-         else if(live_trend == -1 && sz_l >= 1 && sz_h >= 1)
+         // Düşen Trendde Düzeltme (Yukarı): Minör "Üst, Alt, Daha Yüksek Üst(Sweep), Kırılım" yapar.
+         // GERÇEK ZAMANLI KIRILIM: H2 (sweep) sonrası anlık fiyat (live) L1'i geçtiği an (alir almaz) Live_ ön ekiyle çiz!
+         else if(live_trend == -1 && sz_l >= 1 && sz_h >= 2)
            {
             double L1 = g_state_curr.st_l.GetVal(sz_l - 1);
             int iL1 = g_state_curr.st_l.GetIdx(sz_l - 1);
 
-            double H1 = g_state_curr.st_h.GetVal(sz_h - 1);
-            int iH1 = g_state_curr.st_h.GetIdx(sz_h - 1);
+            double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
+            int iH2 = g_state_curr.st_h.GetIdx(sz_h - 1);
+            double H1 = g_state_curr.st_h.GetVal(sz_h - 2);
+            int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
 
-            // Kronolojik sıra: Önce L1 (Alt), Sonra H1 (Üst), Sonra "Kırılım Zamanı" (last_idx)
-            if(close[last_idx] < L1 && iL1 < iH1 && iH1 < last_idx && (last_idx - iL1) < 15)
+            // Kronolojik sıra ve Sweep (H2 > H1): Önce H1, Sonra L1, Sonra H2, Sonra "Kırılım Zamanı" (last_idx)
+            if(close[last_idx] < L1 && H2 > H1 && iH1 < iL1 && iL1 < iH2 && iH2 < last_idx && (last_idx - iH1) < 45)
               {
-               string min_name = "Min_Break_Dn_" + IntegerToString(time[iL1]);
-               if(ObjectFind(0, min_name) < 0)
-                 {
-                  // İşleme giriş yeri (L1) için ufak kırılım çizgisi
-                  DrawLine(min_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*10, L1, clrMagenta, 3, STYLE_SOLID, false);
-                  // "Alt, Üst, Kırılım" zig-zag çizgileri (L1 -> H1 -> Kırılım Barı)
-                  DrawLine(min_name+"_z1", time[iL1], L1, time[iH1], H1, clrMagenta, 3, STYLE_SOLID, false);
-                  DrawLine(min_name+"_z2", time[iH1], H1, time[last_idx], close[last_idx], clrMagenta, 3, STYLE_SOLID, false);
-                 }
+               string min_name = "Live_Min_Break_Dn_" + IntegerToString(time[iL1]);
+               // Live ön eki sayesinde bar bitiminde fakeout (iğne) varsa silinir, kalıcı ise geçmiş döngüsü (ProcessBar) çizer.
+               DrawLine(min_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*10, L1, clrMagenta, 3, STYLE_SOLID, false);
+               DrawLine(min_name+"_z1", time[iH1], H1, time[iL1], L1, clrMagenta, 3, STYLE_SOLID, false);
+               DrawLine(min_name+"_z2", time[iL1], L1, time[iH2], H2, clrMagenta, 3, STYLE_SOLID, false);
+               DrawLine(min_name+"_z3", time[iH2], H2, time[last_idx], close[last_idx], clrMagenta, 3, STYLE_SOLID, false);
               }
            }
 
