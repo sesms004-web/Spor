@@ -29,13 +29,11 @@ input color  InpColorBear = clrRed;
 //--- Alert Settings ---
 input double InpTriggerLevel1    = 40.0;             // 1. Bildirim Çekilme % (örn. %40)
 input double InpTriggerLevel2    = 60.0;             // 2. Bildirim Çekilme % (örn. %60)
-input double InpTradeTriggerPct  = 40.0;             // İşlem Onay Çizgisi (Minör Kırılım) Çekilme %
 input double InpGoodPullbackPct  = 40.0;
 input double InpMomentumMinPeak  = 30.0;
 input double InpMomentumMinBounce= 20.0;
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
-input bool   InpNotificationFilter = false;          // Bildirim Filtresi (True: Sadece Swing İçi, False: Kırılımdan İtibaren)
 input bool   InpTestMode         = false;
 
 //--- Globals ---
@@ -218,17 +216,15 @@ string GetUniqueName(string prefix)
 
 double GetDaysForTF(ENUM_TIMEFRAMES tf)
   {
-   double days = InpDaysM1;
-   if(tf == PERIOD_M1) days = InpDaysM1;
-   else if(tf == PERIOD_M3) days = InpDaysM3;
-   else if(tf == PERIOD_M5) days = InpDaysM5;
-   else if(tf == PERIOD_M15) days = InpDaysM15;
-   else if(tf == PERIOD_M30) days = InpDaysM30;
-   else if(tf == PERIOD_H1) days = InpDaysH1;
-   else if(tf == PERIOD_H4) days = InpDaysH4;
-   else if(tf == PERIOD_D1) days = InpDaysD1;
-
-   return days;
+   if(tf == PERIOD_M1) return InpDaysM1;
+   if(tf == PERIOD_M3) return InpDaysM3;
+   if(tf == PERIOD_M5) return InpDaysM5;
+   if(tf == PERIOD_M15) return InpDaysM15;
+   if(tf == PERIOD_M30) return InpDaysM30;
+   if(tf == PERIOD_H1) return InpDaysH1;
+   if(tf == PERIOD_H4) return InpDaysH4;
+   if(tf == PERIOD_D1) return InpDaysD1;
+   return InpDaysM1;
   }
 
 void ProcessBarMathOnly(int i, const double &high[], const double &low[], const double &close[], SState &state)
@@ -377,18 +373,7 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    st.trig_h  = high[0]; st.trig_l  = low[0];
    st.tmp_h   = high[0]; st.tmp_h_i = 0; st.tmp_l   = low[0]; st.tmp_l_i = 0;
    st.min_tr  = (close[0] > rates[0].open) ? 1 : -1;
-
-   double initial_gap = (high[0] - low[0]);
-   if(initial_gap == 0) initial_gap = Point() * 10;
-   double tiny_gap = initial_gap * 0.1;
-
-   st.maj_h = high[0] + tiny_gap;
-   st.maj_l = low[0] - tiny_gap;
-   st.maj_tr = st.min_tr;
-   st.maj_st = 1;
-   st.bos_i = 0;
-   st.maj_h_i = 0;
-   st.maj_l_i = 0;
+   st.maj_h = EMPTY_VALUE; st.maj_l = EMPTY_VALUE; st.maj_tr = 0; st.maj_st = 0; st.bos_i = 0;
 
    for(int i = 1; i < copied; i++)
      {
@@ -422,11 +407,10 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
       double range = st.maj_h - st.maj_l;
       if(trend == 1)
         {
+         // Eğer fiyat zirveyi (maj_h) geçtiyse (kırılım geliyorsa), çekilme tamamen sıfırlanmıştır (Şişkin/Impulse).
          if(live_p >= st.maj_h || st.maj_st == 0)
            {
-            double dyn_range = st.tmp_h - st.maj_l;
-            if(dyn_range > 0) pct = ((st.tmp_h - live_p) / dyn_range) * 100.0;
-            else pct = 0;
+            pct = 0;
             max_pct = 0;
            }
          else
@@ -437,11 +421,10 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
         }
       else if(trend == -1)
         {
+         // Eğer fiyat dibi (maj_l) geçtiyse (kırılım geliyorsa), çekilme tamamen sıfırlanmıştır (Şişkin/Impulse).
          if(live_p <= st.maj_l || st.maj_st == 0)
            {
-            double dyn_range = st.maj_h - st.tmp_l;
-            if(dyn_range > 0) pct = ((live_p - st.tmp_l) / dyn_range) * 100.0;
-            else pct = 0;
+            pct = 0;
             max_pct = 0;
            }
          else
@@ -544,11 +527,6 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    string msg1 = "🚨 [" + Symbol() + "] M1 Hedef Seviyede! (BÖLÜM 1/2)\n";
    if(InpTestMode) msg1 = "🧪 [TEST MODU - " + Symbol() + "] (BÖLÜM 1/2)\n";
 
-   if(is_revisit)
-     {
-      msg1 += "⚠️ DİKKAT: Fiyat hedefi sert geçmişti. Bu bir geri dönüş (Re-visit) bildirimidir!\n\n";
-     }
-
    string swing_dir = t_m1 == 1 ? "🟢 YUKARI" : "🔴 AŞAĞI";
    datetime start_t = t_m1 == 1 ? tl_m1 : th_m1;
    string swing_start_str = TimeToString(start_t, TIME_DATE|TIME_MINUTES);
@@ -560,20 +538,8 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    msg1 += "  └ Süre: " + ago_str + "\n";
    msg1 += "- Swing High: " + DoubleToString(h_m1, _Digits) + "\n";
    msg1 += "- Swing Low: " + DoubleToString(l_m1, _Digits) + "\n";
-   if(p_m1 == 0 && mp_m1 == 0)
-     {
-      string temp_dir = (t_m1 == 1) ? "SELL" : "BUY";
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + "\n";
-      msg1 += "⚠️ DİKKAT: Trend şişkin! M1 için kısa süreli düzeltme hareketi (" + temp_dir + ") fırsatı beklenebilir.\n\n";
-     }
-   else if(p_m1 <= 10.0 && mp_m1 <= 10.0)
-     {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Trend Şişkin, Düzeltme Bekleniyor)\n\n";
-     }
-   else
-     {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 0) + " ↑↑%" + DoubleToString(mp_m1, 0) + ")\n\n";
-     }
+   if(p_m1 <= 10.0 && mp_m1 <= 10.0) msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Trend Şişkin, Düzeltme Bekleniyor)\n";
+   else msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 0) + " ↑↑%" + DoubleToString(mp_m1, 0) + ")\n\n";
 
    msg1 += "🧭 MAKRO TREND (H1/M30)\n";
    msg1 += "Durum: " + (bull_pressure >= 50 ? "🟢 YÜKSELİŞ" : "🔴 DÜŞÜŞ") + " (%" + DoubleToString(bull_pressure, 0) + " Boğa Baskısı)\n";
@@ -807,7 +773,6 @@ void OnDeinit(const int reason)
    ObjectsDeleteAll(0, "Major_");
    ObjectsDeleteAll(0, "HLine_");
    ObjectsDeleteAll(0, "LiveLeg_");
-   ObjectsDeleteAll(0, "Min_Break_");
   }
 
 //+------------------------------------------------------------------+
@@ -1250,26 +1215,11 @@ int OnCalculate(const int rates_total,
       g_state_hist.lp_i    = start_idx;
       g_state_hist.lp_p    = close[start_idx];
 
-      // Başlangıçta yapının (maj) boş kalmaması için ince bir ATR aralığında yapay swing oluşturuluyor.
-      double initial_atr = 0;
-      double atr_arr[];
-      // Optimizasyon & Hata Engelleme: start_idx dizinin sonlarına doğruysa
-      // iATR 0 noktasından (anlık bar) almak yerine rates_total-start_idx posizyonundan almalıdır
-      // Daha güvenli çözüm: Başlangıç barının yüksekliği (veya bir önceki bar) ATR yerine kullanılır,
-      // gereksiz Handle oluşturma engellenir.
-      initial_atr = (high[start_idx] - low[start_idx]);
-      if(initial_atr == 0) initial_atr = Point() * 10;
-
-      double tiny_gap = initial_atr * 0.1; // "İnce kesilmiş tırnak" kadar boşluk
-
-      g_state_hist.maj_h = high[start_idx] + tiny_gap;
-      g_state_hist.maj_l = low[start_idx] - tiny_gap;
-      g_state_hist.maj_tr = g_state_hist.min_tr; // Trendi minör yöne bağla
-      g_state_hist.maj_st = 1;
+      g_state_hist.maj_h = EMPTY_VALUE;
+      g_state_hist.maj_l = EMPTY_VALUE;
+      g_state_hist.maj_tr = 0;
+      g_state_hist.maj_st = 0;
       g_state_hist.bos_i = start_idx;
-
-      g_state_hist.maj_h_i = start_idx;
-      g_state_hist.maj_l_i = start_idx;
 
       limit = start_idx + 1;
      }
@@ -1284,98 +1234,6 @@ int OnCalculate(const int rates_total,
       if(!inside)
         {
          ProcessBar(i, open, high, low, close, time, g_state_hist, true);
-
-         // Geçmişe dönük Minör Kırılım Çizgilerini Oluştur (Backtest / Gözlem İçin)
-         int sz_h = g_state_hist.st_h.Size();
-         int sz_l = g_state_hist.st_l.Size();
-
-         double hist_range = 0;
-         double hist_pct = 0;
-         if(g_state_hist.maj_h != EMPTY_VALUE && g_state_hist.maj_l != EMPTY_VALUE && g_state_hist.maj_h != g_state_hist.maj_l)
-           {
-            hist_range = g_state_hist.maj_h - g_state_hist.maj_l;
-            if(g_state_hist.maj_tr == 1) hist_pct = ((g_state_hist.maj_h - close[i]) / hist_range) * 100.0;
-            else if(g_state_hist.maj_tr == -1) hist_pct = ((close[i] - g_state_hist.maj_l) / hist_range) * 100.0;
-           }
-
-         // Kullanıcının Talebi: "Sadece %40 üstüne çıkınca aktif olsun (Çekilme yüzdesi)"
-         // Güncelleme: "İşlem Onay Çizgisi" için ayrı InpTradeTriggerPct ayarı kullan.
-         bool hist_valid_pullback = (hist_pct >= InpTradeTriggerPct && hist_pct <= 100.0 && g_state_hist.maj_st == 1);
-
-         // Yükselen Trendde (Düzeltme Aşağı): "Alt, Üst, Daha Düşük Alt, Kırılım"
-         // Yani L1 (Sol Omuz Likiditesi), H1 (İşlem Yeri), L2 (Sweep), Kırılım (i)
-         if(hist_valid_pullback && g_state_hist.maj_tr == 1 && sz_h >= 1 && sz_l >= 2)
-           {
-            double H1 = g_state_hist.st_h.GetVal(sz_h - 1);
-            int iH1 = g_state_hist.st_h.GetIdx(sz_h - 1);
-
-            double L2 = g_state_hist.st_l.GetVal(sz_l - 1);
-            int iL2 = g_state_hist.st_l.GetIdx(sz_l - 1);
-            double L1 = g_state_hist.st_l.GetVal(sz_l - 2);
-            int iL1 = g_state_hist.st_l.GetIdx(sz_l - 2);
-
-            // Kronolojik sıra: L1 -> H1 -> L2 -> Kırılım (i)
-            // Likidite Alımı (Sweep): L2 < L1
-            // VEYA Kullanıcı İsteği (%80 Riskli Dönüş): Likidite alamamış ama %80'ine kadar inmiş: L2 >= L1 && L2 <= H1 - (H1 - L1)*0.8
-            // Kırılım: close[i] > H1
-            if(close[i] > H1 && iL1 < iH1 && iH1 < iL2 && iL2 < i && (i - iL1) < 45)
-              {
-               bool is_sweep = (L2 < L1);
-               bool is_riskli = (!is_sweep && L2 <= H1 - (H1 - L1)*0.8);
-
-               if(is_sweep || is_riskli)
-                 {
-                  color line_clr = is_riskli ? clrRed : clrMagenta;
-                  string min_name = "Min_Break_Up_" + IntegerToString(time[iH1]);
-                  if(ObjectFind(0, min_name) < 0)
-                    {
-                     // İşleme giriş yeri (H1) için ufak kırılım çizgisi
-                     DrawLine(min_name, time[iH1], H1, time[i] + PeriodSeconds()*10, H1, line_clr, 3, STYLE_SOLID, false);
-                     // "Alt, Üst, En Son Alt (Likidite/Riskli), Kırılım" zig-zag çizgileri
-                     DrawLine(min_name+"_z1", time[iL1], L1, time[iH1], H1, line_clr, 3, STYLE_SOLID, false);
-                     DrawLine(min_name+"_z2", time[iH1], H1, time[iL2], L2, line_clr, 3, STYLE_SOLID, false);
-                     DrawLine(min_name+"_z3", time[iL2], L2, time[i], close[i], line_clr, 3, STYLE_SOLID, false);
-                    }
-                 }
-              }
-           }
-         // Düşen Trendde (Düzeltme Yukarı): "Üst, Alt, Daha Yüksek Üst, Kırılım"
-         // Yani H1 (Sol Omuz Likiditesi), L1 (İşlem Yeri), H2 (Sweep), Kırılım (i)
-         else if(g_state_hist.maj_tr == -1 && sz_l >= 1 && sz_h >= 2)
-           {
-            double L1 = g_state_hist.st_l.GetVal(sz_l - 1);
-            int iL1 = g_state_hist.st_l.GetIdx(sz_l - 1);
-
-            double H2 = g_state_hist.st_h.GetVal(sz_h - 1);
-            int iH2 = g_state_hist.st_h.GetIdx(sz_h - 1);
-            double H1 = g_state_hist.st_h.GetVal(sz_h - 2);
-            int iH1 = g_state_hist.st_h.GetIdx(sz_h - 2);
-
-            // Kronolojik sıra: H1 -> L1 -> H2 -> Kırılım (i)
-            // Likidite Alımı (Sweep): H2 > H1
-            // VEYA Kullanıcı İsteği (%80 Riskli Dönüş): Likidite alamamış ama %80'ine kadar çıkmış: H2 <= H1 && H2 >= L1 + (H1 - L1)*0.8
-            // Kırılım: close[i] < L1
-            if(close[i] < L1 && iH1 < iL1 && iL1 < iH2 && iH2 < i && (i - iH1) < 45)
-              {
-               bool is_sweep = (H2 > H1);
-               bool is_riskli = (!is_sweep && H2 >= L1 + (H1 - L1)*0.8);
-
-               if(is_sweep || is_riskli)
-                 {
-                  color line_clr = is_riskli ? clrRed : clrMagenta;
-                  string min_name = "Min_Break_Dn_" + IntegerToString(time[iL1]);
-                  if(ObjectFind(0, min_name) < 0)
-                    {
-                     // İşleme giriş yeri (L1) için ufak kırılım çizgisi
-                     DrawLine(min_name, time[iL1], L1, time[i] + PeriodSeconds()*10, L1, line_clr, 3, STYLE_SOLID, false);
-                     // "Üst, Alt, En Son Üst (Likidite/Riskli), Kırılım" zig-zag çizgileri
-                     DrawLine(min_name+"_z1", time[iH1], H1, time[iL1], L1, line_clr, 3, STYLE_SOLID, false);
-                     DrawLine(min_name+"_z2", time[iL1], L1, time[iH2], H2, line_clr, 3, STYLE_SOLID, false);
-                     DrawLine(min_name+"_z3", time[iH2], H2, time[i], close[i], line_clr, 3, STYLE_SOLID, false);
-                    }
-                 }
-              }
-           }
         }
      }
 
@@ -1421,86 +1279,6 @@ int OnCalculate(const int rates_total,
       double dmy_mpct;
       if (GetMTFPullback(PERIOD_M1, live_trend, live_pct, dmy_mpct, time[last_idx], dmy_h, dmy_l, dmy_th, dmy_tl))
         {
-         // Kullanıcının "QML muhabbeti yerine basitleştirilmiş minör kırılım" talebi:
-         // Düşen trendde (düzeltme yukarıyken): Alt, Üst, En Son Alt (L2 < L1 kırılımı)
-         // Yükselen trendde (düzeltme aşağıyken): Üst, Alt, En Son Üst (H2 > H1 kırılımı)
-
-         int sz_h = g_state_curr.st_h.Size();
-         int sz_l = g_state_curr.st_l.Size();
-
-         // Kullanıcı talebi: Sadece %40 (InpTriggerLevel1) üstüne çıkınca minör kırılım çizgileri aktif olsun.
-         if (live_pct >= InpTriggerLevel1)
-           {
-            // Yükselen Trendde Düzeltme (Aşağı): Minör "Alt, Üst, Daha Düşük Alt(Sweep), Kırılım" yapar.
-            // GERÇEK ZAMANLI KIRILIM: L2 (sweep) sonrası anlık fiyat (live) H1'i geçtiği an (alir almaz) Live_ ön ekiyle çiz!
-            if(live_trend == 1 && sz_h >= 1 && sz_l >= 2)
-              {
-               double H1 = g_state_curr.st_h.GetVal(sz_h - 1);
-               int iH1 = g_state_curr.st_h.GetIdx(sz_h - 1);
-
-            double L2 = g_state_curr.st_l.GetVal(sz_l - 1);
-            int iL2 = g_state_curr.st_l.GetIdx(sz_l - 1);
-            double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
-            int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
-
-            // Kronolojik sıra: L1 -> H1 -> L2 -> Kırılım (last_idx)
-            // Likidite Alımı (Sweep): L2 < L1
-            // VEYA Kullanıcı İsteği (%80 Riskli Dönüş): Likidite alamamış ama %80'ine kadar inmiş: L2 >= L1 && L2 <= H1 - (H1 - L1)*0.8
-            // Kırılım: close[last_idx] > H1
-            if(close[last_idx] > H1 && iL1 < iH1 && iH1 < iL2 && iL2 < last_idx && (last_idx - iL1) < 45)
-              {
-               bool is_sweep = (L2 < L1);
-               bool is_riskli = (!is_sweep && L2 <= H1 - (H1 - L1)*0.8);
-
-               if(is_sweep || is_riskli)
-                 {
-                  color line_clr = is_riskli ? clrRed : clrMagenta;
-                  string min_name = "Live_Min_Break_Up_" + IntegerToString(time[iH1]);
-                  // Eğer isimli obje yoksa (yeni kırılım anıysa), veya varsa bile güncel fiyatla yenile
-                  // Live ön eki, bar kapanıp fakeout olursa OnCalculate içindeki ObjectsDeleteAll(0, "Live_") ile otomatik silinmesini sağlar.
-                  DrawLine(min_name, time[iH1], H1, time[last_idx] + PeriodSeconds()*10, H1, line_clr, 3, STYLE_SOLID, false);
-                  DrawLine(min_name+"_z1", time[iL1], L1, time[iH1], H1, line_clr, 3, STYLE_SOLID, false);
-                  DrawLine(min_name+"_z2", time[iH1], H1, time[iL2], L2, line_clr, 3, STYLE_SOLID, false);
-                  DrawLine(min_name+"_z3", time[iL2], L2, time[last_idx], close[last_idx], line_clr, 3, STYLE_SOLID, false);
-                 }
-              }
-           }
-
-            // Düşen Trendde (Düzeltme Yukarı): Minör "Üst, Alt, Daha Yüksek Üst(Sweep), Kırılım" yapar.
-            // GERÇEK ZAMANLI KIRILIM: H2 (sweep) sonrası anlık fiyat (live) L1'i geçtiği an (alir almaz) Live_ ön ekiyle çiz!
-            else if(live_trend == -1 && sz_l >= 1 && sz_h >= 2)
-              {
-               double L1 = g_state_curr.st_l.GetVal(sz_l - 1);
-               int iL1 = g_state_curr.st_l.GetIdx(sz_l - 1);
-
-               double H2 = g_state_curr.st_h.GetVal(sz_h - 1);
-               int iH2 = g_state_curr.st_h.GetIdx(sz_h - 1);
-               double H1 = g_state_curr.st_h.GetVal(sz_h - 2);
-               int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
-
-               // Kronolojik sıra: H1 -> L1 -> H2 -> Kırılım (last_idx)
-               // Likidite Alımı (Sweep): H2 > H1
-               // VEYA Kullanıcı İsteği (%80 Riskli Dönüş): Likidite alamamış ama %80'ine kadar çıkmış: H2 <= H1 && H2 >= L1 + (H1 - L1)*0.8
-               // Kırılım: close[last_idx] < L1
-               if(close[last_idx] < L1 && iH1 < iL1 && iL1 < iH2 && iH2 < last_idx && (last_idx - iH1) < 45)
-                 {
-                  bool is_sweep = (H2 > H1);
-                  bool is_riskli = (!is_sweep && H2 >= L1 + (H1 - L1)*0.8);
-
-                  if(is_sweep || is_riskli)
-                    {
-                     color line_clr = is_riskli ? clrRed : clrMagenta;
-                     string min_name = "Live_Min_Break_Dn_" + IntegerToString(time[iL1]);
-                     // Live ön eki sayesinde bar bitiminde fakeout (iğne) varsa silinir, kalıcı ise geçmiş döngüsü (ProcessBar) çizer.
-                     DrawLine(min_name, time[iL1], L1, time[last_idx] + PeriodSeconds()*10, L1, line_clr, 3, STYLE_SOLID, false);
-                     DrawLine(min_name+"_z1", time[iH1], H1, time[iL1], L1, line_clr, 3, STYLE_SOLID, false);
-                     DrawLine(min_name+"_z2", time[iL1], L1, time[iH2], H2, line_clr, 3, STYLE_SOLID, false);
-                     DrawLine(min_name+"_z3", time[iH2], H2, time[last_idx], close[last_idx], line_clr, 3, STYLE_SOLID, false);
-                    }
-                 }
-              }
-           }
-
          // Reset triggers if swing changed
          if (g_state_curr.maj_h != g_last_alert_maj_h ||
              g_state_curr.maj_l != g_last_alert_maj_l ||
