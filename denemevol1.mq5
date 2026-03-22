@@ -851,6 +851,8 @@ void OnDeinit(const int reason)
    ObjectsDeleteAll(0, "Major_");
    ObjectsDeleteAll(0, "HLine_");
    ObjectsDeleteAll(0, "LiveLeg_");
+   ObjectsDeleteAll(0, "CHoCH_Bear_");
+   ObjectsDeleteAll(0, "CHoCH_Bull_");
   }
 
 //+------------------------------------------------------------------+
@@ -1002,7 +1004,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
    if (state.choch_dir == -1 && state.t2_h > state.t1_h && state.d1_l != 0) {
       if (val_c < state.d1_l) {
           // Bearish CHoCH confirmed!
-          if (InpShowChoch && !is_history) {
+          if (InpShowChoch) {
               string choch_name = GetUniqueName(prefix + "CHoCH_Bear_");
               DrawLine(choch_name, time[state.lp_i], state.d1_l, time[i] + PeriodSeconds(), state.d1_l, InpColorChochBear, 2, STYLE_SOLID, true);
           }
@@ -1011,7 +1013,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.t2_l < state.t1_l && state.d1_h != 0) {
       if (val_c > state.d1_h) {
           // Bullish CHoCH confirmed!
-          if (InpShowChoch && !is_history) {
+          if (InpShowChoch) {
               string choch_name = GetUniqueName(prefix + "CHoCH_Bull_");
               DrawLine(choch_name, time[state.lp_i], state.d1_h, time[i] + PeriodSeconds(), state.d1_h, InpColorChochBull, 2, STYLE_SOLID, true);
           }
@@ -1355,6 +1357,8 @@ int OnCalculate(const int rates_total,
       ObjectsDeleteAll(0, "Major_");
       ObjectsDeleteAll(0, "HLine_");
       ObjectsDeleteAll(0, "LiveLeg_");
+      ObjectsDeleteAll(0, "CHoCH_Bear_");
+      ObjectsDeleteAll(0, "CHoCH_Bull_");
 
       int start_idx = 0;
       for(int k=0; k<rates_total; k++) {
