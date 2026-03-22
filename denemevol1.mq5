@@ -927,6 +927,16 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               }
            }
 
+         // CHoCH Invalidation (Making a High)
+         if (state.choch_dir == -1 && state.t2_h != 0) {
+             // T1, D1, T2 formed. Making ANOTHER High means Leg 3 failed to break D1. Reset.
+             state.choch_dir = 0;
+         }
+         if (state.choch_dir == 1 && state.t2_l != 0 && state.min_h <= state.d1_h) {
+             // Bullish: T1, D1, T2 formed. Making a High that is <= D1 means failure to break. Reset.
+             state.choch_dir = 0;
+         }
+
          // CHoCH Bearish sequence tracking
          if (state.maj_tr == 1 && in_pullback_zone) {
              if (state.choch_dir == 0 || state.choch_dir == 1) { // Initiate T1 for Bearish
@@ -983,6 +993,16 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                state.st_h.Pop();
               }
            }
+
+         // CHoCH Invalidation (Making a Low)
+         if (state.choch_dir == 1 && state.t2_l != 0) {
+             // T1, D1, T2 formed. Making ANOTHER Low means Leg 3 failed to break D1. Reset.
+             state.choch_dir = 0;
+         }
+         if (state.choch_dir == -1 && state.t2_h != 0 && state.min_l >= state.d1_l) {
+             // Bearish: T1, D1, T2 formed. Making a Low that is >= D1 means failure to break. Reset.
+             state.choch_dir = 0;
+         }
 
          // CHoCH Bullish sequence tracking
          if (state.maj_tr == -1 && in_pullback_zone) {
