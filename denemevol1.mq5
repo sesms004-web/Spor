@@ -37,6 +37,10 @@ input bool   InpAlertPush        = false;
 input bool   InpNotificationFilter = false;          // Bildirim Filtresi (True: Sadece Swing İçi, False: Kırılımdan İtibaren)
 input bool   InpTestMode         = false;
 
+//--- Onay ve İşlem Yüzdeliği ---
+input double InpOnayIslemYuzdeMin = 20.0;
+input double InpOnayIslemYuzdeMax = 100.0;
+
 //--- Globals ---
 int g_counter = 0;
 datetime g_last_alert_time = 0;
@@ -172,6 +176,19 @@ struct SState
    CStack            st_h;
    CStack            st_l;
 
+   // CHoCH Detection Variables
+   bool              choch_active;
+   int               choch_last_dir; // 1: uptrend choch triggered, -1: downtrend choch triggered
+   datetime          choch_t1_time;
+   double            choch_t1_val;
+   datetime          choch_d1_time;
+   double            choch_d1_val;
+   datetime          choch_t2_time;
+   double            choch_t2_val;
+   datetime          choch_break_time;
+   double            choch_break_val;
+   bool              choch_is_strong;
+
    void              CopyFrom(SState &source)
      {
       min_tr         = source.min_tr;
@@ -205,6 +222,18 @@ struct SState
 
       st_h.CopyFrom(source.st_h);
       st_l.CopyFrom(source.st_l);
+
+      choch_active     = source.choch_active;
+      choch_last_dir   = source.choch_last_dir;
+      choch_t1_time    = source.choch_t1_time;
+      choch_t1_val     = source.choch_t1_val;
+      choch_d1_time    = source.choch_d1_time;
+      choch_d1_val     = source.choch_d1_val;
+      choch_t2_time    = source.choch_t2_time;
+      choch_t2_val     = source.choch_t2_val;
+      choch_break_time = source.choch_break_time;
+      choch_break_val  = source.choch_break_val;
+      choch_is_strong  = source.choch_is_strong;
      }
   };
 
@@ -808,6 +837,8 @@ void OnDeinit(const int reason)
    ObjectsDeleteAll(0, "Major_");
    ObjectsDeleteAll(0, "HLine_");
    ObjectsDeleteAll(0, "LiveLeg_");
+   ObjectsDeleteAll(0, "ChochLine_");
+   ObjectsDeleteAll(0, "ChochEntry_");
   }
 
 //+------------------------------------------------------------------+
@@ -820,6 +851,134 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
    double val_c = close[i];
 
    string prefix = is_history ? "" : "Live_";
+
+   // Current Pullback Percentage Calculation
+   double pullback_pct = 0;
+   if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l)
+     {
+      double range = state.maj_h - state.maj_l;
+      if (state.maj_tr == 1) // Uptrend
+        {
+         if (val_c < state.maj_h && val_c > state.maj_l)
+            pullback_pct = ((state.maj_h - val_c) / range) * 100.0;
+         else if (val_c <= state.maj_l)
+            pullback_pct = 100.0;
+         else
+            pullback_pct = 0.0;
+        }
+      else if (state.maj_tr == -1) // Downtrend
+        {
+         if (val_c > state.maj_l && val_c < state.maj_h)
+            pullback_pct = ((val_c - state.maj_l) / range) * 100.0;
+         else if (val_c >= state.maj_h)
+            pullback_pct = 100.0;
+         else
+            pullback_pct = 0.0;
+        }
+     }
+
+   bool in_zone = (pullback_pct >= InpOnayIslemYuzdeMin && pullback_pct <= InpOnayIslemYuzdeMax);
+   if(!in_zone) {
+      // If outside zone, reset CHoCH tracking
+      state.choch_active = false;
+      state.choch_last_dir = 0;
+   }
+
+   // Detect Break for CHoCH
+   if (in_zone && state.st_h.Size() >= 2 && state.st_l.Size() >= 2)
+     {
+      if (state.maj_tr == -1) // Downtrend -> Look for Short Entry
+        {
+         // We need the sequence: T1, D1, T2. And then price breaking D1.
+         // Since min_tr tracks current swing, let's look at history stacks.
+         // st_h has tops, st_l has bottoms.
+         int s_h = state.st_h.Size();
+         int s_l = state.st_l.Size();
+
+         double T2 = state.st_h.GetVal(s_h - 1);
+         int T2_i = state.st_h.GetIdx(s_h - 1);
+         double T1 = state.st_h.GetVal(s_h - 2);
+         int T1_i = state.st_h.GetIdx(s_h - 2);
+
+         double D1 = state.st_l.GetVal(s_l - 1);
+         int D1_i = state.st_l.GetIdx(s_l - 1);
+
+         // Sequence must be T1 -> D1 -> T2
+         if (T1_i < D1_i && D1_i < T2_i)
+           {
+            // Price goes below D1
+            if (val_l < D1 && state.choch_last_dir != -1 && state.min_tr == -1 && state.lp_i == T2_i)
+              {
+               bool is_strong = (T2 > T1); // T2 breaks T1 (liquidity grab)
+               // Weak is T2 <= T1
+
+               state.choch_active = true;
+               state.choch_last_dir = -1;
+               state.choch_t1_time = time[T1_i];
+               state.choch_t1_val = T1;
+               state.choch_d1_time = time[D1_i];
+               state.choch_d1_val = D1;
+               state.choch_t2_time = time[T2_i];
+               state.choch_t2_val = T2;
+               state.choch_break_time = time[i];
+               state.choch_break_val = D1;
+               state.choch_is_strong = is_strong;
+
+               string c_name = GetUniqueName(prefix + "ChochLine_");
+               DrawLine(c_name + "_1", state.choch_t1_time, state.choch_t1_val, state.choch_d1_time, state.choch_d1_val, clrMagenta, 2, STYLE_SOLID);
+               DrawLine(c_name + "_2", state.choch_d1_time, state.choch_d1_val, state.choch_t2_time, state.choch_t2_val, clrMagenta, 2, STYLE_SOLID);
+               DrawLine(c_name + "_3", state.choch_t2_time, state.choch_t2_val, state.choch_break_time, state.choch_break_val, clrMagenta, 2, STYLE_SOLID);
+
+               string e_name = GetUniqueName(prefix + "ChochEntry_");
+               DrawLine(e_name, time[D1_i], D1, time[i] + PeriodSeconds()*5, D1, clrMagenta, 2, STYLE_SOLID, false);
+              }
+           }
+        }
+      else if (state.maj_tr == 1) // Uptrend -> Look for Long Entry
+        {
+         int s_h = state.st_h.Size();
+         int s_l = state.st_l.Size();
+
+         double D2 = state.st_l.GetVal(s_l - 1);
+         int D2_i = state.st_l.GetIdx(s_l - 1);
+         double D1 = state.st_l.GetVal(s_l - 2);
+         int D1_i = state.st_l.GetIdx(s_l - 2);
+
+         double T1 = state.st_h.GetVal(s_h - 1);
+         int T1_i = state.st_h.GetIdx(s_h - 1);
+
+         // Sequence must be D1 -> T1 -> D2
+         if (D1_i < T1_i && T1_i < D2_i)
+           {
+            // Price goes above T1
+            if (val_h > T1 && state.choch_last_dir != 1 && state.min_tr == 1 && state.lp_i == D2_i)
+              {
+               bool is_strong = (D2 < D1); // D2 breaks D1 (liquidity grab)
+               // Weak is D2 >= D1
+
+               state.choch_active = true;
+               state.choch_last_dir = 1;
+               state.choch_t1_time = time[D1_i]; // Mapping D1 to t1
+               state.choch_t1_val = D1;
+               state.choch_d1_time = time[T1_i]; // Mapping T1 to d1
+               state.choch_d1_val = T1;
+               state.choch_t2_time = time[D2_i]; // Mapping D2 to t2
+               state.choch_t2_val = D2;
+               state.choch_break_time = time[i];
+               state.choch_break_val = T1;
+               state.choch_is_strong = is_strong;
+
+               string c_name = GetUniqueName(prefix + "ChochLine_");
+               DrawLine(c_name + "_1", state.choch_t1_time, state.choch_t1_val, state.choch_d1_time, state.choch_d1_val, clrMagenta, 2, STYLE_SOLID);
+               DrawLine(c_name + "_2", state.choch_d1_time, state.choch_d1_val, state.choch_t2_time, state.choch_t2_val, clrMagenta, 2, STYLE_SOLID);
+               DrawLine(c_name + "_3", state.choch_t2_time, state.choch_t2_val, state.choch_break_time, state.choch_break_val, clrMagenta, 2, STYLE_SOLID);
+
+               string e_name = GetUniqueName(prefix + "ChochEntry_");
+               DrawLine(e_name, time[T1_i], T1, time[i] + PeriodSeconds()*5, T1, clrMagenta, 2, STYLE_SOLID, false);
+              }
+           }
+        }
+     }
 
    // MINOR STRUCTURE
    if(state.min_tr == 1)
@@ -1227,6 +1386,8 @@ int OnCalculate(const int rates_total,
       ObjectsDeleteAll(0, "Major_");
       ObjectsDeleteAll(0, "HLine_");
       ObjectsDeleteAll(0, "LiveLeg_");
+      ObjectsDeleteAll(0, "ChochLine_");
+      ObjectsDeleteAll(0, "ChochEntry_");
 
       int start_idx = 0;
       for(int k=0; k<rates_total; k++) {
@@ -1251,6 +1412,9 @@ int OnCalculate(const int rates_total,
       g_state_hist.anc_v   = close[start_idx];
       g_state_hist.lp_i    = start_idx;
       g_state_hist.lp_p    = close[start_idx];
+
+      g_state_hist.choch_active = false;
+      g_state_hist.choch_last_dir = 0;
 
       // Başlangıçta yapının (maj) boş kalmaması için ince bir ATR aralığında yapay swing oluşturuluyor.
       double initial_atr = 0;
