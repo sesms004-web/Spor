@@ -1044,8 +1044,21 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
       if (val_c < state.d1_l) {
           // Bearish CHoCH confirmed!
+          bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
+
+          if (!is_history) {
+              string msg = "🔴 [" + Symbol() + "] M1 Trend Döndü! (CHoCH)\n";
+              msg += "Yön: ⬇️ AŞAĞI\n";
+              if (is_strong) {
+                  msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.";
+              } else {
+                  msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.";
+              }
+              if(InpAlertPopup) Alert(msg);
+              if(InpAlertPush) SendNotification(msg);
+          }
+
           if (InpShowChoch) {
-              bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
 
               // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
@@ -1067,8 +1080,21 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
       if (val_c > state.d1_h) {
           // Bullish CHoCH confirmed!
+          bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
+
+          if (!is_history) {
+              string msg = "🟢 [" + Symbol() + "] M1 Trend Döndü! (CHoCH)\n";
+              msg += "Yön: ⬆️ YUKARI\n";
+              if (is_strong) {
+                  msg += "Durum: 🔥 GÜÇLÜ! Dip likiditesi alındı.";
+              } else {
+                  msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.";
+              }
+              if(InpAlertPopup) Alert(msg);
+              if(InpAlertPush) SendNotification(msg);
+          }
+
           if (InpShowChoch) {
-              bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
 
               // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
