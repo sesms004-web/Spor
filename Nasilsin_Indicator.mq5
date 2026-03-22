@@ -1294,21 +1294,12 @@ int OnCalculate(const int rates_total,
          int sz_l = g_state_hist.st_l.Size();
 
          double hist_range = 0;
-         double hist_pct = 0;
          if(g_state_hist.maj_h != EMPTY_VALUE && g_state_hist.maj_l != EMPTY_VALUE && g_state_hist.maj_h != g_state_hist.maj_l)
-           {
             hist_range = g_state_hist.maj_h - g_state_hist.maj_l;
-            if(g_state_hist.maj_tr == 1) hist_pct = ((g_state_hist.maj_h - close[i]) / hist_range) * 100.0;
-            else if(g_state_hist.maj_tr == -1) hist_pct = ((close[i] - g_state_hist.maj_l) / hist_range) * 100.0;
-           }
-
-         // Kullanıcının Talebi: "Sadece %40 üstüne çıkınca aktif olsun (Çekilme yüzdesi)"
-         // Güncelleme: "İşlem Onay Çizgisi" için ayrı InpTradeTriggerPct ayarı kullan.
-         bool hist_valid_pullback = (hist_pct >= InpTradeTriggerPct && hist_pct <= 100.0 && g_state_hist.maj_st == 1);
 
          // Yükselen Trendde (Düzeltme Aşağı): "Alt, Üst, Daha Düşük Alt, Kırılım"
          // Yani L1 (Sol Omuz Likiditesi), H1 (İşlem Yeri), L2 (Sweep), Kırılım (i)
-         if(hist_valid_pullback && g_state_hist.maj_tr == 1 && sz_h >= 1 && sz_l >= 2)
+         if(g_state_hist.maj_tr == 1 && sz_h >= 1 && sz_l >= 2 && hist_range > 0 && g_state_hist.maj_st == 1)
            {
             double H1 = g_state_hist.st_h.GetVal(sz_h - 1);
             int iH1 = g_state_hist.st_h.GetIdx(sz_h - 1);
@@ -1318,11 +1309,15 @@ int OnCalculate(const int rates_total,
             double L1 = g_state_hist.st_l.GetVal(sz_l - 2);
             int iL1 = g_state_hist.st_l.GetIdx(sz_l - 2);
 
+            // Çekilme (Pullback) Derinliği Hesabı: Swing içindeki "en son ulaşılan dip (L2)" üzerinden
+            // InpTradeTriggerPct (%40 vb.) sağlanıp sağlanmadığını "net" olarak kontrol et.
+            double max_pullback = ((g_state_hist.maj_h - L2) / hist_range) * 100.0;
+
             // Kronolojik sıra: L1 -> H1 -> L2 -> Kırılım (i)
             // Likidite Alımı (Sweep): L2 < L1
             // VEYA Kullanıcı İsteği (%80 Riskli Dönüş): Likidite alamamış ama %80'ine kadar inmiş: L2 >= L1 && L2 <= H1 - (H1 - L1)*0.8
             // Kırılım: close[i] > H1
-            if(close[i] > H1 && iL1 < iH1 && iH1 < iL2 && iL2 < i && (i - iL1) < 45)
+            if(close[i] > H1 && iL1 < iH1 && iH1 < iL2 && iL2 < i && (i - iL1) < 45 && max_pullback >= InpTradeTriggerPct)
               {
                bool is_sweep = (L2 < L1);
                bool is_riskli = (!is_sweep && L2 <= H1 - (H1 - L1)*0.8);
@@ -1345,7 +1340,7 @@ int OnCalculate(const int rates_total,
            }
          // Düşen Trendde (Düzeltme Yukarı): "Üst, Alt, Daha Yüksek Üst, Kırılım"
          // Yani H1 (Sol Omuz Likiditesi), L1 (İşlem Yeri), H2 (Sweep), Kırılım (i)
-         else if(g_state_hist.maj_tr == -1 && sz_l >= 1 && sz_h >= 2)
+         else if(g_state_hist.maj_tr == -1 && sz_l >= 1 && sz_h >= 2 && hist_range > 0 && g_state_hist.maj_st == 1)
            {
             double L1 = g_state_hist.st_l.GetVal(sz_l - 1);
             int iL1 = g_state_hist.st_l.GetIdx(sz_l - 1);
@@ -1355,11 +1350,14 @@ int OnCalculate(const int rates_total,
             double H1 = g_state_hist.st_h.GetVal(sz_h - 2);
             int iH1 = g_state_hist.st_h.GetIdx(sz_h - 2);
 
+            // Çekilme (Pullback) Derinliği Hesabı: Swing içindeki "en son ulaşılan tepe (H2)" üzerinden
+            double max_pullback = ((H2 - g_state_hist.maj_l) / hist_range) * 100.0;
+
             // Kronolojik sıra: H1 -> L1 -> H2 -> Kırılım (i)
             // Likidite Alımı (Sweep): H2 > H1
             // VEYA Kullanıcı İsteği (%80 Riskli Dönüş): Likidite alamamış ama %80'ine kadar çıkmış: H2 <= H1 && H2 >= L1 + (H1 - L1)*0.8
             // Kırılım: close[i] < L1
-            if(close[i] < L1 && iH1 < iL1 && iL1 < iH2 && iH2 < i && (i - iH1) < 45)
+            if(close[i] < L1 && iH1 < iL1 && iL1 < iH2 && iH2 < i && (i - iH1) < 45 && max_pullback >= InpTradeTriggerPct)
               {
                bool is_sweep = (H2 > H1);
                bool is_riskli = (!is_sweep && H2 >= L1 + (H1 - L1)*0.8);
@@ -1432,13 +1430,13 @@ int OnCalculate(const int rates_total,
          int sz_h = g_state_curr.st_h.Size();
          int sz_l = g_state_curr.st_l.Size();
 
-         // Kullanıcı talebi: Sadece %40 üstüne çıkınca minör kırılım çizgileri aktif olsun.
-         // Güncelleme: Çizgi için ayar InpTradeTriggerPct yapıldı.
-         if (live_pct >= InpTradeTriggerPct)
-           {
-            // Yükselen Trendde Düzeltme (Aşağı): Minör "Alt, Üst, Daha Düşük Alt(Sweep), Kırılım" yapar.
-            // GERÇEK ZAMANLI KIRILIM: L2 (sweep) sonrası anlık fiyat (live) H1'i geçtiği an (alir almaz) Live_ ön ekiyle çiz!
-            if(live_trend == 1 && sz_h >= 1 && sz_l >= 2)
+         // Yükselen Trendde Düzeltme (Aşağı): Minör "Alt, Üst, Daha Düşük Alt(Sweep), Kırılım" yapar.
+         // GERÇEK ZAMANLI KIRILIM: L2 (sweep) sonrası anlık fiyat (live) H1'i geçtiği an (alir almaz) Live_ ön ekiyle çiz!
+         double live_range = 0;
+         if(g_state_curr.maj_h != EMPTY_VALUE && g_state_curr.maj_l != EMPTY_VALUE && g_state_curr.maj_h != g_state_curr.maj_l)
+            live_range = g_state_curr.maj_h - g_state_curr.maj_l;
+
+         if(live_trend == 1 && sz_h >= 1 && sz_l >= 2 && live_range > 0 && g_state_curr.maj_st == 1)
               {
                double H1 = g_state_curr.st_h.GetVal(sz_h - 1);
                int iH1 = g_state_curr.st_h.GetIdx(sz_h - 1);
@@ -1448,11 +1446,14 @@ int OnCalculate(const int rates_total,
             double L1 = g_state_curr.st_l.GetVal(sz_l - 2);
             int iL1 = g_state_curr.st_l.GetIdx(sz_l - 2);
 
+            // Çekilme Derinliği Hesabı: Swing içindeki "en son ulaşılan dip (L2)" üzerinden
+            double max_pullback = ((g_state_curr.maj_h - L2) / live_range) * 100.0;
+
             // Kronolojik sıra: L1 -> H1 -> L2 -> Kırılım (last_idx)
             // Likidite Alımı (Sweep): L2 < L1
             // VEYA Kullanıcı İsteği (%80 Riskli Dönüş): Likidite alamamış ama %80'ine kadar inmiş: L2 >= L1 && L2 <= H1 - (H1 - L1)*0.8
             // Kırılım: close[last_idx] > H1
-            if(close[last_idx] > H1 && iL1 < iH1 && iH1 < iL2 && iL2 < last_idx && (last_idx - iL1) < 45)
+            if(close[last_idx] > H1 && iL1 < iH1 && iH1 < iL2 && iL2 < last_idx && (last_idx - iL1) < 45 && max_pullback >= InpTradeTriggerPct)
               {
                bool is_sweep = (L2 < L1);
                bool is_riskli = (!is_sweep && L2 <= H1 - (H1 - L1)*0.8);
@@ -1483,11 +1484,14 @@ int OnCalculate(const int rates_total,
                double H1 = g_state_curr.st_h.GetVal(sz_h - 2);
                int iH1 = g_state_curr.st_h.GetIdx(sz_h - 2);
 
+            // Çekilme Derinliği Hesabı: Swing içindeki "en son ulaşılan tepe (H2)" üzerinden
+            double max_pullback = ((H2 - g_state_curr.maj_l) / live_range) * 100.0;
+
                // Kronolojik sıra: H1 -> L1 -> H2 -> Kırılım (last_idx)
                // Likidite Alımı (Sweep): H2 > H1
                // VEYA Kullanıcı İsteği (%80 Riskli Dönüş): Likidite alamamış ama %80'ine kadar çıkmış: H2 <= H1 && H2 >= L1 + (H1 - L1)*0.8
                // Kırılım: close[last_idx] < L1
-               if(close[last_idx] < L1 && iH1 < iL1 && iL1 < iH2 && iH2 < last_idx && (last_idx - iH1) < 45)
+            if(close[last_idx] < L1 && iH1 < iL1 && iL1 < iH2 && iH2 < last_idx && (last_idx - iH1) < 45 && max_pullback >= InpTradeTriggerPct)
                  {
                   bool is_sweep = (H2 > H1);
                   bool is_riskli = (!is_sweep && H2 >= L1 + (H1 - L1)*0.8);
