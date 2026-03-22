@@ -189,6 +189,17 @@ struct SState
    double            choch_break_val;
    bool              choch_is_strong;
 
+   // CHoCH Pending Boundaries (Inside Bar Logic)
+   int               choch_pending_dir; // 1: pending uptrend, -1: pending downtrend
+   double            choch_upper_bound; // invalidation for short, trigger for long
+   double            choch_lower_bound; // trigger for short, invalidation for long
+   datetime          choch_p_t1_time;
+   double            choch_p_t1_val;
+   datetime          choch_p_d1_time;
+   double            choch_p_d1_val;
+   datetime          choch_p_t2_time;
+   double            choch_p_t2_val;
+
    void              CopyFrom(SState &source)
      {
       min_tr         = source.min_tr;
@@ -234,6 +245,16 @@ struct SState
       choch_break_time = source.choch_break_time;
       choch_break_val  = source.choch_break_val;
       choch_is_strong  = source.choch_is_strong;
+
+      choch_pending_dir = source.choch_pending_dir;
+      choch_upper_bound = source.choch_upper_bound;
+      choch_lower_bound = source.choch_lower_bound;
+      choch_p_t1_time   = source.choch_p_t1_time;
+      choch_p_t1_val    = source.choch_p_t1_val;
+      choch_p_d1_time   = source.choch_p_d1_time;
+      choch_p_d1_val    = source.choch_p_d1_val;
+      choch_p_t2_time   = source.choch_p_t2_time;
+      choch_p_t2_val    = source.choch_p_t2_val;
      }
   };
 
@@ -882,99 +903,147 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       // If outside zone, reset CHoCH tracking
       state.choch_active = false;
       state.choch_last_dir = 0;
+      state.choch_pending_dir = 0;
    }
 
-   // Detect Break for CHoCH
-   if (in_zone && state.st_h.Size() >= 2 && state.st_l.Size() >= 2)
+   // --- Boundary / Inside Bar Logic Evaluation ---
+   if (in_zone)
      {
-      if (state.maj_tr == -1) // Downtrend -> Look for Short Entry
+      // Check active pending setup limits before detecting new ones
+      if (state.choch_pending_dir == -1 && state.maj_tr == -1) // Pending Short Setup
         {
-         // We need the sequence: T1, D1, T2. And then price breaking D1.
-         // Since min_tr tracks current swing, let's look at history stacks.
-         // st_h has tops, st_l has bottoms.
-         int s_h = state.st_h.Size();
-         int s_l = state.st_l.Size();
-
-         double T2 = state.st_h.GetVal(s_h - 1);
-         int T2_i = state.st_h.GetIdx(s_h - 1);
-         double T1 = state.st_h.GetVal(s_h - 2);
-         int T1_i = state.st_h.GetIdx(s_h - 2);
-
-         double D1 = state.st_l.GetVal(s_l - 1);
-         int D1_i = state.st_l.GetIdx(s_l - 1);
-
-         // Sequence must be T1 -> D1 -> T2
-         if (T1_i < D1_i && D1_i < T2_i)
+         // If price goes HIGHER than the upper bound (Max of T1 and T2), setup is INVALIDATED
+         if (val_h > state.choch_upper_bound)
            {
-            // Price goes below D1
-            if (val_l < D1 && state.choch_last_dir != -1 && state.min_tr == -1 && state.lp_i == T2_i)
-              {
-               bool is_strong = (T2 > T1); // T2 breaks T1 (liquidity grab)
-               // Weak is T2 <= T1
+            state.choch_pending_dir = 0; // Cancel pending setup
+           }
+         // If price drops BELOW the lower bound (D1), signal TRIGGERED
+         else if (val_l < state.choch_lower_bound && state.choch_last_dir != -1)
+           {
+            state.choch_active = true;
+            state.choch_last_dir = -1;
+            state.choch_pending_dir = 0; // Cleared
 
-               state.choch_active = true;
-               state.choch_last_dir = -1;
-               state.choch_t1_time = time[T1_i];
-               state.choch_t1_val = T1;
-               state.choch_d1_time = time[D1_i];
-               state.choch_d1_val = D1;
-               state.choch_t2_time = time[T2_i];
-               state.choch_t2_val = T2;
-               state.choch_break_time = time[i];
-               state.choch_break_val = D1;
-               state.choch_is_strong = is_strong;
+            state.choch_t1_time = state.choch_p_t1_time;
+            state.choch_t1_val = state.choch_p_t1_val;
+            state.choch_d1_time = state.choch_p_d1_time;
+            state.choch_d1_val = state.choch_p_d1_val;
+            state.choch_t2_time = state.choch_p_t2_time;
+            state.choch_t2_val = state.choch_p_t2_val;
+            state.choch_break_time = time[i];
+            state.choch_break_val = state.choch_lower_bound;
 
-               string c_name = GetUniqueName(prefix + "ChochLine_");
-               DrawLine(c_name + "_1", state.choch_t1_time, state.choch_t1_val, state.choch_d1_time, state.choch_d1_val, clrMagenta, 2, STYLE_SOLID);
-               DrawLine(c_name + "_2", state.choch_d1_time, state.choch_d1_val, state.choch_t2_time, state.choch_t2_val, clrMagenta, 2, STYLE_SOLID);
-               DrawLine(c_name + "_3", state.choch_t2_time, state.choch_t2_val, state.choch_break_time, state.choch_break_val, clrMagenta, 2, STYLE_SOLID);
+            bool is_strong = (state.choch_p_t2_val > state.choch_p_t1_val);
+            state.choch_is_strong = is_strong;
 
-               string e_name = GetUniqueName(prefix + "ChochEntry_");
-               DrawLine(e_name, time[D1_i], D1, time[i] + PeriodSeconds()*5, D1, clrBlue, 2, STYLE_SOLID, false);
-              }
+            string c_name = GetUniqueName(prefix + "ChochLine_");
+            DrawLine(c_name + "_1", state.choch_t1_time, state.choch_t1_val, state.choch_d1_time, state.choch_d1_val, clrMagenta, 2, STYLE_SOLID);
+            DrawLine(c_name + "_2", state.choch_d1_time, state.choch_d1_val, state.choch_t2_time, state.choch_t2_val, clrMagenta, 2, STYLE_SOLID);
+            DrawLine(c_name + "_3", state.choch_t2_time, state.choch_t2_val, state.choch_break_time, state.choch_break_val, clrMagenta, 2, STYLE_SOLID);
+
+            string e_name = GetUniqueName(prefix + "ChochEntry_");
+            DrawLine(e_name, state.choch_d1_time, state.choch_d1_val, time[i] + PeriodSeconds()*5, state.choch_d1_val, clrBlue, 2, STYLE_SOLID, false);
            }
         }
-      else if (state.maj_tr == 1) // Uptrend -> Look for Long Entry
+      else if (state.choch_pending_dir == 1 && state.maj_tr == 1) // Pending Long Setup
         {
-         int s_h = state.st_h.Size();
-         int s_l = state.st_l.Size();
-
-         double D2 = state.st_l.GetVal(s_l - 1);
-         int D2_i = state.st_l.GetIdx(s_l - 1);
-         double D1 = state.st_l.GetVal(s_l - 2);
-         int D1_i = state.st_l.GetIdx(s_l - 2);
-
-         double T1 = state.st_h.GetVal(s_h - 1);
-         int T1_i = state.st_h.GetIdx(s_h - 1);
-
-         // Sequence must be D1 -> T1 -> D2
-         if (D1_i < T1_i && T1_i < D2_i)
+         // If price drops LOWER than the lower bound (Min of D1 and D2), setup is INVALIDATED
+         if (val_l < state.choch_lower_bound)
            {
-            // Price goes above T1
-            if (val_h > T1 && state.choch_last_dir != 1 && state.min_tr == 1 && state.lp_i == D2_i)
+            state.choch_pending_dir = 0; // Cancel pending setup
+           }
+         // If price goes HIGHER than the upper bound (T1), signal TRIGGERED
+         else if (val_h > state.choch_upper_bound && state.choch_last_dir != 1)
+           {
+            state.choch_active = true;
+            state.choch_last_dir = 1;
+            state.choch_pending_dir = 0; // Cleared
+
+            state.choch_t1_time = state.choch_p_t1_time;
+            state.choch_t1_val = state.choch_p_t1_val;
+            state.choch_d1_time = state.choch_p_d1_time;
+            state.choch_d1_val = state.choch_p_d1_val;
+            state.choch_t2_time = state.choch_p_t2_time;
+            state.choch_t2_val = state.choch_p_t2_val;
+            state.choch_break_time = time[i];
+            state.choch_break_val = state.choch_upper_bound;
+
+            bool is_strong = (state.choch_p_t2_val < state.choch_p_t1_val);
+            state.choch_is_strong = is_strong;
+
+            string c_name = GetUniqueName(prefix + "ChochLine_");
+            DrawLine(c_name + "_1", state.choch_t1_time, state.choch_t1_val, state.choch_d1_time, state.choch_d1_val, clrMagenta, 2, STYLE_SOLID);
+            DrawLine(c_name + "_2", state.choch_d1_time, state.choch_d1_val, state.choch_t2_time, state.choch_t2_val, clrMagenta, 2, STYLE_SOLID);
+            DrawLine(c_name + "_3", state.choch_t2_time, state.choch_t2_val, state.choch_break_time, state.choch_break_val, clrMagenta, 2, STYLE_SOLID);
+
+            string e_name = GetUniqueName(prefix + "ChochEntry_");
+            DrawLine(e_name, state.choch_d1_time, state.choch_d1_val, time[i] + PeriodSeconds()*5, state.choch_d1_val, clrBlue, 2, STYLE_SOLID, false);
+           }
+        }
+
+      // Detect New Pending Setups from Minor Structure
+      if (state.st_h.Size() >= 2 && state.st_l.Size() >= 2)
+        {
+         if (state.maj_tr == -1) // Downtrend -> Look for Short Entry Setup
+           {
+            int s_h = state.st_h.Size();
+            int s_l = state.st_l.Size();
+
+            double T2 = state.st_h.GetVal(s_h - 1);
+            int T2_i = state.st_h.GetIdx(s_h - 1);
+            double T1 = state.st_h.GetVal(s_h - 2);
+            int T1_i = state.st_h.GetIdx(s_h - 2);
+
+            double D1 = state.st_l.GetVal(s_l - 1);
+            int D1_i = state.st_l.GetIdx(s_l - 1);
+
+            // Sequence must be T1 -> D1 -> T2
+            // And we only establish a NEW pending if we are currently at T2 (minor pivot logic just flipped)
+            if (T1_i < D1_i && D1_i < T2_i && state.min_tr == -1 && state.lp_i == T2_i)
               {
-               bool is_strong = (D2 < D1); // D2 breaks D1 (liquidity grab)
-               // Weak is D2 >= D1
+               // If a different/newer sequence happens, overwrite the pending setup
+               if (state.choch_pending_dir != -1 || state.choch_p_t2_time != time[T2_i])
+                 {
+                  state.choch_pending_dir = -1;
+                  state.choch_upper_bound = MathMax(T1, T2); // Highest peak is invalidation
+                  state.choch_lower_bound = D1;              // D1 is the trigger level
+                  state.choch_p_t1_time = time[T1_i];
+                  state.choch_p_t1_val = T1;
+                  state.choch_p_d1_time = time[D1_i];
+                  state.choch_p_d1_val = D1;
+                  state.choch_p_t2_time = time[T2_i];
+                  state.choch_p_t2_val = T2;
+                 }
+              }
+           }
+         else if (state.maj_tr == 1) // Uptrend -> Look for Long Entry Setup
+           {
+            int s_h = state.st_h.Size();
+            int s_l = state.st_l.Size();
 
-               state.choch_active = true;
-               state.choch_last_dir = 1;
-               state.choch_t1_time = time[D1_i]; // Mapping D1 to t1
-               state.choch_t1_val = D1;
-               state.choch_d1_time = time[T1_i]; // Mapping T1 to d1
-               state.choch_d1_val = T1;
-               state.choch_t2_time = time[D2_i]; // Mapping D2 to t2
-               state.choch_t2_val = D2;
-               state.choch_break_time = time[i];
-               state.choch_break_val = T1;
-               state.choch_is_strong = is_strong;
+            double D2 = state.st_l.GetVal(s_l - 1);
+            int D2_i = state.st_l.GetIdx(s_l - 1);
+            double D1 = state.st_l.GetVal(s_l - 2);
+            int D1_i = state.st_l.GetIdx(s_l - 2);
 
-               string c_name = GetUniqueName(prefix + "ChochLine_");
-               DrawLine(c_name + "_1", state.choch_t1_time, state.choch_t1_val, state.choch_d1_time, state.choch_d1_val, clrMagenta, 2, STYLE_SOLID);
-               DrawLine(c_name + "_2", state.choch_d1_time, state.choch_d1_val, state.choch_t2_time, state.choch_t2_val, clrMagenta, 2, STYLE_SOLID);
-               DrawLine(c_name + "_3", state.choch_t2_time, state.choch_t2_val, state.choch_break_time, state.choch_break_val, clrMagenta, 2, STYLE_SOLID);
+            double T1 = state.st_h.GetVal(s_h - 1);
+            int T1_i = state.st_h.GetIdx(s_h - 1);
 
-               string e_name = GetUniqueName(prefix + "ChochEntry_");
-               DrawLine(e_name, time[T1_i], T1, time[i] + PeriodSeconds()*5, T1, clrBlue, 2, STYLE_SOLID, false);
+            // Sequence must be D1 -> T1 -> D2
+            if (D1_i < T1_i && T1_i < D2_i && state.min_tr == 1 && state.lp_i == D2_i)
+              {
+               if (state.choch_pending_dir != 1 || state.choch_p_t2_time != time[D2_i])
+                 {
+                  state.choch_pending_dir = 1;
+                  state.choch_lower_bound = MathMin(D1, D2); // Lowest dip is invalidation
+                  state.choch_upper_bound = T1;              // T1 is the trigger level
+                  state.choch_p_t1_time = time[D1_i]; // Mapping D1 to t1
+                  state.choch_p_t1_val = D1;
+                  state.choch_p_d1_time = time[T1_i]; // Mapping T1 to d1
+                  state.choch_p_d1_val = T1;
+                  state.choch_p_t2_time = time[D2_i]; // Mapping D2 to t2
+                  state.choch_p_t2_val = D2;
+                 }
               }
            }
         }
@@ -1415,6 +1484,7 @@ int OnCalculate(const int rates_total,
 
       g_state_hist.choch_active = false;
       g_state_hist.choch_last_dir = 0;
+      g_state_hist.choch_pending_dir = 0;
 
       // Başlangıçta yapının (maj) boş kalmaması için ince bir ATR aralığında yapay swing oluşturuluyor.
       double initial_atr = 0;
