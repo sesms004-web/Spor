@@ -938,7 +938,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          }
 
          // CHoCH Bearish sequence tracking
-         if (state.maj_tr == 1 && in_pullback_zone) {
+         if (state.maj_tr == -1 && in_pullback_zone) {
              if (state.choch_dir == 0 || state.choch_dir == 1) { // Initiate T1 for Bearish
                  state.t1_h = state.min_h;
                  state.t1_l = state.min_l;
@@ -1005,7 +1005,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          }
 
          // CHoCH Bullish sequence tracking
-         if (state.maj_tr == -1 && in_pullback_zone) {
+         if (state.maj_tr == 1 && in_pullback_zone) {
              if (state.choch_dir == 0 || state.choch_dir == -1) { // Initiate T1 for Bullish
                  state.t1_l = state.min_l;
                  state.t1_h = state.min_h;
