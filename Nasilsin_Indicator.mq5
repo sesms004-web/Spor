@@ -29,6 +29,7 @@ input color  InpColorBear = clrRed;
 //--- Alert Settings ---
 input double InpTriggerLevel1    = 40.0;             // 1. Bildirim Çekilme % (örn. %40)
 input double InpTriggerLevel2    = 60.0;             // 2. Bildirim Çekilme % (örn. %60)
+input double InpTradeTriggerPct  = 40.0;             // İşlem Onay Çizgisi (Minör Kırılım) Çekilme %
 input double InpGoodPullbackPct  = 40.0;
 input double InpMomentumMinPeak  = 30.0;
 input double InpMomentumMinBounce= 20.0;
@@ -1302,7 +1303,8 @@ int OnCalculate(const int rates_total,
            }
 
          // Kullanıcının Talebi: "Sadece %40 üstüne çıkınca aktif olsun (Çekilme yüzdesi)"
-         bool hist_valid_pullback = (hist_pct >= InpTriggerLevel1 && hist_pct <= 100.0 && g_state_hist.maj_st == 1);
+         // Güncelleme: "İşlem Onay Çizgisi" için ayrı InpTradeTriggerPct ayarı kullan.
+         bool hist_valid_pullback = (hist_pct >= InpTradeTriggerPct && hist_pct <= 100.0 && g_state_hist.maj_st == 1);
 
          // Yükselen Trendde (Düzeltme Aşağı): "Alt, Üst, Daha Düşük Alt, Kırılım"
          // Yani L1 (Sol Omuz Likiditesi), H1 (İşlem Yeri), L2 (Sweep), Kırılım (i)
@@ -1430,8 +1432,9 @@ int OnCalculate(const int rates_total,
          int sz_h = g_state_curr.st_h.Size();
          int sz_l = g_state_curr.st_l.Size();
 
-         // Kullanıcı talebi: Sadece %40 (InpTriggerLevel1) üstüne çıkınca minör kırılım çizgileri aktif olsun.
-         if (live_pct >= InpTriggerLevel1)
+         // Kullanıcı talebi: Sadece %40 üstüne çıkınca minör kırılım çizgileri aktif olsun.
+         // Güncelleme: Çizgi için ayar InpTradeTriggerPct yapıldı.
+         if (live_pct >= InpTradeTriggerPct)
            {
             // Yükselen Trendde Düzeltme (Aşağı): Minör "Alt, Üst, Daha Düşük Alt(Sweep), Kırılım" yapar.
             // GERÇEK ZAMANLI KIRILIM: L2 (sweep) sonrası anlık fiyat (live) H1'i geçtiği an (alir almaz) Live_ ön ekiyle çiz!
