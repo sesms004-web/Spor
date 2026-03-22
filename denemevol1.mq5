@@ -1006,7 +1006,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           // Bearish CHoCH confirmed!
           if (InpShowChoch) {
               string choch_name = GetUniqueName(prefix + "CHoCH_Bear_");
-              DrawLine(choch_name, time[state.lp_i], state.d1_l, time[i] + PeriodSeconds(), state.d1_l, InpColorChochBear, 2, STYLE_SOLID, true);
+              DrawLine(choch_name, time[state.lp_i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, InpColorChochBear, 2, STYLE_SOLID, false);
           }
           state.choch_dir = 0; // Reset after trigger
       }
@@ -1015,7 +1015,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           // Bullish CHoCH confirmed!
           if (InpShowChoch) {
               string choch_name = GetUniqueName(prefix + "CHoCH_Bull_");
-              DrawLine(choch_name, time[state.lp_i], state.d1_h, time[i] + PeriodSeconds(), state.d1_h, InpColorChochBull, 2, STYLE_SOLID, true);
+              DrawLine(choch_name, time[state.lp_i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, InpColorChochBull, 2, STYLE_SOLID, false);
           }
           state.choch_dir = 0; // Reset after trigger
       }
