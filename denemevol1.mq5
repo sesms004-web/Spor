@@ -38,8 +38,8 @@ input bool   InpNotificationFilter = false;          // Bildirim Filtresi (True:
 input bool   InpTestMode         = false;
 
 //--- Onay ve İşlem Yüzdeliği ---
-input double InpOnayIslemYuzdeMin = 20.0;
-input double InpOnayIslemYuzdeMax = 100.0;
+input double InpOnayIslemYuzdeMin = 20.0; // Onay ve İşlem Yüzdeliği Min
+input double InpOnayIslemYuzdeMax = 100.0; // Onay ve İşlem Yüzdeliği Max
 
 //--- Globals ---
 int g_counter = 0;
@@ -930,7 +930,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                DrawLine(c_name + "_3", state.choch_t2_time, state.choch_t2_val, state.choch_break_time, state.choch_break_val, clrMagenta, 2, STYLE_SOLID);
 
                string e_name = GetUniqueName(prefix + "ChochEntry_");
-               DrawLine(e_name, time[D1_i], D1, time[i] + PeriodSeconds()*5, D1, clrMagenta, 2, STYLE_SOLID, false);
+               DrawLine(e_name, time[D1_i], D1, time[i] + PeriodSeconds()*5, D1, clrBlue, 2, STYLE_SOLID, false);
               }
            }
         }
@@ -974,7 +974,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                DrawLine(c_name + "_3", state.choch_t2_time, state.choch_t2_val, state.choch_break_time, state.choch_break_val, clrMagenta, 2, STYLE_SOLID);
 
                string e_name = GetUniqueName(prefix + "ChochEntry_");
-               DrawLine(e_name, time[T1_i], T1, time[i] + PeriodSeconds()*5, T1, clrMagenta, 2, STYLE_SOLID, false);
+               DrawLine(e_name, time[T1_i], T1, time[i] + PeriodSeconds()*5, T1, clrBlue, 2, STYLE_SOLID, false);
               }
            }
         }
