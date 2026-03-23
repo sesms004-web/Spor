@@ -22,6 +22,7 @@ input double InpDaysD1   = 1500.0;
 //--- CHoCH Settings ---
 input double InpMinPullbackPct = 20.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
 input double InpMaxPullbackPct = 100.0;          // CHoCH Max Çekilme % (İşlem Yüzdeliği)
+input double InpMaxBreakoutPct = 50.0;           // CHoCH Maksimum İzin Verilen Kırılım %
 input color  InpColorChochStrong = clrPurple;      // Güçlü CHoCH (Mor)
 input color  InpColorChochWeak   = clrRed;         // Güçsuz CHoCH (Kırmızı)
 input color  InpColorChochPath   = clrGray;        // Yapı İzi (Gri)
@@ -1042,7 +1043,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
    // CHoCH Trigger & Drawing Logic
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
-      if (val_c < state.d1_l) {
+      if (val_c < state.d1_l && p_pct <= InpMaxBreakoutPct) {
           // Bearish CHoCH confirmed!
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
@@ -1084,7 +1085,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           state.choch_dir = 0; // Reset after trigger
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
-      if (val_c > state.d1_h) {
+      if (val_c > state.d1_h && p_pct <= InpMaxBreakoutPct) {
           // Bullish CHoCH confirmed!
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
