@@ -1054,8 +1054,14 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               } else {
                   msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.";
               }
-              if(InpAlertPopup) Alert(msg);
-              if(InpAlertPush) SendNotification(msg);
+
+              // Only alert if we haven't already alerted for THIS specific swing setup
+              static int last_alert_d1_i_bear = 0;
+              if (state.d1_i != last_alert_d1_i_bear) {
+                  if(InpAlertPopup) Alert(msg);
+                  if(InpAlertPush) SendNotification(msg);
+                  last_alert_d1_i_bear = state.d1_i;
+              }
           }
 
           if (InpShowChoch) {
@@ -1090,8 +1096,14 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               } else {
                   msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.";
               }
-              if(InpAlertPopup) Alert(msg);
-              if(InpAlertPush) SendNotification(msg);
+
+              // Only alert if we haven't already alerted for THIS specific swing setup
+              static int last_alert_d1_i_bull = 0;
+              if (state.d1_i != last_alert_d1_i_bull) {
+                  if(InpAlertPopup) Alert(msg);
+                  if(InpAlertPush) SendNotification(msg);
+                  last_alert_d1_i_bull = state.d1_i;
+              }
           }
 
           if (InpShowChoch) {
