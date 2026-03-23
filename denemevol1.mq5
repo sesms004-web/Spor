@@ -938,11 +938,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
              state.choch_dir = 0;
          }
 
-         // CHoCH Sequence Abort Rule (Out of Pullback Zone or Exceeded Max Breakout Pct)
-         if (state.choch_dir != 0) {
-             if (!in_pullback_zone || p_pct > InpMaxBreakoutPct) {
-                 state.choch_dir = 0; // Zone exceeded/failed or went too deep, kill sequence
-             }
+         // CHoCH Sequence Abort Rule (Out of Pullback Zone)
+         if (state.choch_dir != 0 && !in_pullback_zone) {
+             state.choch_dir = 0; // Left the authorized zone entirely ([InpMinPullbackPct, InpMaxPullbackPct])
          }
 
          // CHoCH Bearish sequence tracking
@@ -1045,7 +1043,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
    // CHoCH Trigger & Drawing Logic
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
-      if (val_c < state.d1_l && p_pct <= InpMaxBreakoutPct) {
+      if (val_c < state.d1_l && in_pullback_zone) {
           // Bearish CHoCH confirmed!
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
@@ -1087,7 +1085,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           state.choch_dir = 0; // Reset after trigger
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
-      if (val_c > state.d1_h && p_pct <= InpMaxBreakoutPct) {
+      if (val_c > state.d1_h && in_pullback_zone) {
           // Bullish CHoCH confirmed!
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
