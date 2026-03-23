@@ -22,7 +22,6 @@ input double InpDaysD1   = 1500.0;
 //--- CHoCH Settings ---
 input double InpMinPullbackPct = 20.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
 input double InpMaxPullbackPct = 100.0;          // CHoCH Max Çekilme % (İşlem Yüzdeliği)
-input double InpMaxBreakoutPct = 50.0;           // CHoCH Maksimum İzin Verilen Kırılım %
 input color  InpColorChochStrong = clrPurple;      // Güçlü CHoCH (Mor)
 input color  InpColorChochWeak   = clrRed;         // Güçsuz CHoCH (Kırmızı)
 input color  InpColorChochPath   = clrGray;        // Yapı İzi (Gri)
