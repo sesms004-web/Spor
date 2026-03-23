@@ -20,7 +20,7 @@ input double InpDaysH4   = 500.0;
 input double InpDaysD1   = 1500.0;
 
 //--- CHoCH Settings ---
-input double InpMinPullbackPct = 20.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
+input double InpMinPullbackPct = 40.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
 input double InpMaxPullbackPct = 100.0;          // CHoCH Max Çekilme % (İşlem Yüzdeliği)
 input color  InpColorChochStrong = clrPurple;      // Güçlü CHoCH (Mor)
 input color  InpColorChochWeak   = clrRed;         // Güçsuz CHoCH (Kırmızı)
