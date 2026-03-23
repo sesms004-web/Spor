@@ -938,9 +938,11 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
              state.choch_dir = 0;
          }
 
-         // CHoCH Sequence Abort Rule (Out of Pullback Zone)
-         if (state.choch_dir != 0 && !in_pullback_zone) {
-             state.choch_dir = 0; // Zone exceeded/failed, kill sequence
+         // CHoCH Sequence Abort Rule (Out of Pullback Zone or Exceeded Max Breakout Pct)
+         if (state.choch_dir != 0) {
+             if (!in_pullback_zone || p_pct > InpMaxBreakoutPct) {
+                 state.choch_dir = 0; // Zone exceeded/failed or went too deep, kill sequence
+             }
          }
 
          // CHoCH Bearish sequence tracking
