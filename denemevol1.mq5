@@ -1690,8 +1690,10 @@ int OnCalculate(const int rates_total,
           double dh, dl; datetime dth, dtl;
           GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
 
-          // Test varsayımı: Ana yön H1'in trend yönüne (g_state_hist.maj_tr) göre bir kırılım (CHoCH) geldiğini farz ediyoruz.
-          int test_dir = (live_tr != 0) ? live_tr : 1; // Default to buy if unknown
+          // Test varsayımı: O anki M1 yönünün devamı niteliğinde bir kırılım (CHoCH) geldiğini farz ediyoruz.
+          // In real signals, M1 break direction is explicitly 1 (Bullish) or -1 (Bearish). Here we fetch current live_tr.
+          int test_dir = live_tr;
+          if (test_dir == 0) test_dir = g_state_hist.maj_tr; // Fallback to macro if absolutely no M1 trend identified yet
 
           EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, true);
       }
