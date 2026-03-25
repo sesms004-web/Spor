@@ -588,15 +588,15 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool is_h1_aligned = (t_h1 == trigger_dir);
 
    if (h1_momentum) {
-       if (is_h1_aligned) { h1_points = 40; h1_text = "H1 (Makro): Sert Momentum Dönüşü (Trend Onayı) -> [+40 Puan]\n"; }
+       if (is_h1_aligned) { h1_points = 30; h1_text = "H1 (Makro): Sert Momentum Dönüşü (Trend Onayı) -> [+30 Puan]\n"; }
        else               { h1_points = 0;  h1_text = "H1 (Makro): Ters Yönde Sert Momentum (Tehlike!) -> [0 Puan]\n"; }
    } else {
        if (p_h1 >= 50.0) { // Premium
-           if (is_h1_aligned) { h1_points = 40; h1_text = "H1 (Makro): İdeal Pahalı/Ucuz Bölgesinde (Altın Vuruş) -> [+40 Puan]\n"; }
+           if (is_h1_aligned) { h1_points = 30; h1_text = "H1 (Makro): İdeal Pahalı/Ucuz Bölgesinde (Altın Vuruş) -> [+30 Puan]\n"; }
            else               { h1_points = 20; h1_text = "H1 (Makro): İdeal Bölgede ama Ters Yön (Son İtiş) -> [+20 Puan]\n"; }
        } else { // Discount
            if (is_h1_aligned) { h1_points = 0;  h1_text = "H1 (Makro): Trend Yönünde ama Fiyat Erken/Zayıf -> [0 Puan]\n"; }
-           else               { h1_points = 40; h1_text = "H1 (Makro): Yeni Düzeltme Başlıyor (Önü Açık) -> [+40 Puan]\n"; }
+           else               { h1_points = 30; h1_text = "H1 (Makro): Yeni Düzeltme Başlıyor (Önü Açık) -> [+30 Puan]\n"; }
        }
    }
    total_points += h1_points;
@@ -624,7 +624,15 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    int m15_points = 0;
    bool m15_momentum = ((mp_m15 - p_m15) >= 20.0);
    bool is_m15_aligned = (t_m15 == trigger_dir);
-   bool is_duplicate = (th_m15 == th_m30 && tl_m15 == tl_m30); // Same swing anchor
+
+   // Use MTF pullbacks to fetch the actual HIGH/LOW prices of the swings
+   double h_m30, l_m30; datetime dmy1, dmy2;
+   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, dmy1, dmy2);
+   double h_m15, l_m15;
+   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, dmy1, dmy2);
+
+   // Determine if M15 and M30 are tracking the exact same structural swing bounds
+   bool is_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
 
    if (is_duplicate) {
        m15_points = 0; m15_text = "M15 (Ara Filtre): M30 ile aynı dalga, pas geçildi. -> [0 Puan]\n";
