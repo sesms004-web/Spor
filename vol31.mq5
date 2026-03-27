@@ -547,17 +547,17 @@ string GetTimeAgoString(datetime past_time, datetime now_time)
 string PctToText(double pct, double max_pct, datetime swing_time, datetime current_time)
   {
    string age = "\n   └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
-   string base_str = "(Çekilme: %" + FormatPct(pct) + " ↑↑%" + FormatPct(max_pct);
+   string base_str = "[Zirve:%" + FormatPct(max_pct) + " | Çekilme:%" + FormatPct(max_pct - pct) + "]";
 
    if(pct <= 10.0)
      {
       // Fiyat zirvedeyse veya yeni kırılmışsa geçmiş pullback aranmaz. Şişkindir.
       if(max_pct <= 10.0) return " (Trend Şişkin, Düzeltme Bekleniyor)" + age;
-      else return base_str + " - Kırılıma Hazırlanıyor)" + age;
+      else return base_str + " - Kırılıma Hazırlanıyor" + age;
      }
-   if(pct >= InpGoodPullbackPct && pct <= 75.0) return base_str + " - İdeal Düzeltme)" + age;
-   if(pct > 85.0) return base_str + " - Dönüş Riski)" + age;
-   return base_str + ")" + age;
+   if(pct >= InpGoodPullbackPct && pct <= 75.0) return base_str + " - İdeal Düzeltme" + age;
+   if(pct > 85.0) return base_str + " - Dönüş Riski" + age;
+   return base_str + age;
   }
 
 //+------------------------------------------------------------------+
@@ -788,7 +788,7 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
      }
    else
      {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + FormatPct(p_m1) + " ↑↑%" + FormatPct(mp_m1) + ")\n\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " [Zirve:%" + FormatPct(mp_m1) + " | Çekilme:%" + FormatPct(mp_m1 - p_m1) + "]\n\n";
      }
 
    msg1 += "🧭 MAKRO TREND (H1/M30)\n";
