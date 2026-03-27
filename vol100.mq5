@@ -13,8 +13,6 @@
 input double InpDaysM1   = 3.0;
 
 //--- CHoCH Settings ---
-input double InpMinPullbackPct = 40.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
-input double InpMaxPullbackPct = 100.0;          // CHoCH Max Çekilme % (İşlem Yüzdeliği)
 input color  InpColorChochStrong = clrPurple;      // Güçlü CHoCH (Mor)
 input color  InpColorChochWeak   = clrRed;         // Güçsuz CHoCH (Kırmızı)
 input color  InpColorChochPath   = clrGray;        // Yapı İzi (Gri)
@@ -31,6 +29,7 @@ input color  InpColorBear = clrRed;
 input bool   InpEnableAlertCHoCHBase   = true;       // Temel CHoCH (Kırılım) Bildirimini Aç
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
+input bool   InpTestMode         = false;            // 🧪 [TEST] Bildirimi (Aç/Kapa: 1 Kere Atar)
 
 //--- Globals ---
 int g_counter = 0;
@@ -271,26 +270,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
    string prefix = is_history ? "" : "Live_";
 
    // CHoCH & T1-D1-T2 TRACKING LOGIC
-   // Current major trend structure
-   double cur_maj_h = state.maj_h;
-   double cur_maj_l = state.maj_l;
-   double p_pct = 0;
-
-   if (cur_maj_h != EMPTY_VALUE && cur_maj_l != EMPTY_VALUE && cur_maj_h != cur_maj_l) {
-      double range = cur_maj_h - cur_maj_l;
-      if (state.maj_tr == 1) { // Up Trend
-         if (val_l >= cur_maj_l) {
-             p_pct = ((cur_maj_h - val_l) / range) * 100.0;
-         }
-      } else if (state.maj_tr == -1) { // Down Trend
-         if (val_h <= cur_maj_h) {
-             p_pct = ((val_h - cur_maj_l) / range) * 100.0;
-         }
-      }
-   }
-
-   bool in_pullback_zone = (p_pct >= InpMinPullbackPct && p_pct <= InpMaxPullbackPct);
-
    // T1-D1-T2 State Machine based on Minor structure turns
    // (Calculated implicitly during Minor Structure state changes below)
 
@@ -332,13 +311,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
              state.choch_dir = 0;
          }
 
-         // CHoCH Sequence Abort Rule (Out of Pullback Zone)
-         if (state.choch_dir != 0 && !in_pullback_zone) {
-             state.choch_dir = 0; // Left the authorized zone entirely ([InpMinPullbackPct, InpMaxPullbackPct])
-         }
-
          // CHoCH Bearish sequence tracking
-         if (state.maj_tr == -1 && in_pullback_zone) {
+         if (state.maj_tr == -1) {
              if (state.choch_dir == 0 || state.choch_dir == 1) { // Initiate T1 for Bearish
                  state.t1_h = state.min_h;
                  state.t1_l = state.min_l;
@@ -405,7 +379,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          }
 
          // CHoCH Bullish sequence tracking
-         if (state.maj_tr == 1 && in_pullback_zone) {
+         if (state.maj_tr == 1) {
              if (state.choch_dir == 0 || state.choch_dir == -1) { // Initiate T1 for Bullish
                  state.t1_l = state.min_l;
                  state.t1_h = state.min_h;
@@ -437,17 +411,38 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
    // CHoCH Trigger & Drawing Logic
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
-      if (val_c < state.d1_l && in_pullback_zone) {
+      if (val_c < state.d1_l) {
           // Bearish CHoCH confirmed!
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
           if (!is_history) {
-              string msg = "🔴 [" + Symbol() + "] M1 Trend Döndü! (CHoCH)\n";
+              string msg = "🔴 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
               msg += "Yön: ⬇️ AŞAĞI\n";
               if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.";
+                  msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.\n";
               } else {
-                  msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.";
+                  msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.\n";
+              }
+
+              // Calculate precise pullback against the Major Swing
+              if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
+                  double range = state.maj_h - state.maj_l;
+                  double p_pct = 0;
+                  if (state.maj_tr == 1) {
+                      p_pct = ((state.maj_h - val_c) / range) * 100.0;
+                      msg += "\n📊 Majör Çekilme Detayı:\n";
+                      msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
+                      msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
+                      msg += "└ Güncel Fiyat: " + DoubleToString(val_c, _Digits) + "\n";
+                      msg += "└ Çekilme: %" + DoubleToString(p_pct, 2) + "\n";
+                  } else if (state.maj_tr == -1) {
+                      p_pct = ((val_c - state.maj_l) / range) * 100.0;
+                      msg += "\n📊 Majör Çekilme Detayı:\n";
+                      msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
+                      msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
+                      msg += "└ Güncel Fiyat: " + DoubleToString(val_c, _Digits) + "\n";
+                      msg += "└ Çekilme: %" + DoubleToString(p_pct, 2) + "\n";
+                  }
               }
 
               // Only alert if we haven't already alerted for THIS specific swing setup
@@ -481,17 +476,38 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           state.choch_dir = 0; // Reset after trigger
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
-      if (val_c > state.d1_h && in_pullback_zone) {
+      if (val_c > state.d1_h) {
           // Bullish CHoCH confirmed!
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
           if (!is_history) {
-              string msg = "🟢 [" + Symbol() + "] M1 Trend Döndü! (CHoCH)\n";
+              string msg = "🟢 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
               msg += "Yön: ⬆️ YUKARI\n";
               if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Dip likiditesi alındı.";
+                  msg += "Durum: 🔥 GÜÇLÜ! Dip likiditesi alındı.\n";
               } else {
-                  msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.";
+                  msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.\n";
+              }
+
+              // Calculate precise pullback against the Major Swing
+              if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
+                  double range = state.maj_h - state.maj_l;
+                  double p_pct = 0;
+                  if (state.maj_tr == 1) {
+                      p_pct = ((state.maj_h - val_c) / range) * 100.0;
+                      msg += "\n📊 Majör Çekilme Detayı:\n";
+                      msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
+                      msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
+                      msg += "└ Güncel Fiyat: " + DoubleToString(val_c, _Digits) + "\n";
+                      msg += "└ Çekilme: %" + DoubleToString(p_pct, 2) + "\n";
+                  } else if (state.maj_tr == -1) {
+                      p_pct = ((val_c - state.maj_l) / range) * 100.0;
+                      msg += "\n📊 Majör Çekilme Detayı:\n";
+                      msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
+                      msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
+                      msg += "└ Güncel Fiyat: " + DoubleToString(val_c, _Digits) + "\n";
+                      msg += "└ Çekilme: %" + DoubleToString(p_pct, 2) + "\n";
+                  }
               }
 
               // Only alert if we haven't already alerted for THIS specific swing setup
@@ -914,6 +930,12 @@ int OnCalculate(const int rates_total,
       g_state_hist.maj_l_i = start_idx;
 
       limit = start_idx + 1;
+
+      if (InpTestMode) {
+          string msg = "🧪 [TEST MODU] Sistem aktif ve çalışıyor!";
+          if(InpAlertPopup) Alert(msg);
+          if(InpAlertPush)  SendNotification(msg);
+      }
      }
    else
      {
