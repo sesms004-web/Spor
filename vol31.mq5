@@ -587,7 +587,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool h1_momentum = ((mp_h1 - p_h1) >= 20.0);
    bool is_h1_aligned = (t_h1 == trigger_dir);
 
-   string stats_h1 = StringFormat("[Zirve:%.1f | Çekilme:%.1f] ", mp_h1, (mp_h1 - p_h1));
+   string stats_h1 = "[Zirve:" + DoubleToString(mp_h1, 1) + " | Çekilme:" + DoubleToString(mp_h1 - p_h1, 1) + "] ";
 
    if (h1_momentum) {
        if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Sert Dönüş (İvme) -> [+30 Puan]\n"; }
@@ -608,7 +608,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool m30_momentum = ((mp_m30 - p_m30) >= 20.0);
    bool is_m30_aligned = (t_m30 == trigger_dir);
 
-   string stats_m30 = StringFormat("[Zirve:%.1f | Çekilme:%.1f] ", mp_m30, (mp_m30 - p_m30));
+   string stats_m30 = "[Zirve:" + DoubleToString(mp_m30, 1) + " | Çekilme:" + DoubleToString(mp_m30 - p_m30, 1) + "] ";
 
    if (m30_momentum) {
        if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "Sert İvme (Onay) -> [+15 Puan]\n"; }
@@ -638,7 +638,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // Determine if M15 and M30 are tracking the exact same structural swing bounds
    bool is_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
 
-   string stats_m15 = StringFormat("[Zirve:%.1f | Çekilme:%.1f] ", mp_m15, (mp_m15 - p_m15));
+   string stats_m15 = "[Zirve:" + DoubleToString(mp_m15, 1) + " | Çekilme:" + DoubleToString(mp_m15 - p_m15, 1) + "] ";
 
    if (is_duplicate) {
        m15_points = 0; m15_text = "M15: " + stats_m15 + "M30 ile aynı dalga -> [0 Puan]\n";
@@ -1691,7 +1691,8 @@ int OnCalculate(const int rates_total,
       limit = start_idx + 1;
 
       // TEST TRIGGER
-      if (InpTestTradeExecution) {
+      static bool test_triggered_trade = false;
+      if (InpTestTradeExecution && !test_triggered_trade) {
           int live_tr = 0; double live_pct = 0; double mp_pct = 0;
           double dh, dl; datetime dth, dtl;
           GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
@@ -1702,6 +1703,7 @@ int OnCalculate(const int rates_total,
           if (test_dir == 0) test_dir = g_state_hist.maj_tr; // Fallback to macro if absolutely no M1 trend identified yet
 
           EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, true);
+          test_triggered_trade = true;
       }
      }
    else
@@ -1837,12 +1839,16 @@ int OnCalculate(const int rates_total,
             if(trig2 && g_level2_missed) is_revisit_2 = true;
            }
 
-         if(InpEnableAlertMTFLevels && (trig1 || trig2 || InpTestMode))
+         static bool test_triggered_mtf = false;
+         bool do_test = (InpTestMode && !test_triggered_mtf);
+
+         if(InpEnableAlertMTFLevels && (trig1 || trig2 || do_test))
            {
             int trigger_lvl = trig2 ? 2 : 1;
             bool is_revisit = (trigger_lvl == 2) ? is_revisit_2 : is_revisit_1;
             bool success = TriggerMTFAlert(last_idx, time[last_idx], close[last_idx], trigger_lvl, is_revisit);
-            if(success && !InpTestMode) {
+            if(success) {
+               if(do_test) test_triggered_mtf = true;
                if(trig1) { g_level1_triggered = true; g_level1_missed = false; }
                if(trig2) { g_level2_triggered = true; g_level2_missed = false; }
             }
