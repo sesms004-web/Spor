@@ -63,6 +63,8 @@ bool g_level1_triggered = false;
 bool g_level2_triggered = false;
 bool g_level1_missed = false;
 bool g_level2_missed = false;
+bool g_test_trade_triggered = false;
+bool g_test_mtf_triggered = false;
 
 void DrawLine(string name, datetime time1, double price1, datetime time2, double price2, color clr, int width, ENUM_LINE_STYLE style, bool ray_right=false)
   {
@@ -517,6 +519,13 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    return true;
   }
 
+string FormatPct(double val)
+  {
+   string str = DoubleToString(val, 1);
+   StringReplace(str, ".", ",");
+   return str;
+  }
+
 string GetTimeAgoString(datetime past_time, datetime now_time)
   {
    if (past_time == 0) return "";
@@ -538,7 +547,7 @@ string GetTimeAgoString(datetime past_time, datetime now_time)
 string PctToText(double pct, double max_pct, datetime swing_time, datetime current_time)
   {
    string age = "\n   └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
-   string base_str = "(Çekilme: %" + DoubleToString(pct, 1) + " ↑↑%" + DoubleToString(max_pct, 1);
+   string base_str = "(Çekilme: %" + FormatPct(pct) + " ↑↑%" + FormatPct(max_pct);
 
    if(pct <= 10.0)
      {
@@ -587,7 +596,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool h1_momentum = ((mp_h1 - p_h1) >= 20.0);
    bool is_h1_aligned = (t_h1 == trigger_dir);
 
-   string stats_h1 = "[Zirve:" + DoubleToString(mp_h1, 1) + " | Çekilme:" + DoubleToString(mp_h1 - p_h1, 1) + "] ";
+   string stats_h1 = "[Zirve:%" + FormatPct(mp_h1) + " | Çekilme:%" + FormatPct(mp_h1 - p_h1) + "] ";
 
    if (h1_momentum) {
        if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Sert Dönüş (İvme) -> [+30 Puan]\n"; }
@@ -608,7 +617,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool m30_momentum = ((mp_m30 - p_m30) >= 20.0);
    bool is_m30_aligned = (t_m30 == trigger_dir);
 
-   string stats_m30 = "[Zirve:" + DoubleToString(mp_m30, 1) + " | Çekilme:" + DoubleToString(mp_m30 - p_m30, 1) + "] ";
+   string stats_m30 = "[Zirve:%" + FormatPct(mp_m30) + " | Çekilme:%" + FormatPct(mp_m30 - p_m30) + "] ";
 
    if (m30_momentum) {
        if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "Sert İvme (Onay) -> [+15 Puan]\n"; }
@@ -638,7 +647,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // Determine if M15 and M30 are tracking the exact same structural swing bounds
    bool is_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
 
-   string stats_m15 = "[Zirve:" + DoubleToString(mp_m15, 1) + " | Çekilme:" + DoubleToString(mp_m15 - p_m15, 1) + "] ";
+   string stats_m15 = "[Zirve:%" + FormatPct(mp_m15) + " | Çekilme:%" + FormatPct(mp_m15 - p_m15) + "] ";
 
    if (is_duplicate) {
        m15_points = 0; m15_text = "M15: " + stats_m15 + "M30 ile aynı dalga -> [0 Puan]\n";
@@ -779,11 +788,11 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
      }
    else
      {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 1) + " ↑↑%" + DoubleToString(mp_m1, 1) + ")\n\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + FormatPct(p_m1) + " ↑↑%" + FormatPct(mp_m1) + ")\n\n";
      }
 
    msg1 += "🧭 MAKRO TREND (H1/M30)\n";
-   msg1 += "Durum: " + (bull_pressure >= 50 ? "🟢 YÜKSELİŞ" : "🔴 DÜŞÜŞ") + " (%" + DoubleToString(bull_pressure, 0) + " Boğa Baskısı)\n";
+   msg1 += "Durum: " + (bull_pressure >= 50 ? "🟢 YÜKSELİŞ" : "🔴 DÜŞÜŞ") + " (%" + FormatPct(bull_pressure) + " Boğa Baskısı)\n";
    msg1 += "H1:  " + (t_h1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_h1, mp_h1, (t_h1==1?tl_h1:th_h1), t) + "\n";
    msg1 += "M30: " + (t_m30 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m30, mp_m30, (t_m30==1?tl_m30:th_m30), t) + "\n\n";
 
@@ -795,7 +804,7 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    msg1 += "M3:  " + (t_m3 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m3, mp_m3, (t_m3==1?tl_m3:th_m3), t) + "\n";
    msg1 += "M1:  " + (t_m1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m1, mp_m1, (t_m1==1?tl_m1:th_m1), t) + "\n\n";
 
-   msg1 += "📊 Baskınlık: Makro=↑%" + DoubleToString(macro_bull_pct, 0) + " ↓%" + DoubleToString(macro_bear_pct, 0) + " | Mikro=↑%" + DoubleToString(micro_bull_pct, 0) + " ↓%" + DoubleToString(micro_bear_pct, 0) + "\n";
+   msg1 += "📊 Baskınlık: Makro=↑%" + FormatPct(macro_bull_pct) + " ↓%" + FormatPct(macro_bear_pct) + " | Mikro=↑%" + FormatPct(micro_bull_pct) + " ↓%" + FormatPct(micro_bear_pct) + "\n";
   bool macro_bull = (t_h1 == 1 && t_m30 == 1);
    bool macro_bear = (t_h1 == -1 && t_m30 == -1);
 
@@ -934,11 +943,11 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    // --- MOMENTUM REJECTION NOTU ---
    string momentum_note = "";
 
-   if (mp_h1 >= InpMomentumMinPeak && (mp_h1 - p_h1) >= InpMomentumMinBounce) momentum_note += "  └ [H1] Zirveden %" + DoubleToString(mp_h1 - p_h1, 1) + " döndü. " + (t_h1 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m30 >= InpMomentumMinPeak && (mp_m30 - p_m30) >= InpMomentumMinBounce) momentum_note += "  └ [M30] Zirveden %" + DoubleToString(mp_m30 - p_m30, 1) + " döndü. " + (t_m30 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m15 >= InpMomentumMinPeak && (mp_m15 - p_m15) >= InpMomentumMinBounce) momentum_note += "  └ [M15] Zirveden %" + DoubleToString(mp_m15 - p_m15, 1) + " döndü. " + (t_m15 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m5 >= InpMomentumMinPeak && (mp_m5 - p_m5) >= InpMomentumMinBounce) momentum_note += "  └ [M5] Zirveden %" + DoubleToString(mp_m5 - p_m5, 0) + " döndü. " + (t_m5 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m3 >= InpMomentumMinPeak && (mp_m3 - p_m3) >= InpMomentumMinBounce) momentum_note += "  └ [M3] Zirveden %" + DoubleToString(mp_m3 - p_m3, 0) + " döndü. " + (t_m3 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
+   if (mp_h1 >= InpMomentumMinPeak && (mp_h1 - p_h1) >= InpMomentumMinBounce) momentum_note += "  └ [H1] Zirveden %" + FormatPct(mp_h1 - p_h1) + " döndü. " + (t_h1 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
+   if (mp_m30 >= InpMomentumMinPeak && (mp_m30 - p_m30) >= InpMomentumMinBounce) momentum_note += "  └ [M30] Zirveden %" + FormatPct(mp_m30 - p_m30) + " döndü. " + (t_m30 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
+   if (mp_m15 >= InpMomentumMinPeak && (mp_m15 - p_m15) >= InpMomentumMinBounce) momentum_note += "  └ [M15] Zirveden %" + FormatPct(mp_m15 - p_m15) + " döndü. " + (t_m15 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
+   if (mp_m5 >= InpMomentumMinPeak && (mp_m5 - p_m5) >= InpMomentumMinBounce) momentum_note += "  └ [M5] Zirveden %" + FormatPct(mp_m5 - p_m5) + " döndü. " + (t_m5 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
+   if (mp_m3 >= InpMomentumMinPeak && (mp_m3 - p_m3) >= InpMomentumMinBounce) momentum_note += "  └ [M3] Zirveden %" + FormatPct(mp_m3 - p_m3) + " döndü. " + (t_m3 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
 
    string final_momentum_str = "";
    if (momentum_note != "")
@@ -1623,6 +1632,8 @@ int OnCalculate(const int rates_total,
       g_level2_triggered = false;
       g_level1_missed = false;
       g_level2_missed = false;
+      g_test_trade_triggered = false;
+      g_test_mtf_triggered = false;
 
       ObjectsDeleteAll(0, "Structure_");
       ObjectsDeleteAll(0, "Minor_");
@@ -1691,8 +1702,7 @@ int OnCalculate(const int rates_total,
       limit = start_idx + 1;
 
       // TEST TRIGGER
-      static bool test_triggered_trade = false;
-      if (InpTestTradeExecution && !test_triggered_trade) {
+      if (InpTestTradeExecution && !g_test_trade_triggered) {
           int live_tr = 0; double live_pct = 0; double mp_pct = 0;
           double dh, dl; datetime dth, dtl;
           GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
@@ -1703,7 +1713,7 @@ int OnCalculate(const int rates_total,
           if (test_dir == 0) test_dir = g_state_hist.maj_tr; // Fallback to macro if absolutely no M1 trend identified yet
 
           EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, true);
-          test_triggered_trade = true;
+          g_test_trade_triggered = true;
       }
      }
    else
@@ -1839,8 +1849,7 @@ int OnCalculate(const int rates_total,
             if(trig2 && g_level2_missed) is_revisit_2 = true;
            }
 
-         static bool test_triggered_mtf = false;
-         bool do_test = (InpTestMode && !test_triggered_mtf);
+         bool do_test = (InpTestMode && !g_test_mtf_triggered);
 
          if(InpEnableAlertMTFLevels && (trig1 || trig2 || do_test))
            {
@@ -1848,7 +1857,7 @@ int OnCalculate(const int rates_total,
             bool is_revisit = (trigger_lvl == 2) ? is_revisit_2 : is_revisit_1;
             bool success = TriggerMTFAlert(last_idx, time[last_idx], close[last_idx], trigger_lvl, is_revisit);
             if(success) {
-               if(do_test) test_triggered_mtf = true;
+               if(do_test) g_test_mtf_triggered = true;
                if(trig1) { g_level1_triggered = true; g_level1_missed = false; }
                if(trig2) { g_level2_triggered = true; g_level2_missed = false; }
             }
