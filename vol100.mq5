@@ -397,7 +397,7 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
   }
 
 bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct, datetime current_time,
-                    double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l)
+                    double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l, double &points_dropped)
   {
    MqlRates rates[];
    ArraySetAsSeries(rates, false);
@@ -468,6 +468,7 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    trend = st.maj_tr;
    pct = 0;
    max_pct = 0;
+   points_dropped = 0;
    double live_p = SymbolInfoDouble(Symbol(), SYMBOL_BID);
 
    ref_h = st.maj_h;
@@ -480,6 +481,9 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
       double range = st.maj_h - st.maj_l;
       if(trend == 1)
         {
+         points_dropped = (st.maj_h - live_p) / Point();
+         if(points_dropped < 0) points_dropped = 0;
+
          if(live_p >= st.maj_h || st.maj_st == 0)
            {
             double dyn_range = st.tmp_h - st.maj_l;
@@ -495,6 +499,9 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
         }
       else if(trend == -1)
         {
+         points_dropped = (live_p - st.maj_l) / Point();
+         if(points_dropped < 0) points_dropped = 0;
+
          if(live_p <= st.maj_l || st.maj_st == 0)
            {
             double dyn_range = st.maj_h - st.tmp_l;
@@ -537,10 +544,11 @@ string GetTimeAgoString(datetime past_time, datetime now_time)
    return IntegerToString(d) + " Gün Önce";
   }
 
-string PctToText(double pct, double max_pct, datetime swing_time, datetime current_time)
+string PctToText(double pct, double max_pct, datetime swing_time, datetime current_time, double points_dropped = 0.0)
   {
    string age = "\n   └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
-   string base_str = "(Çekilme: %" + DoubleToString(pct, 0) + " ↑↑%" + DoubleToString(max_pct, 0);
+   string pt_str = (points_dropped > 0) ? " [" + DoubleToString(points_dropped, 0) + " Puan]" : "";
+   string base_str = "(Çekilme: %" + DoubleToString(pct, 2) + pt_str + " ↑↑%" + DoubleToString(max_pct, 2);
 
    if(pct <= 10.0)
      {
@@ -564,12 +572,12 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    double dmy_h, dmy_l; datetime dmy_th, dmy_tl, th_m15, tl_m15, th_m30, tl_m30;
 
    // We need MTF data to evaluate the matrix
-   GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, dmy_h, dmy_l, dmy_th, dmy_tl);
-   GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, dmy_h, dmy_l, dmy_th, dmy_tl);
-   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, dmy_h, dmy_l, dmy_th, dmy_tl);
-   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, dmy_h, dmy_l, th_m15, tl_m15);
-   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, dmy_h, dmy_l, th_m30, tl_m30);
-   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, dmy_h, dmy_l, dmy_th, dmy_tl);
+   double dmy_pts; GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, dmy_h, dmy_l, dmy_th, dmy_tl, dmy_pts);
+   GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, dmy_h, dmy_l, dmy_th, dmy_tl, dmy_pts);
+   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, dmy_h, dmy_l, dmy_th, dmy_tl, dmy_pts);
+   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, dmy_h, dmy_l, th_m15, tl_m15, dmy_pts);
+   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, dmy_h, dmy_l, th_m30, tl_m30, dmy_pts);
+   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, dmy_h, dmy_l, dmy_th, dmy_tl, dmy_pts);
 
    int total_points = 0;
    string h1_text = "";
@@ -633,9 +641,9 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    // Use MTF pullbacks to fetch the actual HIGH/LOW prices of the swings
    double h_m30, l_m30; datetime dmy1, dmy2;
-   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, dmy1, dmy2);
+   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, dmy1, dmy2, dmy_pts);
    double h_m15, l_m15;
-   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, dmy1, dmy2);
+   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, dmy1, dmy2, dmy_pts);
 
    // Determine if M15 and M30 are tracking the exact same structural swing bounds
    bool is_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
@@ -716,12 +724,13 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    double h_m1, l_m1; datetime th_m1, tl_m1;
    double dmy_h, dmy_l; datetime th_m3, tl_m3, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
 
-   bool hm1 = GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, th_m1, tl_m1);
-   bool hm3 = GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, dmy_h, dmy_l, th_m3, tl_m3);
-   bool hm5 = GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, dmy_h, dmy_l, th_m5, tl_m5);
-   bool hm15 = GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, dmy_h, dmy_l, th_m15, tl_m15);
-   bool hm30 = GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, dmy_h, dmy_l, th_m30, tl_m30);
-   bool hh1 = GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, dmy_h, dmy_l, th_h1, tl_h1);
+   double pt_m1, pt_m3, pt_m5, pt_m15, pt_m30, pt_h1;
+   bool hm1  = GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, th_m1, tl_m1, pt_m1);
+   bool hm3  = GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, dmy_h, dmy_l, th_m3, tl_m3, pt_m3);
+   bool hm5  = GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, dmy_h, dmy_l, th_m5, tl_m5, pt_m5);
+   bool hm15 = GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, dmy_h, dmy_l, th_m15, tl_m15, pt_m15);
+   bool hm30 = GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, dmy_h, dmy_l, th_m30, tl_m30, pt_m30);
+   bool hh1  = GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, dmy_h, dmy_l, th_h1, tl_h1, pt_h1);
 
    if(!hm1 || !hm3 || !hm5 || !hm15 || !hm30 || !hh1) return false;
 
@@ -781,21 +790,21 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
      }
    else
      {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 0) + " ↑↑%" + DoubleToString(mp_m1, 0) + ")\n\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 2) + " [" + DoubleToString(pt_m1, 0) + " Puan])\n\n";
      }
 
    msg1 += "🧭 MAKRO TREND (H1/M30)\n";
    msg1 += "Durum: " + (bull_pressure >= 50 ? "🟢 YÜKSELİŞ" : "🔴 DÜŞÜŞ") + " (%" + DoubleToString(bull_pressure, 0) + " Boğa Baskısı)\n";
-   msg1 += "H1:  " + (t_h1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_h1, mp_h1, (t_h1==1?tl_h1:th_h1), t) + "\n";
-   msg1 += "M30: " + (t_m30 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m30, mp_m30, (t_m30==1?tl_m30:th_m30), t) + "\n\n";
+   msg1 += "H1:  " + (t_h1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_h1, mp_h1, (t_h1==1?tl_h1:th_h1), t, pt_h1) + "\n";
+   msg1 += "M30: " + (t_m30 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m30, mp_m30, (t_m30==1?tl_m30:th_m30), t, pt_m30) + "\n\n";
 
    msg1 += "🔬 DÜZELTME VE HEDEF (M15/M5)\n";
-   msg1 += "M15: " + (t_m15 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m15, mp_m15, (t_m15==1?tl_m15:th_m15), t) + "\n";
-   msg1 += "M5:  " + (t_m5 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m5, mp_m5, (t_m5==1?tl_m5:th_m5), t) + "\n\n";
+   msg1 += "M15: " + (t_m15 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m15, mp_m15, (t_m15==1?tl_m15:th_m15), t, pt_m15) + "\n";
+   msg1 += "M5:  " + (t_m5 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m5, mp_m5, (t_m5==1?tl_m5:th_m5), t, pt_m5) + "\n\n";
 
    msg1 += "🎯 TETİK VE ONAY GRUBU (M3/M1)\n";
-   msg1 += "M3:  " + (t_m3 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m3, mp_m3, (t_m3==1?tl_m3:th_m3), t) + "\n";
-   msg1 += "M1:  " + (t_m1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m1, mp_m1, (t_m1==1?tl_m1:th_m1), t) + "\n\n";
+   msg1 += "M3:  " + (t_m3 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m3, mp_m3, (t_m3==1?tl_m3:th_m3), t, pt_m3) + "\n";
+   msg1 += "M1:  " + (t_m1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m1, mp_m1, (t_m1==1?tl_m1:th_m1), t, pt_m1) + "\n\n";
 
    msg1 += "📊 Baskınlık: Makro=↑%" + DoubleToString(macro_bull_pct, 0) + " ↓%" + DoubleToString(macro_bear_pct, 0) + " | Mikro=↑%" + DoubleToString(micro_bull_pct, 0) + " ↓%" + DoubleToString(micro_bear_pct, 0) + "\n";
   bool macro_bull = (t_h1 == 1 && t_m30 == 1);
@@ -1696,7 +1705,7 @@ int OnCalculate(const int rates_total,
       if (InpTestTradeExecution) {
           int live_tr = 0; double live_pct = 0; double mp_pct = 0;
           double dh, dl; datetime dth, dtl;
-          GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
+          double dmy_pts3; GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl, dmy_pts3);
 
           int test_dir = live_tr;
           if (test_dir == 0) test_dir = g_state_hist.maj_tr;
@@ -1777,7 +1786,7 @@ int OnCalculate(const int rates_total,
       double live_pct = 0.0;
       double dmy_h, dmy_l; datetime dmy_th, dmy_tl;
       double dmy_mpct;
-      if (GetMTFPullback(PERIOD_M1, live_trend, live_pct, dmy_mpct, time[last_idx], dmy_h, dmy_l, dmy_th, dmy_tl))
+      double dmy_pts4; if (GetMTFPullback(PERIOD_M1, live_trend, live_pct, dmy_mpct, time[last_idx], dmy_h, dmy_l, dmy_th, dmy_tl, dmy_pts4))
         {
          // Reset triggers if swing changed (only when fully confirmed by a bar close / definitive state update)
          // Kullanıcının Spam ve Kapanış talebi: "swing çizgisinin üstünde altında BİR KERE KAPANIŞ OLUR 1 kere atar"
