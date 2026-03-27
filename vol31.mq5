@@ -478,34 +478,51 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    if(st.maj_h != EMPTY_VALUE && st.maj_l != EMPTY_VALUE && st.maj_h != st.maj_l)
      {
       double range = st.maj_h - st.maj_l;
+
+      // Calculate true absolute extremums from the pivot point onwards
+      // We must check all actual bars (including inside bars and current tick)
+      // from the major swing pivot to the current bar to get the absolute max pullback.
+      double absolute_lowest = st.tmp_l;
+      double absolute_highest = st.tmp_h;
+
+      int start_search_idx = 0;
+      if (trend == 1 && st.maj_h_i >= 0 && st.maj_h_i < copied) start_search_idx = st.maj_h_i;
+      else if (trend == -1 && st.maj_l_i >= 0 && st.maj_l_i < copied) start_search_idx = st.maj_l_i;
+
+      for(int k = start_search_idx; k < copied; k++)
+        {
+         if (high[k] > absolute_highest) absolute_highest = high[k];
+         if (low[k] < absolute_lowest) absolute_lowest = low[k];
+        }
+
       if(trend == 1)
         {
          if(live_p >= st.maj_h || st.maj_st == 0)
            {
-            double dyn_range = st.tmp_h - st.maj_l;
-            if(dyn_range > 0) pct = ((st.tmp_h - live_p) / dyn_range) * 100.0;
+            double dyn_range = absolute_highest - st.maj_l;
+            if(dyn_range > 0) pct = ((absolute_highest - live_p) / dyn_range) * 100.0;
             else pct = 0;
             max_pct = 0;
            }
          else
            {
             pct = ((st.maj_h - live_p) / range) * 100.0;
-            max_pct = ((st.maj_h - st.tmp_l) / range) * 100.0;
+            max_pct = ((st.maj_h - absolute_lowest) / range) * 100.0;
            }
         }
       else if(trend == -1)
         {
          if(live_p <= st.maj_l || st.maj_st == 0)
            {
-            double dyn_range = st.maj_h - st.tmp_l;
-            if(dyn_range > 0) pct = ((live_p - st.tmp_l) / dyn_range) * 100.0;
+            double dyn_range = st.maj_h - absolute_lowest;
+            if(dyn_range > 0) pct = ((live_p - absolute_lowest) / dyn_range) * 100.0;
             else pct = 0;
             max_pct = 0;
            }
          else
            {
             pct = ((live_p - st.maj_l) / range) * 100.0;
-            max_pct = ((st.tmp_h - st.maj_l) / range) * 100.0;
+            max_pct = ((absolute_highest - st.maj_l) / range) * 100.0;
            }
         }
      }
