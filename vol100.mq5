@@ -63,7 +63,6 @@ bool g_level1_triggered = false;
 bool g_level2_triggered = false;
 bool g_level1_missed = false;
 bool g_level2_missed = false;
-bool g_test_mode_alerted = false; // Prevents spamming in InpTestMode
 
 void DrawLine(string name, datetime time1, double price1, datetime time2, double price2, color clr, int width, ENUM_LINE_STYLE style, bool ray_right=false)
   {
@@ -1624,7 +1623,6 @@ int OnCalculate(const int rates_total,
       g_level2_triggered = false;
       g_level1_missed = false;
       g_level2_missed = false;
-      g_test_mode_alerted = false;
 
       ObjectsDeleteAll(0, "Structure_");
       ObjectsDeleteAll(0, "Minor_");
@@ -1692,18 +1690,22 @@ int OnCalculate(const int rates_total,
 
       limit = start_idx + 1;
 
-      // TEST TRIGGER
+      // TEST TRIGGER FOR TRADE EXECUTION
       if (InpTestTradeExecution) {
           int live_tr = 0; double live_pct = 0; double mp_pct = 0;
           double dh, dl; datetime dth, dtl;
           GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
 
           // Test varsayımı: O anki M1 yönünün devamı niteliğinde bir kırılım (CHoCH) geldiğini farz ediyoruz.
-          // In real signals, M1 break direction is explicitly 1 (Bullish) or -1 (Bearish). Here we fetch current live_tr.
           int test_dir = live_tr;
-          if (test_dir == 0) test_dir = g_state_hist.maj_tr; // Fallback to macro if absolutely no M1 trend identified yet
+          if (test_dir == 0) test_dir = g_state_hist.maj_tr;
 
           EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, true);
+      }
+
+      // TEST TRIGGER FOR MTF LEVELS
+      if (InpTestMode) {
+          TriggerMTFAlert(rates_total-1, TimeCurrent(), close[rates_total-1], 1, false);
       }
      }
    else
@@ -1768,7 +1770,7 @@ int OnCalculate(const int rates_total,
       DrawLine("LiveLeg", time[g_state_curr.lp_i], g_state_curr.lp_p, time[leg_i], leg_p, InpColorMin, 1, STYLE_DOT);
      }
 
-   if(last_idx > 0 && (Period() == PERIOD_M1 || InpTestMode))
+   if(last_idx > 0 && (Period() == PERIOD_M1))
      {
       int live_trend = 0;
       double live_pct = 0.0;
@@ -1839,13 +1841,12 @@ int OnCalculate(const int rates_total,
             if(trig2 && g_level2_missed) is_revisit_2 = true;
            }
 
-         if(InpEnableAlertMTFLevels && (trig1 || trig2 || (InpTestMode && !g_test_mode_alerted)))
+         if(InpEnableAlertMTFLevels && (trig1 || trig2))
            {
             int trigger_lvl = trig2 ? 2 : 1;
             bool is_revisit = (trigger_lvl == 2) ? is_revisit_2 : is_revisit_1;
             bool success = TriggerMTFAlert(last_idx, time[last_idx], close[last_idx], trigger_lvl, is_revisit);
             if(success) {
-               if(InpTestMode) g_test_mode_alerted = true;
                if(trig1) { g_level1_triggered = true; g_level1_missed = false; }
                if(trig2) { g_level2_triggered = true; g_level2_missed = false; }
             }
