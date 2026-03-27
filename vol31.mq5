@@ -552,7 +552,7 @@ string PctToText(double pct, double max_pct, datetime swing_time, datetime curre
    if(pct <= 10.0)
      {
       // Fiyat zirvedeyse veya yeni kırılmışsa geçmiş pullback aranmaz. Şişkindir.
-      if(max_pct <= 10.0) return " (Trend Şişkin, Düzeltme Bekleniyor)" + age;
+      if(max_pct <= 10.0) return base_str + " (Trend Şişkin, Düzeltme Bekleniyor)" + age;
       else return base_str + " - Kırılıma Hazırlanıyor" + age;
      }
    if(pct >= InpGoodPullbackPct && pct <= 75.0) return base_str + " - İdeal Düzeltme" + age;
@@ -779,12 +779,12 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    if(p_m1 == 0 && mp_m1 == 0)
      {
       string temp_dir = (t_m1 == 1) ? "SELL" : "BUY";
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + "\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " [Zirve:%" + FormatPct(mp_m1) + " | Çekilme:%" + FormatPct(mp_m1 - p_m1) + "]\n";
       msg1 += "⚠️ DİKKAT: Trend şişkin! M1 için kısa süreli düzeltme hareketi (" + temp_dir + ") fırsatı beklenebilir.\n\n";
      }
    else if(p_m1 <= 10.0 && mp_m1 <= 10.0)
      {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Trend Şişkin, Düzeltme Bekleniyor)\n\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " [Zirve:%" + FormatPct(mp_m1) + " | Çekilme:%" + FormatPct(mp_m1 - p_m1) + "] (Trend Şişkin, Düzeltme Bekleniyor)\n\n";
      }
    else
      {
