@@ -562,7 +562,7 @@ string GetTimeAgoString(datetime past_time, datetime now_time)
 string PctToText(double pct, double max_pct, datetime swing_time, datetime current_time)
   {
    string age = "\n   └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
-   string base_str = "(Maks. Çekilme: %" + DoubleToString(max_pct, 2) + " | Anlık Uzaklık: %" + DoubleToString(pct, 2);
+   string base_str = "(Çekilme: %" + DoubleToString(pct, 2) + " ↑↑%" + DoubleToString(max_pct, 2);
 
    if(pct == 0.0) return base_str + " - Kırılım Gerçekleşti / Trend Devam)" + age;
 
@@ -615,7 +615,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool h1_momentum = ((mp_h1 - p_h1) >= 20.0);
    bool is_h1_aligned = (t_h1 == trigger_dir);
 
-   string stats_h1 = "[Çekilme: %" + DoubleToString(mp_h1, 2) + " | Anlık Mesafe: %" + DoubleToString(p_h1, 2) + "] ";
+   string stats_h1 = StringFormat("[Zirve:%.2f | Çekilme:%.2f] ", mp_h1, (mp_h1 - p_h1));
 
    if (h1_momentum) {
        if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Sert Dönüş (İvme) -> [+30 Skor]\n"; }
@@ -636,7 +636,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool m30_momentum = ((mp_m30 - p_m30) >= 20.0);
    bool is_m30_aligned = (t_m30 == trigger_dir);
 
-   string stats_m30 = "[Çekilme: %" + DoubleToString(mp_m30, 2) + " | Anlık Mesafe: %" + DoubleToString(p_m30, 2) + "] ";
+   string stats_m30 = StringFormat("[Zirve:%.2f | Çekilme:%.2f] ", mp_m30, (mp_m30 - p_m30));
 
    if (m30_momentum) {
        if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "Sert İvme (Onay) -> [+15 Skor]\n"; }
@@ -667,7 +667,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // Determine if M15 and M30 are tracking the exact same structural swing bounds
    bool is_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
 
-   string stats_m15 = "[Çekilme: %" + DoubleToString(mp_m15, 2) + " | Anlık Mesafe: %" + DoubleToString(p_m15, 2) + "] ";
+   string stats_m15 = StringFormat("[Zirve:%.2f | Çekilme:%.2f] ", mp_m15, (mp_m15 - p_m15));
 
    if (is_duplicate) {
        m15_points = 0; m15_text = "M15: " + stats_m15 + "M30 ile aynı dalga -> [0 Skor]\n";
@@ -808,7 +808,7 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
      }
    else
      {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Maks. Çekilme: %" + DoubleToString(mp_m1, 2) + " | Anlık Uzaklık: %" + DoubleToString(p_m1, 2) + ")\n\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 2) + " ↑↑%" + DoubleToString(mp_m1, 2) + ")\n\n";
      }
 
    msg1 += "🧭 MAKRO TREND (H1/M30)\n";
@@ -1233,29 +1233,17 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.\n";
               }
 
+              double ext_pct = 0;
               if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
                   double range = state.maj_h - state.maj_l;
                   double extreme_pt = FindTrueHigh(high, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
                   if(extreme_pt == EMPTY_VALUE) extreme_pt = is_strong ? MathMax(state.t1_h, state.t2_h) : state.t1_h;
 
-                  double ext_pct = 0, break_pct = 0;
-
                   if (state.maj_tr == 1) { // Up Trend Pullback Reverse
                       ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
-                      break_pct = ((state.maj_h - val_c) / range) * 100.0;
                   } else { // Down Trend Pullback Reverse
                       ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
-                      break_pct = ((val_c - state.maj_l) / range) * 100.0;
                   }
-
-                  double mov_pct = MathAbs(break_pct - ext_pct);
-
-                  msg += "\n📊 Majör Çekilme Detayı:\n";
-                  msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
-                  msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
-                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(extreme_pt, _Digits) + " (%" + DoubleToString(ext_pct, 2) + ")\n";
-                  msg += "└ Kırılım Fiyatı: " + DoubleToString(val_c, _Digits) + " (%" + DoubleToString(break_pct, 2) + ")\n";
-                  msg += "└ Kırılım İçi Yüzde Farkı: %" + DoubleToString(mov_pct, 2) + "\n";
               }
 
               // Only alert if we haven't already alerted for THIS specific swing setup
@@ -1264,6 +1252,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   if (InpEnableAlertCHoCHBase) {
                       if(InpAlertPopup) Alert(msg);
                       if(InpAlertPush) SendNotification(msg);
+                  }
+                  if (InpEnableTradeExecution) {
+                      EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong);
                   }
                   last_alert_d1_i_bear = state.d1_i;
               }
@@ -1302,29 +1293,17 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.\n";
               }
 
+              double ext_pct = 0;
               if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
                   double range = state.maj_h - state.maj_l;
                   double extreme_pt = FindTrueLow(low, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
                   if(extreme_pt == EMPTY_VALUE) extreme_pt = is_strong ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
 
-                  double ext_pct = 0, break_pct = 0;
-
                   if (state.maj_tr == 1) { // Up Trend Pullback Reverse
                       ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
-                      break_pct = ((state.maj_h - val_c) / range) * 100.0;
                   } else { // Down Trend Pullback Reverse
                       ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
-                      break_pct = ((val_c - state.maj_l) / range) * 100.0;
                   }
-
-                  double mov_pct = MathAbs(break_pct - ext_pct);
-
-                  msg += "\n📊 Majör Çekilme Detayı:\n";
-                  msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
-                  msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
-                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(extreme_pt, _Digits) + " (%" + DoubleToString(ext_pct, 2) + ")\n";
-                  msg += "└ Kırılım Fiyatı: " + DoubleToString(val_c, _Digits) + " (%" + DoubleToString(break_pct, 2) + ")\n";
-                  msg += "└ Kırılım İçi Yüzde Farkı: %" + DoubleToString(mov_pct, 2) + "\n";
               }
 
               // Only alert if we haven't already alerted for THIS specific swing setup
@@ -1333,6 +1312,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   if (InpEnableAlertCHoCHBase) {
                       if(InpAlertPopup) Alert(msg);
                       if(InpAlertPush) SendNotification(msg);
+                  }
+                  if (InpEnableTradeExecution) {
+                      EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong);
                   }
                   last_alert_d1_i_bull = state.d1_i;
               }
