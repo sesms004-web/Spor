@@ -529,14 +529,17 @@ string PctToText(double pct, double max_pct, datetime swing_time, datetime curre
    string age = "\n   └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
    string base_str = "(Maks. Çekilme: %" + DoubleToString(max_pct, 2) + " | Anlık Uzaklık: %" + DoubleToString(pct, 2);
 
+   if(pct == 0.0) return base_str + " - Kırılım Gerçekleşti / Trend Devam)" + age;
+
    if(pct <= 10.0)
      {
-      // Fiyat zirvedeyse veya yeni kırılmışsa geçmiş pullback aranmaz. Şişkindir.
       if(max_pct <= 10.0) return " (Trend Şişkin, Düzeltme Bekleniyor)" + age;
       else return base_str + " - Kırılıma Hazırlanıyor)" + age;
      }
+
    if(pct >= InpGoodPullbackPct && pct <= 75.0) return base_str + " - İdeal Düzeltme)" + age;
    if(pct > 85.0) return base_str + " - Dönüş Riski)" + age;
+
    return base_str + ")" + age;
   }
 
