@@ -1053,23 +1053,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       }
    }
 
-   // To properly trigger CHoCH based on the maximum pullback before the CHoCH occurs
-   double actual_pullback = 0;
-   if (cur_maj_h != EMPTY_VALUE && cur_maj_l != EMPTY_VALUE && cur_maj_h != cur_maj_l) {
-      double range = cur_maj_h - cur_maj_l;
-      if (state.maj_tr == 1) {
-         if (state.tmp_l >= cur_maj_l) {
-             actual_pullback = ((cur_maj_h - state.tmp_l) / range) * 100.0;
-         }
-      } else if (state.maj_tr == -1) {
-         if (state.tmp_h <= cur_maj_h) {
-             actual_pullback = ((state.tmp_h - cur_maj_l) / range) * 100.0;
-         }
-      }
-   }
-
-   bool in_pullback_zone = (actual_pullback >= InpMinPullbackPct && actual_pullback <= InpMaxPullbackPct);
-
    // T1-D1-T2 State Machine based on Minor structure turns
    // (Calculated implicitly during Minor Structure state changes below)
 
@@ -1111,13 +1094,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
              state.choch_dir = 0;
          }
 
-         // CHoCH Sequence Abort Rule (Out of Pullback Zone)
-         if (state.choch_dir != 0 && !in_pullback_zone) {
-             state.choch_dir = 0; // Left the authorized zone entirely ([InpMinPullbackPct, InpMaxPullbackPct])
-         }
-
          // CHoCH Bearish sequence tracking
-         if (state.maj_tr == -1 && in_pullback_zone) {
+         if (state.maj_tr == -1) {
              if (state.choch_dir == 0 || state.choch_dir == 1) { // Initiate T1 for Bearish
                  state.t1_h = state.min_h;
                  state.t1_l = state.min_l;
@@ -1184,7 +1162,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          }
 
          // CHoCH Bullish sequence tracking
-         if (state.maj_tr == 1 && in_pullback_zone) {
+         if (state.maj_tr == 1) {
              if (state.choch_dir == 0 || state.choch_dir == -1) { // Initiate T1 for Bullish
                  state.t1_l = state.min_l;
                  state.t1_h = state.min_h;
@@ -1216,7 +1194,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
    // CHoCH Trigger & Drawing Logic
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
-      if (val_c < state.d1_l && in_pullback_zone) {
+      if (val_c < state.d1_l) {
           // Bearish CHoCH confirmed!
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
@@ -1231,13 +1209,24 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
                   double range = state.maj_h - state.maj_l;
-                  double cur_pct = ((val_c - state.maj_l) / range) * 100.0;
+                  double ext_pct = 0, break_pct = 0;
+
+                  if (state.maj_tr == 1) { // Up Trend Pullback Reverse
+                      ext_pct = ((state.maj_h - state.t1_h) / range) * 100.0;
+                      break_pct = ((state.maj_h - val_c) / range) * 100.0;
+                  } else { // Down Trend Pullback Reverse
+                      ext_pct = ((state.t1_h - state.maj_l) / range) * 100.0;
+                      break_pct = ((val_c - state.maj_l) / range) * 100.0;
+                  }
+
+                  double mov_pct = MathAbs(break_pct - ext_pct);
+
                   msg += "\n📊 Majör Çekilme Detayı:\n";
                   msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
                   msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
-                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(state.tmp_h, _Digits) + " (%" + DoubleToString(actual_pullback, 2) + ")\n";
-                  msg += "└ Kırılım Fiyatı: " + DoubleToString(val_c, _Digits) + " (%" + DoubleToString(cur_pct, 2) + ")\n";
-                  msg += "└ Kırılım İçi Fiyat Hareketi: %" + DoubleToString(actual_pullback - cur_pct, 2) + "\n";
+                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(state.t1_h, _Digits) + " (%" + DoubleToString(ext_pct, 2) + ")\n";
+                  msg += "└ Kırılım Fiyatı: " + DoubleToString(val_c, _Digits) + " (%" + DoubleToString(break_pct, 2) + ")\n";
+                  msg += "└ Kırılım İçi Yüzde Farkı: %" + DoubleToString(mov_pct, 2) + "\n";
               }
 
               // Only alert if we haven't already alerted for THIS specific swing setup
@@ -1246,9 +1235,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   if (InpEnableAlertCHoCHBase) {
                       if(InpAlertPopup) Alert(msg);
                       if(InpAlertPush) SendNotification(msg);
-                  }
-                  if (InpEnableTradeExecution) {
-                      EvaluateTradeSignal(i, time[i], val_c, -1, actual_pullback, is_strong);
                   }
                   last_alert_d1_i_bear = state.d1_i;
               }
@@ -1274,7 +1260,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           state.choch_dir = 0; // Reset after trigger
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
-      if (val_c > state.d1_h && in_pullback_zone) {
+      if (val_c > state.d1_h) {
           // Bullish CHoCH confirmed!
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
@@ -1289,13 +1275,24 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
                   double range = state.maj_h - state.maj_l;
-                  double cur_pct = ((state.maj_h - val_c) / range) * 100.0;
+                  double ext_pct = 0, break_pct = 0;
+
+                  if (state.maj_tr == 1) { // Up Trend Pullback Reverse
+                      ext_pct = ((state.maj_h - state.t1_l) / range) * 100.0;
+                      break_pct = ((state.maj_h - val_c) / range) * 100.0;
+                  } else { // Down Trend Pullback Reverse
+                      ext_pct = ((state.t1_l - state.maj_l) / range) * 100.0;
+                      break_pct = ((val_c - state.maj_l) / range) * 100.0;
+                  }
+
+                  double mov_pct = MathAbs(break_pct - ext_pct);
+
                   msg += "\n📊 Majör Çekilme Detayı:\n";
                   msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
                   msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
-                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(state.tmp_l, _Digits) + " (%" + DoubleToString(actual_pullback, 2) + ")\n";
-                  msg += "└ Kırılım Fiyatı: " + DoubleToString(val_c, _Digits) + " (%" + DoubleToString(cur_pct, 2) + ")\n";
-                  msg += "└ Kırılım İçi Fiyat Hareketi: %" + DoubleToString(actual_pullback - cur_pct, 2) + "\n";
+                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(state.t1_l, _Digits) + " (%" + DoubleToString(ext_pct, 2) + ")\n";
+                  msg += "└ Kırılım Fiyatı: " + DoubleToString(val_c, _Digits) + " (%" + DoubleToString(break_pct, 2) + ")\n";
+                  msg += "└ Kırılım İçi Yüzde Farkı: %" + DoubleToString(mov_pct, 2) + "\n";
               }
 
               // Only alert if we haven't already alerted for THIS specific swing setup
@@ -1304,9 +1301,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   if (InpEnableAlertCHoCHBase) {
                       if(InpAlertPopup) Alert(msg);
                       if(InpAlertPush) SendNotification(msg);
-                  }
-                  if (InpEnableTradeExecution) {
-                      EvaluateTradeSignal(i, time[i], val_c, 1, actual_pullback, is_strong);
                   }
                   last_alert_d1_i_bull = state.d1_i;
               }
