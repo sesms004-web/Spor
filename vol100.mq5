@@ -1230,10 +1230,14 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               }
 
               if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
+                  double range = state.maj_h - state.maj_l;
+                  double cur_pct = ((val_c - state.maj_l) / range) * 100.0;
                   msg += "\n📊 Majör Çekilme Detayı:\n";
                   msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
                   msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
-                  msg += "└ En Derin Çekilme: %" + DoubleToString(actual_pullback, 2) + "\n";
+                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(state.tmp_h, _Digits) + " (%" + DoubleToString(actual_pullback, 2) + ")\n";
+                  msg += "└ Kırılım Fiyatı: " + DoubleToString(val_c, _Digits) + " (%" + DoubleToString(cur_pct, 2) + ")\n";
+                  msg += "└ Kırılım İçi Fiyat Hareketi: %" + DoubleToString(actual_pullback - cur_pct, 2) + "\n";
               }
 
               // Only alert if we haven't already alerted for THIS specific swing setup
@@ -1284,10 +1288,14 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               }
 
               if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
+                  double range = state.maj_h - state.maj_l;
+                  double cur_pct = ((state.maj_h - val_c) / range) * 100.0;
                   msg += "\n📊 Majör Çekilme Detayı:\n";
                   msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
                   msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
-                  msg += "└ En Derin Çekilme: %" + DoubleToString(actual_pullback, 2) + "\n";
+                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(state.tmp_l, _Digits) + " (%" + DoubleToString(actual_pullback, 2) + ")\n";
+                  msg += "└ Kırılım Fiyatı: " + DoubleToString(val_c, _Digits) + " (%" + DoubleToString(cur_pct, 2) + ")\n";
+                  msg += "└ Kırılım İçi Fiyat Hareketi: %" + DoubleToString(actual_pullback - cur_pct, 2) + "\n";
               }
 
               // Only alert if we haven't already alerted for THIS specific swing setup
