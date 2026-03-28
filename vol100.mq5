@@ -1195,13 +1195,14 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
                   double range = state.maj_h - state.maj_l;
+                  double extreme_pt = is_strong ? MathMax(state.t1_h, state.t2_h) : state.t1_h;
                   double ext_pct = 0, break_pct = 0;
 
                   if (state.maj_tr == 1) { // Up Trend Pullback Reverse
-                      ext_pct = ((state.maj_h - state.t1_h) / range) * 100.0;
+                      ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
                       break_pct = ((state.maj_h - val_c) / range) * 100.0;
                   } else { // Down Trend Pullback Reverse
-                      ext_pct = ((state.t1_h - state.maj_l) / range) * 100.0;
+                      ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
                       break_pct = ((val_c - state.maj_l) / range) * 100.0;
                   }
 
@@ -1210,7 +1211,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   msg += "\n📊 Majör Çekilme Detayı:\n";
                   msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
                   msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
-                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(state.t1_h, _Digits) + " (%" + DoubleToString(ext_pct, 2) + ")\n";
+                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(extreme_pt, _Digits) + " (%" + DoubleToString(ext_pct, 2) + ")\n";
                   msg += "└ Kırılım Fiyatı: " + DoubleToString(val_c, _Digits) + " (%" + DoubleToString(break_pct, 2) + ")\n";
                   msg += "└ Kırılım İçi Yüzde Farkı: %" + DoubleToString(mov_pct, 2) + "\n";
               }
@@ -1261,13 +1262,14 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
                   double range = state.maj_h - state.maj_l;
+                  double extreme_pt = is_strong ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
                   double ext_pct = 0, break_pct = 0;
 
                   if (state.maj_tr == 1) { // Up Trend Pullback Reverse
-                      ext_pct = ((state.maj_h - state.t1_l) / range) * 100.0;
+                      ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
                       break_pct = ((state.maj_h - val_c) / range) * 100.0;
                   } else { // Down Trend Pullback Reverse
-                      ext_pct = ((state.t1_l - state.maj_l) / range) * 100.0;
+                      ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
                       break_pct = ((val_c - state.maj_l) / range) * 100.0;
                   }
 
@@ -1276,7 +1278,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   msg += "\n📊 Majör Çekilme Detayı:\n";
                   msg += "└ Majör Tepe: " + DoubleToString(state.maj_h, _Digits) + "\n";
                   msg += "└ Majör Dip: " + DoubleToString(state.maj_l, _Digits) + "\n";
-                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(state.t1_l, _Digits) + " (%" + DoubleToString(ext_pct, 2) + ")\n";
+                  msg += "└ Geldiği En Uç Nokta: " + DoubleToString(extreme_pt, _Digits) + " (%" + DoubleToString(ext_pct, 2) + ")\n";
                   msg += "└ Kırılım Fiyatı: " + DoubleToString(val_c, _Digits) + " (%" + DoubleToString(break_pct, 2) + ")\n";
                   msg += "└ Kırılım İçi Yüzde Farkı: %" + DoubleToString(mov_pct, 2) + "\n";
               }
