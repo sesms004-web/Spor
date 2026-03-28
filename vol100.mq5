@@ -481,19 +481,33 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
       double range = st.maj_h - st.maj_l;
       if(trend == 1)
         {
-         pct = ((st.maj_h - live_p) / range) * 100.0;
-         max_pct = ((st.maj_h - st.tmp_l) / range) * 100.0;
-
-         // If price broke the major high, reset percentage but keep max_pct tracking the historical dip
-         if(live_p >= st.maj_h) pct = 0;
+         if(st.maj_st == 0) // Unconfirmed/expanding peak
+           {
+            double dyn_range = st.tmp_h - st.maj_l;
+            if(dyn_range > 0) pct = ((st.tmp_h - live_p) / dyn_range) * 100.0; else pct = 0;
+            max_pct = pct; // Max pullback during an unconfirmed extension IS the live pullback
+           }
+         else // Confirmed peak
+           {
+            pct = ((st.maj_h - live_p) / range) * 100.0;
+            max_pct = ((st.maj_h - st.tmp_l) / range) * 100.0;
+            if(live_p >= st.maj_h) pct = 0;
+           }
         }
       else if(trend == -1)
         {
-         pct = ((live_p - st.maj_l) / range) * 100.0;
-         max_pct = ((st.tmp_h - st.maj_l) / range) * 100.0;
-
-         // If price broke the major low, reset percentage
-         if(live_p <= st.maj_l) pct = 0;
+         if(st.maj_st == 0) // Unconfirmed/expanding bottom
+           {
+            double dyn_range = st.maj_h - st.tmp_l;
+            if(dyn_range > 0) pct = ((live_p - st.tmp_l) / dyn_range) * 100.0; else pct = 0;
+            max_pct = pct;
+           }
+         else // Confirmed bottom
+           {
+            pct = ((live_p - st.maj_l) / range) * 100.0;
+            max_pct = ((st.tmp_h - st.maj_l) / range) * 100.0;
+            if(live_p <= st.maj_l) pct = 0;
+           }
         }
      }
 
