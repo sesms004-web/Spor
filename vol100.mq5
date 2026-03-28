@@ -575,7 +575,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool h1_momentum = ((mp_h1 - p_h1) >= 20.0);
    bool is_h1_aligned = (t_h1 == trigger_dir);
 
-   string stats_h1 = StringFormat("[Zirve:%.1f | Çekilme:%.1f] ", mp_h1, (mp_h1 - p_h1));
+   string stats_h1 = "[Çekilme: %" + DoubleToString(mp_h1, 2) + " | Anlık Mesafe: %" + DoubleToString(p_h1, 2) + "] ";
 
    if (h1_momentum) {
        if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Sert Dönüş (İvme) -> [+30 Skor]\n"; }
@@ -596,7 +596,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool m30_momentum = ((mp_m30 - p_m30) >= 20.0);
    bool is_m30_aligned = (t_m30 == trigger_dir);
 
-   string stats_m30 = StringFormat("[Zirve:%.1f | Çekilme:%.1f] ", mp_m30, (mp_m30 - p_m30));
+   string stats_m30 = "[Çekilme: %" + DoubleToString(mp_m30, 2) + " | Anlık Mesafe: %" + DoubleToString(p_m30, 2) + "] ";
 
    if (m30_momentum) {
        if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "Sert İvme (Onay) -> [+15 Skor]\n"; }
@@ -627,7 +627,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // Determine if M15 and M30 are tracking the exact same structural swing bounds
    bool is_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
 
-   string stats_m15 = StringFormat("[Zirve:%.1f | Çekilme:%.1f] ", mp_m15, (mp_m15 - p_m15));
+   string stats_m15 = "[Çekilme: %" + DoubleToString(mp_m15, 2) + " | Anlık Mesafe: %" + DoubleToString(p_m15, 2) + "] ";
 
    if (is_duplicate) {
        m15_points = 0; m15_text = "M15: " + stats_m15 + "M30 ile aynı dalga -> [0 Skor]\n";
