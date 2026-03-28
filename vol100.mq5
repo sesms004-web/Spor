@@ -402,10 +402,11 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    MqlRates rates[];
    ArraySetAsSeries(rates, false);
 
-   double tf_days = GetDaysForTF(tf);
-   datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
-
-   int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
+   // Sync lookback depth uniformly across ALL timeframes by fetching a consistent 2000 bars.
+   // This guarantees that all timeframes evaluate the exact same structural swings over the same data breadth,
+   // rather than evaluating different anchor points due to misaligned day depths.
+   int max_bars = 2000;
+   int copied = CopyRates(Symbol(), tf, 0, max_bars, rates);
    if(copied < 2) return false;
 
    double high[], low[], close[];
@@ -526,7 +527,7 @@ string GetTimeAgoString(datetime past_time, datetime now_time)
 string PctToText(double pct, double max_pct, datetime swing_time, datetime current_time)
   {
    string age = "\n   └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
-   string base_str = "(Çekilme: %" + DoubleToString(pct, 2) + " ↑↑%" + DoubleToString(max_pct, 2);
+   string base_str = "(Maks. Çekilme: %" + DoubleToString(max_pct, 2) + " | Anlık Uzaklık: %" + DoubleToString(pct, 2);
 
    if(pct <= 10.0)
      {
@@ -768,7 +769,7 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
      }
    else
      {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 2) + " ↑↑%" + DoubleToString(mp_m1, 2) + ")\n\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Maks. Çekilme: %" + DoubleToString(mp_m1, 2) + " | Anlık Uzaklık: %" + DoubleToString(p_m1, 2) + ")\n\n";
      }
 
    msg1 += "🧭 MAKRO TREND (H1/M30)\n";
