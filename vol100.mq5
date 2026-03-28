@@ -1224,121 +1224,135 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
    // CHoCH Trigger & Drawing Logic
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
       if (val_c < state.d1_l) {
-          // Bearish CHoCH confirmed!
-          bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
+          double ext_pct = 0;
+          double break_pct = 0;
+          if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
+              double range = state.maj_h - state.maj_l;
+              double extreme_pt = FindTrueHigh(high, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
+              if(extreme_pt == EMPTY_VALUE) extreme_pt = (state.t2_h > state.t1_h) ? MathMax(state.t1_h, state.t2_h) : state.t1_h;
 
-          if (!is_history) {
-              string msg = "🔴 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
-              msg += "Yön: ⬇️ AŞAĞI\n";
-              if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.\n";
-              } else {
-                  msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.\n";
-              }
-
-              double ext_pct = 0;
-              if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
-                  double range = state.maj_h - state.maj_l;
-                  double extreme_pt = FindTrueHigh(high, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
-                  if(extreme_pt == EMPTY_VALUE) extreme_pt = is_strong ? MathMax(state.t1_h, state.t2_h) : state.t1_h;
-
-                  if (state.maj_tr == 1) { // Up Trend Pullback Reverse
-                      ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
-                  } else { // Down Trend Pullback Reverse
-                      ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
-                  }
-              }
-
-              // Only alert if we haven't already alerted for THIS specific swing setup
-              static int last_alert_d1_i_bear = 0;
-              if (state.d1_i != last_alert_d1_i_bear) {
-                  if (InpEnableAlertCHoCHBase) {
-                      if(InpAlertPopup) Alert(msg);
-                      if(InpAlertPush) SendNotification(msg);
-                  }
-                  if (InpEnableTradeExecution) {
-                      EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong);
-                  }
-                  last_alert_d1_i_bear = state.d1_i;
+              if (state.maj_tr == 1) { // Up Trend Pullback Reverse
+                  ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
+                  break_pct = ((state.maj_h - val_c) / range) * 100.0;
+              } else { // Down Trend Pullback Reverse
+                  ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
+                  break_pct = ((val_c - state.maj_l) / range) * 100.0;
               }
           }
 
-          if (InpShowChoch) {
-              color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
+          if(ext_pct >= InpMinPullbackPct && ext_pct <= InpMaxPullbackPct) {
+              // Bearish CHoCH confirmed!
+              bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
-              // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
-              string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_1, time[state.t1_i], state.t1_h, time[state.d1_i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+              if (!is_history) {
+                  string msg = "🔴 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
+                  msg += "Yön: ⬇️ AŞAĞI\n";
+                  if (is_strong) {
+                      msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.\n";
+                  } else {
+                      msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.\n";
+                  }
 
-              string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_2, time[state.d1_i], state.d1_l, time[state.t2_i], state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
+                  msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
 
-              string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_3, time[state.t2_i], state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+                  // Only alert if we haven't already alerted for THIS specific swing setup
+                  static int last_alert_d1_i_bear = 0;
+                  if (state.d1_i != last_alert_d1_i_bear) {
+                      if (InpEnableAlertCHoCHBase) {
+                          if(InpAlertPopup) Alert(msg);
+                          if(InpAlertPush) SendNotification(msg);
+                      }
+                      if (InpEnableTradeExecution) {
+                          EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong);
+                      }
+                      last_alert_d1_i_bear = state.d1_i;
+                  }
+              }
 
-              // 2. Draw the short, thick signal marker at breakout level
-              string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
-              DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
+              if (InpShowChoch) {
+                  color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
+
+                  // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
+                  string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_1, time[state.t1_i], state.t1_h, time[state.d1_i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+
+                  string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_2, time[state.d1_i], state.d1_l, time[state.t2_i], state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
+
+                  string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_3, time[state.t2_i], state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+
+                  // 2. Draw the short, thick signal marker at breakout level
+                  string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
+                  DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
+              }
           }
           state.choch_dir = 0; // Reset after trigger
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
       if (val_c > state.d1_h) {
-          // Bullish CHoCH confirmed!
-          bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
+          double ext_pct = 0;
+          double break_pct = 0;
+          if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
+              double range = state.maj_h - state.maj_l;
+              double extreme_pt = FindTrueLow(low, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
+              if(extreme_pt == EMPTY_VALUE) extreme_pt = (state.t2_l < state.t1_l) ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
 
-          if (!is_history) {
-              string msg = "🟢 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
-              msg += "Yön: ⬆️ YUKARI\n";
-              if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Dip likiditesi alındı.\n";
-              } else {
-                  msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.\n";
-              }
-
-              double ext_pct = 0;
-              if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
-                  double range = state.maj_h - state.maj_l;
-                  double extreme_pt = FindTrueLow(low, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
-                  if(extreme_pt == EMPTY_VALUE) extreme_pt = is_strong ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
-
-                  if (state.maj_tr == 1) { // Up Trend Pullback Reverse
-                      ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
-                  } else { // Down Trend Pullback Reverse
-                      ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
-                  }
-              }
-
-              // Only alert if we haven't already alerted for THIS specific swing setup
-              static int last_alert_d1_i_bull = 0;
-              if (state.d1_i != last_alert_d1_i_bull) {
-                  if (InpEnableAlertCHoCHBase) {
-                      if(InpAlertPopup) Alert(msg);
-                      if(InpAlertPush) SendNotification(msg);
-                  }
-                  if (InpEnableTradeExecution) {
-                      EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong);
-                  }
-                  last_alert_d1_i_bull = state.d1_i;
+              if (state.maj_tr == 1) { // Up Trend Pullback Reverse
+                  ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
+                  break_pct = ((state.maj_h - val_c) / range) * 100.0;
+              } else { // Down Trend Pullback Reverse
+                  ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
+                  break_pct = ((val_c - state.maj_l) / range) * 100.0;
               }
           }
 
-          if (InpShowChoch) {
-              color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
+          if(ext_pct >= InpMinPullbackPct && ext_pct <= InpMaxPullbackPct) {
+              // Bullish CHoCH confirmed!
+              bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
-              // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
-              string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+              if (!is_history) {
+                  string msg = "🟢 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
+                  msg += "Yön: ⬆️ YUKARI\n";
+                  if (is_strong) {
+                      msg += "Durum: 🔥 GÜÇLÜ! Dip likiditesi alındı.\n";
+                  } else {
+                      msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.\n";
+                  }
 
-              string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
+                  msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
 
-              string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+                  // Only alert if we haven't already alerted for THIS specific swing setup
+                  static int last_alert_d1_i_bull = 0;
+                  if (state.d1_i != last_alert_d1_i_bull) {
+                      if (InpEnableAlertCHoCHBase) {
+                          if(InpAlertPopup) Alert(msg);
+                          if(InpAlertPush) SendNotification(msg);
+                      }
+                      if (InpEnableTradeExecution) {
+                          EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong);
+                      }
+                      last_alert_d1_i_bull = state.d1_i;
+                  }
+              }
 
-              // 2. Draw the short, thick signal marker at breakout level
-              string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
-              DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
+              if (InpShowChoch) {
+                  color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
+
+                  // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
+                  string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+
+                  string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
+
+                  string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+
+                  // 2. Draw the short, thick signal marker at breakout level
+                  string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
+                  DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
+              }
           }
           state.choch_dir = 0; // Reset after trigger
       }
