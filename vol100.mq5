@@ -279,6 +279,28 @@ double GetDaysForTF(ENUM_TIMEFRAMES tf)
    return days;
   }
 
+double FindTrueHigh(const double &high[], int start_idx, int end_idx)
+  {
+   if(start_idx < 0 || end_idx >= ArraySize(high) || start_idx > end_idx) return EMPTY_VALUE;
+   double max_val = high[start_idx];
+   for(int i = start_idx; i <= end_idx; i++)
+     {
+      if(high[i] > max_val) max_val = high[i];
+     }
+   return max_val;
+  }
+
+double FindTrueLow(const double &low[], int start_idx, int end_idx)
+  {
+   if(start_idx < 0 || end_idx >= ArraySize(low) || start_idx > end_idx) return EMPTY_VALUE;
+   double min_val = low[start_idx];
+   for(int i = start_idx; i <= end_idx; i++)
+     {
+      if(low[i] < min_val) min_val = low[i];
+     }
+   return min_val;
+  }
+
 void ProcessBarMathOnly(int i, const double &high[], const double &low[], const double &close[], SState &state)
   {
    double val_h = high[i];
@@ -477,44 +499,44 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
 
    if(st.maj_h != EMPTY_VALUE && st.maj_l != EMPTY_VALUE && st.maj_h != st.maj_l)
      {
-      double range = st.maj_h - st.maj_l;
       if(trend == 1)
         {
-         if(st.maj_st == 0) // Unconfirmed/expanding peak
+         // Find the true peak since the origin (maj_l_i) to current bar
+         double true_peak = FindTrueHigh(high, st.maj_l_i, copied - 1);
+         // Find the deepest pullback from that true peak to current bar
+         int peak_idx = copied - 1;
+         for(int i = st.maj_l_i; i < copied; i++) { if(high[i] == true_peak) { peak_idx = i; break; } }
+         double true_bottom = FindTrueLow(low, peak_idx, copied - 1);
+
+         double range = true_peak - st.maj_l;
+         if (range > 0)
            {
-            double dyn_range = st.tmp_h - st.maj_l;
-            if(dyn_range > 0) pct = ((st.tmp_h - live_p) / dyn_range) * 100.0; else pct = 0;
-            max_pct = pct; // Max pullback during an unconfirmed extension IS the live pullback
+            pct = ((true_peak - live_p) / range) * 100.0;
+            max_pct = ((true_peak - true_bottom) / range) * 100.0;
            }
-         else // Confirmed peak
-           {
-            pct = ((st.maj_h - live_p) / range) * 100.0;
-            max_pct = ((st.maj_h - st.tmp_l) / range) * 100.0;
-            if(live_p >= st.maj_h) pct = 0;
-           }
+         if(live_p >= true_peak) pct = 0;
         }
       else if(trend == -1)
         {
-         if(st.maj_st == 0) // Unconfirmed/expanding bottom
+         // Find the true bottom since the origin (maj_h_i) to current bar
+         double true_bottom = FindTrueLow(low, st.maj_h_i, copied - 1);
+         // Find the highest pullback from that true bottom to current bar
+         int bot_idx = copied - 1;
+         for(int i = st.maj_h_i; i < copied; i++) { if(low[i] == true_bottom) { bot_idx = i; break; } }
+         double true_peak = FindTrueHigh(high, bot_idx, copied - 1);
+
+         double range = st.maj_h - true_bottom;
+         if (range > 0)
            {
-            double dyn_range = st.maj_h - st.tmp_l;
-            if(dyn_range > 0) pct = ((live_p - st.tmp_l) / dyn_range) * 100.0; else pct = 0;
-            max_pct = pct;
+            pct = ((live_p - true_bottom) / range) * 100.0;
+            max_pct = ((true_peak - true_bottom) / range) * 100.0;
            }
-         else // Confirmed bottom
-           {
-            pct = ((live_p - st.maj_l) / range) * 100.0;
-            max_pct = ((st.tmp_h - st.maj_l) / range) * 100.0;
-            if(live_p <= st.maj_l) pct = 0;
-           }
+         if(live_p <= true_bottom) pct = 0;
         }
      }
 
    if(pct < 0) pct = 0;
-   if(pct > 100) pct = 100;
-   if(max_pct < 0) max_pct = 0;
-   if(max_pct > 100) max_pct = 100;
-   if(max_pct < pct) max_pct = pct; // Emniyet: Max pct her zaman en az anlık pct kadar olmalı
+   if(max_pct < pct) max_pct = pct;
 
    return true;
   }
@@ -1213,7 +1235,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
                   double range = state.maj_h - state.maj_l;
-                  double extreme_pt = is_strong ? MathMax(state.t1_h, state.t2_h) : state.t1_h;
+                  double extreme_pt = FindTrueHigh(high, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
+                  if(extreme_pt == EMPTY_VALUE) extreme_pt = is_strong ? MathMax(state.t1_h, state.t2_h) : state.t1_h;
+
                   double ext_pct = 0, break_pct = 0;
 
                   if (state.maj_tr == 1) { // Up Trend Pullback Reverse
@@ -1280,7 +1304,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
                   double range = state.maj_h - state.maj_l;
-                  double extreme_pt = is_strong ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
+                  double extreme_pt = FindTrueLow(low, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
+                  if(extreme_pt == EMPTY_VALUE) extreme_pt = is_strong ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
+
                   double ext_pct = 0, break_pct = 0;
 
                   if (state.maj_tr == 1) { // Up Trend Pullback Reverse
