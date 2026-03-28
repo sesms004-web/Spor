@@ -402,11 +402,10 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    MqlRates rates[];
    ArraySetAsSeries(rates, false);
 
-   // Sync lookback depth uniformly across ALL timeframes by fetching a consistent 2000 bars.
-   // This guarantees that all timeframes evaluate the exact same structural swings over the same data breadth,
-   // rather than evaluating different anchor points due to misaligned day depths.
-   int max_bars = 2000;
-   int copied = CopyRates(Symbol(), tf, 0, max_bars, rates);
+   // Sync lookback depth uniformly across ALL timeframes by fetching exact historical time period.
+   // 30 days is chosen to ensure even H1 has enough structural history to align with lower timeframes.
+   datetime anchor_time = current_time - (30 * 24 * 60 * 60);
+   int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
    if(copied < 2) return false;
 
    double high[], low[], close[];
@@ -548,6 +547,7 @@ string PctToText(double pct, double max_pct, datetime swing_time, datetime curre
    if(pct <= 10.0)
      {
       if(max_pct <= 10.0) return " (Trend Şişkin, Düzeltme Bekleniyor)" + age;
+      else if(max_pct == pct) return base_str + " - Yeni Dalga Oluşuyor)" + age;
       else return base_str + " - Kırılıma Hazırlanıyor)" + age;
      }
 
