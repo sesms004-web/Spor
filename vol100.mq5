@@ -433,23 +433,28 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
    if(copied < 2) return false;
 
-   double high[], low[], close[];
+   double open[], high[], low[], close[];
+   datetime time[];
+   ArrayResize(open, copied);
    ArrayResize(high, copied);
    ArrayResize(low, copied);
    ArrayResize(close, copied);
+   ArrayResize(time, copied);
 
    for(int i=0; i<copied; i++)
      {
+      open[i] = rates[i].open;
       high[i] = rates[i].high;
       low[i]  = rates[i].low;
       close[i] = rates[i].close;
+      time[i] = rates[i].time;
      }
 
    SState st;
    st.min_h   = high[0]; st.min_h_i = 0; st.min_l   = low[0]; st.min_l_i = 0;
    st.trig_h  = high[0]; st.trig_l  = low[0];
    st.tmp_h   = high[0]; st.tmp_h_i = 0; st.tmp_l   = low[0]; st.tmp_l_i = 0;
-   st.min_tr  = (close[0] > rates[0].open) ? 1 : -1;
+   st.min_tr  = (close[0] > open[0]) ? 1 : -1;
 
    double initial_gap = (high[0] - low[0]);
    if(initial_gap == 0) initial_gap = Point() * 10;
@@ -486,7 +491,7 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
             if(bid < low[i]) low[i] = bid;
            }
 
-         ProcessBarMathOnly(i, high, low, close, st);
+         ProcessBar(i, open, high, low, close, time, st, true, false); // false = do not draw UI
         }
      }
 
@@ -1089,7 +1094,7 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 //| Main Logic Execution                                             |
 //+------------------------------------------------------------------+
-void ProcessBar(int i, const double &open[], const double &high[], const double &low[], const double &close[], const datetime &time[], SState &state, bool is_history)
+void ProcessBar(int i, const double &open[], const double &high[], const double &low[], const double &close[], const datetime &time[], SState &state, bool is_history, bool draw_ui = true)
   {
    double val_h = high[i];
    double val_l = low[i];
@@ -1134,7 +1139,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
       if(val_l < old_trig)
         {
-         if(InpShowMin)
+         if(InpShowMin && draw_ui)
            {
             string name = GetUniqueName(prefix + "Minor_");
             DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_h_i], state.min_h, InpColorMin, 1, STYLE_SOLID);
@@ -1206,7 +1211,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
       if(val_h > old_trig)
         {
-         if(InpShowMin)
+         if(InpShowMin && draw_ui)
            {
             string name = GetUniqueName(prefix + "Minor_");
             DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_l_i], state.min_l, InpColorMin, 1, STYLE_SOLID);
@@ -1298,18 +1303,18 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bear = 0;
               if (state.d1_i != last_alert_d1_i_bear) {
-                  if (InpEnableAlertCHoCHBase) {
+                  if (InpEnableAlertCHoCHBase && draw_ui) {
                       if(InpAlertPopup) Alert(msg);
                       if(InpAlertPush) SendNotification(msg);
                   }
-                  if (InpEnableTradeExecution) {
+                  if (InpEnableTradeExecution && draw_ui) {
                       EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong);
                   }
                   last_alert_d1_i_bear = state.d1_i;
               }
           }
 
-          if (InpShowChoch) {
+          if (InpShowChoch && draw_ui) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
 
               // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
@@ -1363,18 +1368,18 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bull = 0;
               if (state.d1_i != last_alert_d1_i_bull) {
-                  if (InpEnableAlertCHoCHBase) {
+                  if (InpEnableAlertCHoCHBase && draw_ui) {
                       if(InpAlertPopup) Alert(msg);
                       if(InpAlertPush) SendNotification(msg);
                   }
-                  if (InpEnableTradeExecution) {
+                  if (InpEnableTradeExecution && draw_ui) {
                       EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong);
                   }
                   last_alert_d1_i_bull = state.d1_i;
               }
           }
 
-          if (InpShowChoch) {
+          if (InpShowChoch && draw_ui) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
 
               // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
@@ -1419,7 +1424,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
            {
             state.maj_h = state.tmp_h;
             state.maj_h_i = state.tmp_h_i;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
               {
                string name = GetUniqueName(prefix + "Major_");
                DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBull, 2, STYLE_SOLID);
@@ -1436,7 +1441,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             CutLine(state.cur_top_line, time[i]);
             CutLine(state.cur_bot_line, time[i]);
 
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
               {
                state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
                DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBull, 1, STYLE_DASH, true);
@@ -1452,7 +1457,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_l < state.maj_l && val_c >= state.maj_l)
            {
             state.maj_l = val_l;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
                UpdateLineLevel(state.cur_bot_line, state.maj_l);
            }
 
@@ -1461,7 +1466,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.maj_tr = -1;
             state.maj_st = 0;
             state.bos_i = i;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
               {
                string name = GetUniqueName(prefix + "Major_");
                DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
@@ -1492,7 +1497,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          if(val_h > state.maj_h && val_c <= state.maj_h)
            {
             state.maj_h = val_h;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
                UpdateLineLevel(state.cur_top_line, state.maj_h);
            }
 
@@ -1501,7 +1506,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.bos_i = i;
             state.maj_l = state.tmp_l;
             state.maj_l_i = state.tmp_l_i;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
               {
                string name = GetUniqueName(prefix + "Major_");
                DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBull, 2, STYLE_SOLID);
@@ -1523,7 +1528,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_l < state.maj_l && val_c >= state.maj_l)
            {
             state.maj_l = val_l;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
                UpdateLineLevel(state.cur_bot_line, state.maj_l);
            }
 
@@ -1532,7 +1537,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.maj_tr = -1;
             state.maj_st = 0;
             state.bos_i = i;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
               {
                string name = GetUniqueName(prefix + "Major_");
                DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
@@ -1568,7 +1573,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
            {
             state.maj_l = state.tmp_l;
             state.maj_l_i = state.tmp_l_i;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
               {
                string name = GetUniqueName(prefix + "Major_");
                DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBear, 2, STYLE_SOLID);
@@ -1585,7 +1590,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             CutLine(state.cur_top_line, time[i]);
             CutLine(state.cur_bot_line, time[i]);
 
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
               {
                state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
                DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBear, 1, STYLE_DASH, true);
@@ -1601,7 +1606,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_h > state.maj_h && val_c <= state.maj_h)
            {
             state.maj_h = val_h;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
                UpdateLineLevel(state.cur_top_line, state.maj_h);
            }
 
@@ -1610,7 +1615,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.maj_tr = 1;
             state.maj_st = 0;
             state.bos_i = i;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
               {
                string name = GetUniqueName(prefix + "Major_");
                DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.tmp_l, InpColorBear, 2, STYLE_SOLID);
@@ -1641,7 +1646,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          if(val_l < state.maj_l && val_c >= state.maj_l)
            {
             state.maj_l = val_l;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
                UpdateLineLevel(state.cur_bot_line, state.maj_l);
            }
 
@@ -1650,7 +1655,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.maj_h = state.tmp_h;
             state.bos_i = i;
             state.maj_h_i = state.tmp_h_i;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
               {
                string name = GetUniqueName(prefix + "Major_");
                DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBear, 2, STYLE_SOLID);
@@ -1672,7 +1677,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_h > state.maj_h && val_c <= state.maj_h)
            {
             state.maj_h = val_h;
-            if(InpShowMaj)
+            if(InpShowMaj && draw_ui)
                UpdateLineLevel(state.cur_top_line, state.maj_h);
            }
 
@@ -1817,7 +1822,7 @@ int OnCalculate(const int rates_total,
             g_state_hist.mb_l = low[i];
             g_state_hist.mb_i = i;
          }
-         ProcessBar(i, open, high, low, close, time, g_state_hist, true);
+         ProcessBar(i, open, high, low, close, time, g_state_hist, true, true);
         }
      }
 
@@ -1835,7 +1840,7 @@ int OnCalculate(const int rates_total,
 
    if(!inside_last && last_idx > 0)
      {
-      ProcessBar(last_idx, open, high, low, close, time, g_state_curr, false);
+      ProcessBar(last_idx, open, high, low, close, time, g_state_curr, false, true);
      }
 
    if(InpShowMin)
