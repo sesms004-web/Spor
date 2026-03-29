@@ -27,6 +27,9 @@ input color  InpColorChochWeak   = clrRed;         // Güçsuz CHoCH (Kırmızı
 input color  InpColorChochPath   = clrGray;        // Yapı İzi (Gri)
 input bool   InpShowChoch      = true;           // CHoCH Çizgilerini Göster
 
+//--- İşlem Skoru & Filtre Ayarları ---
+input double InpM5MinPullback    = 50.0;         // M5 Mikro Filtre Min Çekilme (%)
+
 //--- Visual Options ---
 input bool   InpShowMin = true;
 input bool   InpShowMaj = true;
@@ -694,7 +697,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    int m5_points = 0;
    bool is_m5_aligned = (t_m5 == trigger_dir);
    string stats_m5 = "[Maks Çekilme: %" + DoubleToString(mp_m5, 2) + " | Anlık: %" + DoubleToString(p_m5, 2) + "] ";
-   if (is_m5_aligned && p_m5 >= 50.0) {
+   if (is_m5_aligned && mp_m5 >= InpM5MinPullback) {
        m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme Onayı -> [+5 Skor]\n";
    } else {
        m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Çekilme Onayı Yok -> [0 Skor]\n";
