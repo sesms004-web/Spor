@@ -590,15 +590,16 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
    double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
    double mp_m1=0, mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
-   double temp_h_val, temp_l_val; datetime temp_th_val, temp_tl_val, th_m15, tl_m15, th_m30, tl_m30;
+   double h_m5, l_m5, h_m15, l_m15, h_m30, l_m30, h_h1, l_h1;
+   double temp_h_val, temp_l_val; datetime temp_th_val, temp_tl_val, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
 
    // We need MTF data to evaluate the matrix
    GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
    GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
-   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
-   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, temp_h_val, temp_l_val, th_m15, tl_m15);
-   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, temp_h_val, temp_l_val, th_m30, tl_m30);
-   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
+   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, h_m5, l_m5, th_m5, tl_m5);
+   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, th_m15, tl_m15);
+   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, th_m30, tl_m30);
+   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, h_h1, l_h1, th_h1, tl_h1);
 
    // Override the triggered timeframe's direction safely (because during a CHoCH bar,
    // the history scan might still read the old trend if the bar hasn't closed)
@@ -648,23 +649,28 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    }
    total_points += h1_points;
 
-   // --- M30 MODIFIER LOGIC ---
+   // --- M30 MODIFIER LOGIC (De-duplication) ---
    int m30_points = 0;
    bool m30_momentum = ((mp_m30 - p_m30) >= 20.0);
    bool is_m30_aligned = (t_m30 == trigger_dir);
+   bool is_m30_duplicate = (MathAbs(h_m30 - h_h1) < Point() * 5 && MathAbs(l_m30 - l_h1) < Point() * 5);
 
    string stats_m30 = "[Maks Çekilme: %" + DoubleToString(mp_m30, 2) + " | Anlık: %" + DoubleToString(p_m30, 2) + "] ";
 
-   if (m30_momentum) {
-       if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "Sert İvme (Onay) -> [+15 Skor]\n"; }
-       else                { m30_points = -5; m30_text = "M30: " + stats_m30 + "Ters İvme (Tehlike) -> [-5 Skor]\n"; }
+   if (is_m30_duplicate) {
+       m30_points = 0; m30_text = "M30: " + stats_m30 + "H1 ile aynı dalga -> [0 Skor]\n";
    } else {
-       if (p_m30 >= 50.0) {
-           if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Şişkin Bölgede Destek -> [+10 Skor]\n"; }
-           else                { m30_points = -10; m30_text = "M30: " + stats_m30 + "Şişkin Bölgede Direnç -> [-10 Skor]\n"; }
+       if (m30_momentum) {
+           if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "Sert İvme (Onay) -> [+15 Skor]\n"; }
+           else                { m30_points = -5; m30_text = "M30: " + stats_m30 + "Ters İvme (Tehlike) -> [-5 Skor]\n"; }
        } else {
-           if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Yolun Başında Destek -> [+10 Skor]\n"; }
-           else                { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Sağlıklı Düzeltme -> [+10 Skor]\n"; }
+           if (p_m30 >= 50.0) {
+               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Şişkin Bölgede Destek -> [+10 Skor]\n"; }
+               else                { m30_points = -10; m30_text = "M30: " + stats_m30 + "Şişkin Bölgede Direnç -> [-10 Skor]\n"; }
+           } else {
+               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Yolun Başında Destek -> [+10 Skor]\n"; }
+               else                { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Sağlıklı Düzeltme -> [+10 Skor]\n"; }
+           }
        }
    }
    total_points += m30_points;
@@ -673,20 +679,11 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    int m15_points = 0;
    bool m15_momentum = ((mp_m15 - p_m15) >= 20.0);
    bool is_m15_aligned = (t_m15 == trigger_dir);
-
-   // Use MTF pullbacks to fetch the actual HIGH/LOW prices of the swings
-   double h_m30, l_m30; datetime temp_d1_val, temp_d2_val;
-   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, temp_d1_val, temp_d2_val);
-
-   double h_m15, l_m15;
-   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, temp_d1_val, temp_d2_val);
-
-   // Determine if M15 and M30 are tracking the exact same structural swing bounds
-   bool is_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
+   bool is_m15_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
 
    string stats_m15 = "[Maks Çekilme: %" + DoubleToString(mp_m15, 2) + " | Anlık: %" + DoubleToString(p_m15, 2) + "] ";
 
-   if (is_duplicate) {
+   if (is_m15_duplicate) {
        m15_points = 0; m15_text = "M15: " + stats_m15 + "M30 ile aynı dalga -> [0 Skor]\n";
    } else {
        if (m15_momentum) {
@@ -704,29 +701,35 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    }
    total_points += m15_points;
 
-   // --- M5 MODIFIER LOGIC ---
+   // --- M5 MODIFIER LOGIC (De-duplication) ---
    int m5_points = 0;
    bool m5_momentum = ((mp_m5 - p_m5) >= 20.0);
    bool is_m5_aligned = (t_m5 == trigger_dir);
    bool is_m5_deep = (mp_m5 >= InpM5MinPullback);
+   bool is_m5_duplicate = (MathAbs(h_m5 - h_m15) < Point() * 5 && MathAbs(l_m5 - l_m15) < Point() * 5);
+
    string stats_m5 = "[Maks Çekilme: %" + DoubleToString(mp_m5, 2) + " | Anlık: %" + DoubleToString(p_m5, 2) + "] ";
 
-   if (m5_momentum) {
-       if (is_m5_aligned) {
-           if (is_m5_deep) {
-               m5_points = 15; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme + Sert İvme -> [+15 Skor]\n";
-           } else {
-               m5_points = 10; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Sert İvme (Onay) -> [+10 Skor]\n";
-           }
-       }
-       else {
-           m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ters İvme (Zayıf Etki) -> [0 Skor]\n";
-       }
+   if (is_m5_duplicate) {
+       m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "M15 ile aynı dalga -> [0 Skor]\n";
    } else {
-       if (is_m5_aligned && is_m5_deep) {
-           m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme Onayı -> [+5 Skor]\n";
+       if (m5_momentum) {
+           if (is_m5_aligned) {
+               if (is_m5_deep) {
+                   m5_points = 15; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme + Sert İvme -> [+15 Skor]\n";
+               } else {
+                   m5_points = 10; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Sert İvme (Onay) -> [+10 Skor]\n";
+               }
+           }
+           else {
+               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ters İvme (Zayıf Etki) -> [0 Skor]\n";
+           }
        } else {
-           m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Çekilme Onayı Yok -> [0 Skor]\n";
+           if (is_m5_aligned && is_m5_deep) {
+               m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme Onayı -> [+5 Skor]\n";
+           } else {
+               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Çekilme Onayı Yok -> [0 Skor]\n";
+           }
        }
    }
    total_points += m5_points;
