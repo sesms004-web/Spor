@@ -1231,10 +1231,10 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               double extreme_pt = FindTrueHigh(high, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
               if(extreme_pt == EMPTY_VALUE) extreme_pt = (state.t2_h > state.t1_h) ? MathMax(state.t1_h, state.t2_h) : state.t1_h;
 
-              if (state.maj_tr == 1) { // Up Trend Pullback Reverse
-                  ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
-                  break_pct = ((state.maj_h - val_c) / range) * 100.0;
-              } else { // Down Trend Pullback Reverse
+              if (state.maj_tr == 1) { // Up Trend Top Reversal
+                  ext_pct = ((state.maj_h - val_c) / range) * 100.0; // Track breakout depth relative to peak
+                  break_pct = ext_pct;
+              } else { // Down Trend Pullback Continuation
                   ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
                   break_pct = ((val_c - state.maj_l) / range) * 100.0;
               }
@@ -1298,12 +1298,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               double extreme_pt = FindTrueLow(low, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
               if(extreme_pt == EMPTY_VALUE) extreme_pt = (state.t2_l < state.t1_l) ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
 
-              if (state.maj_tr == 1) { // Up Trend Pullback Reverse
+              if (state.maj_tr == 1) { // Up Trend Pullback Continuation
                   ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
                   break_pct = ((state.maj_h - val_c) / range) * 100.0;
-              } else { // Down Trend Pullback Reverse
-                  ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
-                  break_pct = ((val_c - state.maj_l) / range) * 100.0;
+              } else { // Down Trend Bottom Reversal
+                  ext_pct = ((val_c - state.maj_l) / range) * 100.0; // Track breakout depth relative to bottom
+                  break_pct = ext_pct;
               }
           }
 
