@@ -1789,36 +1789,6 @@ int OnCalculate(const int rates_total,
 
       limit = start_idx + 1;
 
-      // TEST TRIGGER FOR TRADE EXECUTION
-      if (InpTestTradeExecution) {
-          int live_tr = g_state_hist.maj_tr;
-          double live_pct = 0.0;
-
-          double h_m1 = g_state_hist.maj_h;
-          double l_m1 = g_state_hist.maj_l;
-          double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-          if (h_m1 != EMPTY_VALUE && l_m1 != EMPTY_VALUE && h_m1 != l_m1) {
-              double range = h_m1 - l_m1;
-              if (live_tr == 1) {
-                  live_pct = ((h_m1 - bid) / range) * 100.0;
-                  if (bid >= h_m1) live_pct = 0;
-              } else {
-                  live_pct = ((bid - l_m1) / range) * 100.0;
-                  if (bid <= l_m1) live_pct = 0;
-              }
-              if (live_pct < 0) live_pct = 0;
-          }
-
-          // Test Analizi, kullanıcının "Pullback sonrası ana trend devamı (BOS/Continuation CHoCH)" mantığına göre simüle edilir.
-          int test_choch_dir = live_tr; // Trend Yönü ile aynı olmalı
-
-          EvaluateTradeSignal(rates_total-1, TimeCurrent(), bid, test_choch_dir, live_pct, true, true);
-      }
-
-      // TEST TRIGGER FOR MTF LEVELS
-      if (InpTestMode) {
-          TriggerMTFAlert(rates_total-1, TimeCurrent(), close[rates_total-1], 1, false);
-      }
      }
    else
      {
@@ -1984,6 +1954,46 @@ int OnCalculate(const int rates_total,
            }
         }
      }
+
+   // 🧪 TEST TRIGGER EXECUTION (Yalnızca bir kez ve en güncel veriler işlendikten sonra çalıştırılır)
+   static bool is_test_run = false;
+   if (prev_calculated == 0) is_test_run = false; // Reset on re-compile/re-attach
+
+   if (!is_test_run && last_idx > 0) {
+       // TEST TRIGGER FOR TRADE EXECUTION
+       if (InpTestTradeExecution) {
+           int live_tr = g_state_curr.maj_tr;
+           double live_pct = 0.0;
+
+           double h_m1 = g_state_curr.maj_h;
+           double l_m1 = g_state_curr.maj_l;
+           double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+           if (h_m1 != EMPTY_VALUE && l_m1 != EMPTY_VALUE && h_m1 != l_m1) {
+               double range = h_m1 - l_m1;
+               if (live_tr == 1) {
+                   live_pct = ((h_m1 - bid) / range) * 100.0;
+                   if (bid >= h_m1) live_pct = 0;
+               } else {
+                   live_pct = ((bid - l_m1) / range) * 100.0;
+                   if (bid <= l_m1) live_pct = 0;
+               }
+               if (live_pct < 0) live_pct = 0;
+           }
+
+           // Test Analizi, kullanıcının "Pullback sonrası ana trend devamı (BOS/Continuation CHoCH)" mantığına göre simüle edilir.
+           int test_choch_dir = live_tr; // Trend Yönü ile aynı olmalı
+
+           EvaluateTradeSignal(last_idx, TimeCurrent(), bid, test_choch_dir, live_pct, true, true);
+           is_test_run = true;
+       }
+
+       // TEST TRIGGER FOR MTF LEVELS
+       if (InpTestMode && !is_test_run) {
+           TriggerMTFAlert(last_idx, TimeCurrent(), close[last_idx], 1, false);
+           is_test_run = true;
+       }
+       if(!InpTestMode && !InpTestTradeExecution) is_test_run = true; // prevent infinite false state if both are off
+   }
 
    return(rates_total);
   }
