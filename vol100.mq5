@@ -695,12 +695,28 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    // --- M5 MODIFIER LOGIC ---
    int m5_points = 0;
+   bool m5_momentum = ((mp_m5 - p_m5) >= 20.0);
    bool is_m5_aligned = (t_m5 == trigger_dir);
+   bool is_m5_deep = (mp_m5 >= InpM5MinPullback);
    string stats_m5 = "[Maks Çekilme: %" + DoubleToString(mp_m5, 2) + " | Anlık: %" + DoubleToString(p_m5, 2) + "] ";
-   if (is_m5_aligned && mp_m5 >= InpM5MinPullback) {
-       m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme Onayı -> [+5 Skor]\n";
+
+   if (m5_momentum) {
+       if (is_m5_aligned) {
+           if (is_m5_deep) {
+               m5_points = 15; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme + Sert İvme -> [+15 Skor]\n";
+           } else {
+               m5_points = 10; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Sert İvme (Onay) -> [+10 Skor]\n";
+           }
+       }
+       else {
+           m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ters İvme (Zayıf Etki) -> [0 Skor]\n";
+       }
    } else {
-       m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Çekilme Onayı Yok -> [0 Skor]\n";
+       if (is_m5_aligned && is_m5_deep) {
+           m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme Onayı -> [+5 Skor]\n";
+       } else {
+           m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Çekilme Onayı Yok -> [0 Skor]\n";
+       }
    }
    total_points += m5_points;
 
