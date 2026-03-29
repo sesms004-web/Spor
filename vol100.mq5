@@ -1809,7 +1809,10 @@ int OnCalculate(const int rates_total,
               if (live_pct < 0) live_pct = 0;
           }
 
-          EvaluateTradeSignal(rates_total-1, TimeCurrent(), bid, live_tr, live_pct, true, true);
+          // Test Analizi, CHoCH kırılımı varsayımıyla (mevcut trendin tersine) simüle edilir.
+          int test_choch_dir = (live_tr == 1) ? -1 : 1;
+
+          EvaluateTradeSignal(rates_total-1, TimeCurrent(), bid, test_choch_dir, live_pct, true, true);
       }
 
       // TEST TRIGGER FOR MTF LEVELS
