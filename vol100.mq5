@@ -587,22 +587,29 @@ string PctToText(double pct, double max_pct, datetime swing_time, datetime curre
 //+------------------------------------------------------------------+
 void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, bool is_test = false)
   {
-   int t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
-   double p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
-   double mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
+   int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
+   double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
+   double mp_m1=0, mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
    double temp_h_val, temp_l_val; datetime temp_th_val, temp_tl_val, th_m15, tl_m15, th_m30, tl_m30;
 
-   // For M1, strictly use the live state computed by ProcessBar to guarantee 100% chart synchronization
-   int t_m1 = trigger_dir;
-   if(t_m1 == 0) t_m1 = g_state_curr.maj_tr;
-   double p_m1 = p_pct;
-
    // We need MTF data to evaluate the matrix
+   GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
    GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
    GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
    GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, temp_h_val, temp_l_val, th_m15, tl_m15);
    GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, temp_h_val, temp_l_val, th_m30, tl_m30);
    GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
+
+   // Override the triggered timeframe's direction safely (because during a CHoCH bar,
+   // the history scan might still read the old trend if the bar hasn't closed)
+   if (trigger_dir != 0) {
+       if(Period() == PERIOD_M1) { t_m1 = trigger_dir; p_m1 = p_pct; }
+       if(Period() == PERIOD_M3) { t_m3 = trigger_dir; p_m3 = p_pct; }
+       if(Period() == PERIOD_M5) { t_m5 = trigger_dir; p_m5 = p_pct; }
+       if(Period() == PERIOD_M15) { t_m15 = trigger_dir; p_m15 = p_pct; }
+       if(Period() == PERIOD_M30) { t_m30 = trigger_dir; p_m30 = p_pct; }
+       if(Period() == PERIOD_H1) { t_h1 = trigger_dir; p_h1 = p_pct; }
+   }
 
    int total_points = 0;
    string h1_text = "";
@@ -770,33 +777,8 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    double h_m1, l_m1; datetime th_m1, tl_m1;
    double temp_h_val, temp_l_val; datetime th_m3, tl_m3, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
 
-   // For M1, strictly use the live state computed by ProcessBar to guarantee 100% chart synchronization
-   t_m1 = g_state_curr.maj_tr;
-   h_m1 = g_state_curr.maj_h;
-   l_m1 = g_state_curr.maj_l;
-   th_m1 = iTime(Symbol(), PERIOD_M1, current_bar_i - g_state_curr.maj_h_i);
-   if(th_m1 == 0) th_m1 = t; // fallback if iTime fails
-   tl_m1 = iTime(Symbol(), PERIOD_M1, current_bar_i - g_state_curr.maj_l_i);
-   if(tl_m1 == 0) tl_m1 = t;
-
-   double range = h_m1 - l_m1;
-
-   if (range > 0) {
-      if (t_m1 == 1) {
-         p_m1 = ((h_m1 - live_price) / range) * 100.0;
-         mp_m1 = ((h_m1 - g_state_curr.tmp_l) / range) * 100.0;
-         if (live_price >= h_m1) p_m1 = 0;
-      } else {
-         p_m1 = ((live_price - l_m1) / range) * 100.0;
-         mp_m1 = ((g_state_curr.tmp_h - l_m1) / range) * 100.0;
-         if (live_price <= l_m1) p_m1 = 0;
-      }
-      if(p_m1 < 0) p_m1 = 0;
-      if(mp_m1 < p_m1) mp_m1 = p_m1;
-   }
-
-   bool hm1 = true;
-   bool hm3  = GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, temp_h_val, temp_l_val, th_m3, tl_m3);
+   bool hm1 = GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, th_m1, tl_m1);
+   bool hm3 = GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, temp_h_val, temp_l_val, th_m3, tl_m3);
    bool hm5  = GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, temp_h_val, temp_l_val, th_m5, tl_m5);
    bool hm15 = GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, temp_h_val, temp_l_val, th_m15, tl_m15);
    bool hm30 = GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, temp_h_val, temp_l_val, th_m30, tl_m30);
