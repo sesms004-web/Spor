@@ -587,13 +587,17 @@ string PctToText(double pct, double max_pct, datetime swing_time, datetime curre
 //+------------------------------------------------------------------+
 void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, bool is_test = false)
   {
-   int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
-   double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
-   double mp_m1=0, mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
+   int t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
+   double p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
+   double mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
    double temp_h_val, temp_l_val; datetime temp_th_val, temp_tl_val, th_m15, tl_m15, th_m30, tl_m30;
 
+   // For M1, strictly use the live state computed by ProcessBar to guarantee 100% chart synchronization
+   int t_m1 = trigger_dir;
+   if(t_m1 == 0) t_m1 = g_state_curr.maj_tr;
+   double p_m1 = p_pct;
+
    // We need MTF data to evaluate the matrix
-   GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
    GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
    GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
    GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, temp_h_val, temp_l_val, th_m15, tl_m15);
@@ -1805,14 +1809,25 @@ int OnCalculate(const int rates_total,
 
       // TEST TRIGGER FOR TRADE EXECUTION
       if (InpTestTradeExecution) {
-          int live_tr = 0; double live_pct = 0; double mp_pct = 0;
-          double dh, dl; datetime dth, dtl;
-          GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
+          int live_tr = g_state_hist.maj_tr;
+          double live_pct = 0.0;
 
-          int test_dir = live_tr;
-          if (test_dir == 0) test_dir = g_state_hist.maj_tr;
+          double h_m1 = g_state_hist.maj_h;
+          double l_m1 = g_state_hist.maj_l;
+          double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+          if (h_m1 != EMPTY_VALUE && l_m1 != EMPTY_VALUE && h_m1 != l_m1) {
+              double range = h_m1 - l_m1;
+              if (live_tr == 1) {
+                  live_pct = ((h_m1 - bid) / range) * 100.0;
+                  if (bid >= h_m1) live_pct = 0;
+              } else {
+                  live_pct = ((bid - l_m1) / range) * 100.0;
+                  if (bid <= l_m1) live_pct = 0;
+              }
+              if (live_pct < 0) live_pct = 0;
+          }
 
-          EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, true);
+          EvaluateTradeSignal(rates_total-1, TimeCurrent(), bid, live_tr, live_pct, true, true);
       }
 
       // TEST TRIGGER FOR MTF LEVELS
