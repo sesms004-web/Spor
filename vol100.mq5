@@ -422,7 +422,7 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
   }
 
 bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct, datetime current_time,
-                    double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l)
+                    double live_price, double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l)
   {
    MqlRates rates[];
    ArraySetAsSeries(rates, false);
@@ -498,7 +498,7 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    trend = st.maj_tr;
    pct = 0;
    max_pct = 0;
-   double live_p = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+   double live_p = live_price;
 
    ref_h = st.maj_h;
    ref_l = st.maj_l;
@@ -599,12 +599,12 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    double temp_h_val, temp_l_val; datetime temp_th_val, temp_tl_val, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
 
    // We need MTF data to evaluate the matrix
-   GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
-   GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
-   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, h_m5, l_m5, th_m5, tl_m5);
-   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, th_m15, tl_m15);
-   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, th_m30, tl_m30);
-   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, h_h1, l_h1, th_h1, tl_h1);
+   GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, live_price, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
+   GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, live_price, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
+   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, live_price, h_m5, l_m5, th_m5, tl_m5);
+   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, live_price, h_m15, l_m15, th_m15, tl_m15);
+   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, live_price, h_m30, l_m30, th_m30, tl_m30);
+   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, live_price, h_h1, l_h1, th_h1, tl_h1);
 
    // Override the triggered timeframe's direction safely (because during a CHoCH bar,
    // the history scan might still read the old trend if the bar hasn't closed)
@@ -785,12 +785,12 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    double h_m1, l_m1; datetime th_m1, tl_m1;
    double temp_h_val, temp_l_val; datetime th_m3, tl_m3, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
 
-   bool hm1 = GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, th_m1, tl_m1);
-   bool hm3 = GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, temp_h_val, temp_l_val, th_m3, tl_m3);
-   bool hm5  = GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, temp_h_val, temp_l_val, th_m5, tl_m5);
-   bool hm15 = GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, temp_h_val, temp_l_val, th_m15, tl_m15);
-   bool hm30 = GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, temp_h_val, temp_l_val, th_m30, tl_m30);
-   bool hh1  = GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, temp_h_val, temp_l_val, th_h1, tl_h1);
+   bool hm1 = GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, live_price, h_m1, l_m1, th_m1, tl_m1);
+   bool hm3 = GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, live_price, temp_h_val, temp_l_val, th_m3, tl_m3);
+   bool hm5  = GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, live_price, temp_h_val, temp_l_val, th_m5, tl_m5);
+   bool hm15 = GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, live_price, temp_h_val, temp_l_val, th_m15, tl_m15);
+   bool hm30 = GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, live_price, temp_h_val, temp_l_val, th_m30, tl_m30);
+   bool hh1  = GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, live_price, temp_h_val, temp_l_val, th_h1, tl_h1);
 
    if(!hm1 || !hm3 || !hm5 || !hm15 || !hm30 || !hh1) return false;
 
