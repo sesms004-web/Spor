@@ -746,7 +746,27 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    double h_m1, l_m1; datetime th_m1, tl_m1;
    double dmy_h, dmy_l; datetime th_m3, tl_m3, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
 
-   bool hm1  = GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, th_m1, tl_m1);
+   // For M1, strictly use the live state computed by ProcessBar to guarantee 100% chart synchronization
+   t_m1 = g_state_curr.maj_tr;
+   h_m1 = g_state_curr.maj_h;
+   l_m1 = g_state_curr.maj_l;
+   double range = h_m1 - l_m1;
+
+   if (range > 0) {
+      if (t_m1 == 1) {
+         p_m1 = ((h_m1 - live_price) / range) * 100.0;
+         mp_m1 = ((h_m1 - g_state_curr.tmp_l) / range) * 100.0;
+         if (live_price >= h_m1) p_m1 = 0;
+      } else {
+         p_m1 = ((live_price - l_m1) / range) * 100.0;
+         mp_m1 = ((g_state_curr.tmp_h - l_m1) / range) * 100.0;
+         if (live_price <= l_m1) p_m1 = 0;
+      }
+      if(p_m1 < 0) p_m1 = 0;
+      if(mp_m1 < p_m1) mp_m1 = p_m1;
+   }
+
+   bool hm1 = true;
    bool hm3  = GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, dmy_h, dmy_l, th_m3, tl_m3);
    bool hm5  = GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, dmy_h, dmy_l, th_m5, tl_m5);
    bool hm15 = GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, dmy_h, dmy_l, th_m15, tl_m15);
@@ -780,8 +800,8 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    if (bull_pressure > 100) bull_pressure = 100;
 
    string lvl_text = (triggered_level == 2) ? DoubleToString(InpTriggerLevel2,0) : DoubleToString(InpTriggerLevel1,0);
-   string msg1 = "🚨 [" + Symbol() + "] M1 Hedef Seviyede! (BÖLÜM 1/2)\n";
-   if(InpTestMode) msg1 = "🧪 [TEST MODU - " + Symbol() + "] (BÖLÜM 1/2)\n";
+   string msg1 = "🚨 [" + Symbol() + "] M1 Hedef (%" + lvl_text + ") Seviyesinde! (BÖLÜM 1/2)\n";
+   if(InpTestMode) msg1 = "🧪 [TEST MODU - " + Symbol() + "] M1 Hedef (%" + lvl_text + ") Seviyesinde! (BÖLÜM 1/2)\n";
 
    if(is_revisit)
      {
@@ -799,19 +819,19 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    msg1 += "  └ Süre: " + ago_str + "\n";
    msg1 += "- Swing High: " + DoubleToString(h_m1, _Digits) + "\n";
    msg1 += "- Swing Low: " + DoubleToString(l_m1, _Digits) + "\n";
-   if(p_m1 == 0 && mp_m1 == 0)
+   if(p_m1 == 0.0)
      {
-      string temp_dir = (t_m1 == 1) ? "SELL" : "BUY";
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + "\n";
-      msg1 += "⚠️ DİKKAT: Trend şişkin! M1 için kısa süreli düzeltme hareketi (" + temp_dir + ") fırsatı beklenebilir.\n\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Kırılım Gerçekleşti)\n\n";
      }
-   else if(p_m1 <= 10.0 && mp_m1 <= 10.0)
+   else if(p_m1 <= 10.0)
      {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Trend Şişkin, Düzeltme Bekleniyor)\n\n";
+      if(mp_m1 <= 10.0) msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Trend Şişkin, Düzeltme Bekleniyor)\n\n";
+      else if(mp_m1 == p_m1) msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Yeni Dalga Oluşuyor)\n\n";
+      else msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Kırılıma Hazırlanıyor)\n\n";
      }
    else
      {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 2) + " ↑↑%" + DoubleToString(mp_m1, 2) + ")\n\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Maks. Çekilme: %" + DoubleToString(mp_m1, 2) + " | Anlık Uzaklık: %" + DoubleToString(p_m1, 2) + ")\n\n";
      }
 
    msg1 += "🧭 MAKRO TREND (H1/M30)\n";
@@ -1847,7 +1867,26 @@ int OnCalculate(const int rates_total,
       double live_pct = 0.0;
       double dmy_h, dmy_l; datetime dmy_th, dmy_tl;
       double dmy_mpct;
-      if (GetMTFPullback(PERIOD_M1, live_trend, live_pct, dmy_mpct, time[last_idx], dmy_h, dmy_l, dmy_th, dmy_tl))
+
+      // Calculate live_pct directly from live M1 state
+      double h_m1 = g_state_curr.maj_h;
+      double l_m1 = g_state_curr.maj_l;
+      live_trend = g_state_curr.maj_tr;
+
+      if (h_m1 != EMPTY_VALUE && l_m1 != EMPTY_VALUE && h_m1 != l_m1) {
+          double range = h_m1 - l_m1;
+          double live_price = close[last_idx];
+          if (live_trend == 1) {
+              live_pct = ((h_m1 - live_price) / range) * 100.0;
+              if (live_price >= h_m1) live_pct = 0;
+          } else {
+              live_pct = ((live_price - l_m1) / range) * 100.0;
+              if (live_price <= l_m1) live_pct = 0;
+          }
+          if (live_pct < 0) live_pct = 0;
+      }
+
+      if (true)
         {
          // Reset triggers if swing changed (only when fully confirmed by a bar close / definitive state update)
          // Kullanıcının Spam ve Kapanış talebi: "swing çizgisinin üstünde altında BİR KERE KAPANIŞ OLUR 1 kere atar"
