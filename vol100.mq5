@@ -425,8 +425,9 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    ArraySetAsSeries(rates, false);
 
    // Sync lookback depth uniformly across ALL timeframes by fetching exact historical time period.
-   // 30 days is chosen to ensure even H1 has enough structural history to align with lower timeframes.
-   datetime anchor_time = current_time - (30 * 24 * 60 * 60);
+   // Use InpDaysM1 to strictly align with the user's visual chart settings.
+   double tf_days = InpDaysM1;
+   datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
    int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
    if(copied < 2) return false;
 
@@ -750,6 +751,11 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    t_m1 = g_state_curr.maj_tr;
    h_m1 = g_state_curr.maj_h;
    l_m1 = g_state_curr.maj_l;
+   th_m1 = iTime(Symbol(), PERIOD_M1, current_bar_i - g_state_curr.maj_h_i);
+   if(th_m1 == 0) th_m1 = t; // fallback if iTime fails
+   tl_m1 = iTime(Symbol(), PERIOD_M1, current_bar_i - g_state_curr.maj_l_i);
+   if(tl_m1 == 0) tl_m1 = t;
+
    double range = h_m1 - l_m1;
 
    if (range > 0) {
