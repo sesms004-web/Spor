@@ -1082,6 +1082,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       }
    }
 
+   bool in_pullback_zone = (p_pct >= InpMinPullbackPct && p_pct <= InpMaxPullbackPct);
+
    // T1-D1-T2 State Machine based on Minor structure turns
    // (Calculated implicitly during Minor Structure state changes below)
 
@@ -1123,8 +1125,13 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
              state.choch_dir = 0;
          }
 
+         // CHoCH Sequence Abort Rule (Out of Pullback Zone)
+         if (state.choch_dir != 0 && !in_pullback_zone) {
+             state.choch_dir = 0; // Left the authorized zone entirely ([InpMinPullbackPct, InpMaxPullbackPct])
+         }
+
          // CHoCH Bearish sequence tracking
-         if (state.maj_tr == -1) {
+         if (state.maj_tr == -1 && in_pullback_zone) {
              if (state.choch_dir == 0 || state.choch_dir == 1) { // Initiate T1 for Bearish
                  state.t1_h = state.min_h;
                  state.t1_l = state.min_l;
@@ -1191,7 +1198,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          }
 
          // CHoCH Bullish sequence tracking
-         if (state.maj_tr == 1) {
+         if (state.maj_tr == 1 && in_pullback_zone) {
              if (state.choch_dir == 0 || state.choch_dir == -1) { // Initiate T1 for Bullish
                  state.t1_l = state.min_l;
                  state.t1_h = state.min_h;
