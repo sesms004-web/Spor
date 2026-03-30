@@ -9,26 +9,26 @@
 #property indicator_chart_window
 #property indicator_plots 0
 
-//--- Input Settings for Calculation Depth (Days Back) ---
-input double InpDaysM1   = 3.0;
-input double InpDaysM3   = 10.0;
-input double InpDaysM5   = 15.0;
-input double InpDaysM15  = 45.0;
-input double InpDaysM30  = 90.0;
-input double InpDaysH1   = 180.0;
-input double InpDaysH4   = 500.0;
-input double InpDaysD1   = 1500.0;
+//--- MTF Pullback & Lookback Settings ---
+input int    InpBarsM1   = 1000;         // M1 Analiz Bar Sayısı
+input int    InpBarsM3   = 500;          // M3 Analiz Bar Sayısı
+input int    InpBarsM5   = 500;          // M5 Analiz Bar Sayısı
+input int    InpBarsM15  = 300;          // M15 Analiz Bar Sayısı
+input int    InpBarsM30  = 300;          // M30 Analiz Bar Sayısı
+input int    InpBarsH1   = 300;          // H1 Analiz Bar Sayısı
 
 //--- CHoCH Settings ---
 input double InpMinPullbackPct = 40.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
 input double InpMaxPullbackPct = 100.0;          // CHoCH Max Çekilme % (İşlem Yüzdeliği)
+
+//--- Çekilme (Pullback) Hassasiyet Ayarları (%) ---
+input double InpPullbackM5   = 50.0;     // M5 Mikro Filtre Çekilme %
+
+//--- Visual Settings ---
 input color  InpColorChochStrong = clrPurple;      // Güçlü CHoCH (Mor)
 input color  InpColorChochWeak   = clrRed;         // Güçsuz CHoCH (Kırmızı)
 input color  InpColorChochPath   = clrGray;        // Yapı İzi (Gri)
 input bool   InpShowChoch      = true;           // CHoCH Çizgilerini Göster
-
-//--- İşlem Skoru & Filtre Ayarları ---
-input double InpM5MinPullback    = 50.0;         // M5 Mikro Filtre Min Çekilme (%)
 
 //--- Visual Options ---
 input bool   InpShowMin = true;
@@ -255,19 +255,16 @@ string GetUniqueName(string prefix)
    return prefix + "_" + IntegerToString(g_counter);
   }
 
-double GetDaysForTF(ENUM_TIMEFRAMES tf)
-  {
-   double days = InpDaysM1;
-   if(tf == PERIOD_M1) days = InpDaysM1;
-   else if(tf == PERIOD_M3) days = InpDaysM3;
-   else if(tf == PERIOD_M5) days = InpDaysM5;
-   else if(tf == PERIOD_M15) days = InpDaysM15;
-   else if(tf == PERIOD_M30) days = InpDaysM30;
-   else if(tf == PERIOD_H1) days = InpDaysH1;
-   else if(tf == PERIOD_H4) days = InpDaysH4;
-   else if(tf == PERIOD_D1) days = InpDaysD1;
 
-   return days;
+int GetBarsForTF(ENUM_TIMEFRAMES tf)
+  {
+   if(tf == PERIOD_M1) return InpBarsM1;
+   if(tf == PERIOD_M3) return InpBarsM3;
+   if(tf == PERIOD_M5) return InpBarsM5;
+   if(tf == PERIOD_M15) return InpBarsM15;
+   if(tf == PERIOD_M30) return InpBarsM30;
+   if(tf == PERIOD_H1) return InpBarsH1;
+   return 1000;
   }
 
 double FindTrueHigh(const double &high[], int start_idx, int end_idx)
@@ -292,233 +289,70 @@ double FindTrueLow(const double &low[], int start_idx, int end_idx)
    return min_val;
   }
 
-void ProcessBarMathOnly(int i, const double &high[], const double &low[], const double &close[], SState &state)
-  {
-   double val_h = high[i];
-   double val_l = low[i];
-   double val_c = close[i];
-
-   if(state.min_tr == 1)
-     {
-      double old_trig = state.trig_l;
-      if(val_h > state.min_h) { state.min_h = val_h; state.min_h_i = i; state.trig_l = val_l; }
-      if(val_l < old_trig)
-        {
-         state.st_h.Push(state.min_h, state.min_h_i);
-         if(state.maj_tr == 1 && state.maj_st == 0 && state.min_h < state.tmp_h && state.st_l.Size() > 0)
-           {
-            if(state.st_l.GetIdx(state.st_l.Size() - 1) > state.bos_i) state.st_l.Pop();
-           }
-         state.min_tr = -1; state.lp_i = state.min_h_i; state.lp_p = state.min_h;
-         state.min_l = val_l; state.min_l_i = i; state.trig_h = val_h;
-        }
-     }
-   else
-     {
-      double old_trig = state.trig_h;
-      if(val_l < state.min_l) { state.min_l = val_l; state.min_l_i = i; state.trig_h = val_h; }
-      if(val_h > old_trig)
-        {
-         state.st_l.Push(state.min_l, state.min_l_i);
-         if(state.maj_tr == -1 && state.maj_st == 0 && state.min_l > state.tmp_l && state.st_h.Size() > 0)
-           {
-            if(state.st_h.GetIdx(state.st_h.Size() - 1) > state.bos_i) state.st_h.Pop();
-           }
-         state.min_tr = 1; state.lp_i = state.min_l_i; state.lp_p = state.min_l;
-         state.min_h = val_h; state.min_h_i = i; state.trig_l = val_l;
-        }
-     }
-
-   if(state.maj_tr == 0) { state.maj_tr = 1; state.maj_l_i = state.min_l_i; }
-
-   if(state.maj_tr == 1)
-     {
-      if(val_h > state.tmp_h) { state.tmp_h = val_h; state.tmp_h_i = i; }
-      if(state.maj_st == 0)
-        {
-         double act = state.st_l.Size() > 0 ? state.st_l.GetVal(state.st_l.Size() - 1) : EMPTY_VALUE;
-         if(act != EMPTY_VALUE && val_l < act)
-           {
-            state.maj_h = state.tmp_h; state.maj_h_i = state.tmp_h_i;
-            state.st_l.Clear(); state.st_h.Clear(); state.maj_st = 1;
-            state.tmp_l = val_l; state.tmp_l_i = i;
-           }
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_l < state.maj_l && val_c >= state.maj_l) state.maj_l = val_l;
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_c < state.maj_l)
-           {
-            state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
-            state.st_l.Clear(); state.tmp_l = val_l; state.tmp_l_i = i;
-            state.maj_h = state.tmp_h; state.maj_h_i = state.tmp_h_i;
-           }
-        }
-      else if(state.maj_st == 1)
-        {
-         if(val_l < state.tmp_l) { state.tmp_l = val_l; state.tmp_l_i = i; }
-         if(val_h > state.maj_h && val_c <= state.maj_h) state.maj_h = val_h;
-         if(val_c > state.maj_h)
-           {
-            state.bos_i = i; state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
-            state.st_h.Clear(); state.maj_st = 0; state.tmp_h = val_h; state.tmp_h_i = i;
-           }
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_l < state.maj_l && val_c >= state.maj_l) state.maj_l = val_l;
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_c < state.maj_l)
-           {
-            state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
-            state.st_l.Clear(); state.tmp_l = val_l; state.tmp_l_i = i;
-            state.maj_h = state.tmp_h; state.maj_h_i = state.tmp_h_i;
-           }
-        }
-     }
-   else // maj_tr == -1
-     {
-      if(val_l < state.tmp_l) { state.tmp_l = val_l; state.tmp_l_i = i; }
-      if(state.maj_st == 0)
-        {
-         double act = state.st_h.Size() > 0 ? state.st_h.GetVal(state.st_h.Size() - 1) : EMPTY_VALUE;
-         if(act != EMPTY_VALUE && val_h > act)
-           {
-            state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
-            state.st_l.Clear(); state.st_h.Clear(); state.maj_st = 1;
-            state.tmp_h = val_h; state.tmp_h_i = i;
-           }
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_h > state.maj_h && val_c <= state.maj_h) state.maj_h = val_h;
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_c > state.maj_h)
-           {
-            state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
-            state.st_h.Clear(); state.tmp_h = val_h; state.tmp_h_i = i;
-            state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
-           }
-        }
-      else if(state.maj_st == 1)
-        {
-         if(val_h > state.tmp_h) { state.tmp_h = val_h; state.tmp_h_i = i; }
-         if(val_l < state.maj_l && val_c >= state.maj_l) state.maj_l = val_l;
-         if(val_c < state.maj_l)
-           {
-            state.maj_h = state.tmp_h; state.bos_i = i; state.maj_h_i = state.tmp_h_i;
-            state.st_l.Clear(); state.maj_st = 0; state.tmp_l = val_l; state.tmp_l_i = i;
-           }
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_h > state.maj_h && val_c <= state.maj_h) state.maj_h = val_h;
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_c > state.maj_h)
-           {
-            state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
-            state.st_h.Clear(); state.tmp_h = val_h; state.tmp_h_i = i;
-            state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
-           }
-        }
-     }
-  }
-
 bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct, datetime current_time,
                     double live_price, double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l)
   {
+   int bars = GetBarsForTF(tf);
    MqlRates rates[];
-   ArraySetAsSeries(rates, false);
+   ArraySetAsSeries(rates, true); // En yeni bar = 0
 
-   // Fetch dynamic timeframe settings to individually align each timeframe with user inputs.
-   double tf_days = GetDaysForTF(tf);
-   datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
-   int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
+   int copied = CopyRates(Symbol(), tf, 0, bars, rates);
    if(copied < 2) return false;
 
-   double open[], high[], low[], close[];
-   datetime time[];
-   ArrayResize(open, copied);
-   ArrayResize(high, copied);
-   ArrayResize(low, copied);
-   ArrayResize(close, copied);
-   ArrayResize(time, copied);
-
-   for(int i=0; i<copied; i++)
-     {
-      open[i] = rates[i].open;
-      high[i] = rates[i].high;
-      low[i]  = rates[i].low;
-      close[i] = rates[i].close;
-      time[i] = rates[i].time;
-     }
-
-   SState st;
-   st.min_h   = high[0]; st.min_h_i = 0; st.min_l   = low[0]; st.min_l_i = 0;
-   st.trig_h  = high[0]; st.trig_l  = low[0];
-   st.tmp_h   = high[0]; st.tmp_h_i = 0; st.tmp_l   = low[0]; st.tmp_l_i = 0;
-   st.min_tr  = (close[0] > open[0]) ? 1 : -1;
-
-   double initial_gap = (high[0] - low[0]);
-   if(initial_gap == 0) initial_gap = Point() * 10;
-   double tiny_gap = initial_gap * 0.1;
-
-   st.maj_h = high[0] + tiny_gap;
-   st.maj_l = low[0] - tiny_gap;
-   st.maj_tr = st.min_tr;
-   st.maj_st = 1;
-   st.bos_i = 0;
-   st.maj_h_i = 0;
-   st.maj_l_i = 0;
-
-   st.mb_h = high[0];
-   st.mb_l = low[0];
-   st.mb_i = 0;
+   // Basit Rolling Max/Min (Son N bar içinde en yüksek ve en düşük)
+   double highest = rates[0].high;
+   double lowest = rates[0].low;
+   int highest_idx = 0;
+   int lowest_idx = 0;
 
    for(int i = 1; i < copied; i++)
      {
-      bool inside = (high[i] <= st.mb_h) && (low[i] >= st.mb_l);
-      if(!inside)
-        {
-         // Dışarı çıktı, yeni mother bar olabilir
-         if (high[i] > st.mb_h || low[i] < st.mb_l) {
-            st.mb_h = high[i];
-            st.mb_l = low[i];
-            st.mb_i = i;
-         }
-         if(i == copied - 1)
-           {
-            double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-            close[i] = bid;
-            if(bid > high[i]) high[i] = bid;
-            if(bid < low[i]) low[i] = bid;
+      if(rates[i].high > highest) { highest = rates[i].high; highest_idx = i; }
+      if(rates[i].low < lowest)   { lowest = rates[i].low; lowest_idx = i; }
+     }
+
+   // Trend Yönü: Hangisi daha YENİ (yani index'i daha KÜÇÜK) ise trend odur.
+   // Eğer highest_idx < lowest_idx ise: Önce dip yapmış, sonra tepe yapmış = YUKARI trend.
+   // ArraySetAsSeries true olduğu için index 0 = şu an.
+   if (highest_idx < lowest_idx) {
+       trend = 1; // YUKARI
+   } else {
+       trend = -1; // AŞAĞI
+   }
+
+   pct = 0.0;
+   max_pct = 0.0;
+   double range = highest - lowest;
+
+   if (range > 0) {
+       if (trend == 1) { // Trend BUY ise (Tepe daha yeni)
+           // Tepeden (highest_idx) günümüze (0) kadar olan en düşük fiyata bakılır
+           double local_lowest = rates[0].low;
+           for(int i = 0; i <= highest_idx; i++) {
+               if(rates[i].low < local_lowest) local_lowest = rates[i].low;
            }
-
-         ProcessBarMathOnly(i, high, low, close, st);
-        }
-     }
-
-   trend = st.maj_tr;
-   pct = 0;
-   max_pct = 0;
-   double live_p = live_price;
-
-   ref_h = st.maj_h;
-   ref_l = st.maj_l;
-   if(st.maj_h_i >= 0 && st.maj_h_i < copied) ref_t_h = rates[st.maj_h_i].time; else ref_t_h = 0;
-   if(st.maj_l_i >= 0 && st.maj_l_i < copied) ref_t_l = rates[st.maj_l_i].time; else ref_t_l = 0;
-
-   if(st.maj_h != EMPTY_VALUE && st.maj_l != EMPTY_VALUE && st.maj_h != st.maj_l)
-     {
-      double range = 0;
-      if (trend == 1) {
-          range = st.tmp_h - st.maj_l;
-          if (range > 0) {
-              double true_bottom = FindTrueLow(low, st.tmp_h_i, copied - 1);
-              if (true_bottom == EMPTY_VALUE) true_bottom = st.tmp_h; // Fallback
-              pct = ((st.tmp_h - live_p) / range) * 100.0;
-              max_pct = ((st.tmp_h - true_bottom) / range) * 100.0;
-              if (live_p >= st.tmp_h) pct = 0;
-          }
-      } else if (trend == -1) {
-          range = st.maj_h - st.tmp_l;
-          if (range > 0) {
-              double true_peak = FindTrueHigh(high, st.tmp_l_i, copied - 1);
-              if (true_peak == EMPTY_VALUE) true_peak = st.tmp_l; // Fallback
-              pct = ((live_p - st.tmp_l) / range) * 100.0;
-              max_pct = ((true_peak - st.tmp_l) / range) * 100.0;
-              if (live_p <= st.tmp_l) pct = 0;
-          }
-      }
-     }
+           pct = ((highest - live_price) / range) * 100.0;
+           max_pct = ((highest - local_lowest) / range) * 100.0;
+           if (live_price >= highest) pct = 0;
+       } else { // Trend SELL ise (Dip daha yeni)
+           // Dipten (lowest_idx) günümüze (0) kadar olan en yüksek fiyata bakılır
+           double local_highest = rates[0].high;
+           for(int i = 0; i <= lowest_idx; i++) {
+               if(rates[i].high > local_highest) local_highest = rates[i].high;
+           }
+           pct = ((live_price - lowest) / range) * 100.0;
+           max_pct = ((local_highest - lowest) / range) * 100.0;
+           if (live_price <= lowest) pct = 0;
+       }
+   }
 
    if(pct < 0) pct = 0;
    if(max_pct < pct) max_pct = pct;
+
+   ref_h = highest;
+   ref_l = lowest;
+   ref_t_h = rates[highest_idx].time;
+   ref_t_l = rates[lowest_idx].time;
 
    return true;
   }
@@ -1367,8 +1201,9 @@ int OnCalculate(const int rates_total,
 
    if(prev_calculated == 0)
      {
-      double tf_days = GetDaysForTF(Period());
-      g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
+      int bars_lookback = GetBarsForTF(Period());
+      // M1 vb. için sadece bar limitine göre tarih belirle (veya son barı al)
+      g_anchor_time = time[MathMax(0, rates_total - bars_lookback - 1)];
 
       g_counter = 0;
       g_last_alert_maj_h = 0;
