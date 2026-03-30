@@ -293,66 +293,128 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
                     double live_price, double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l)
   {
    int bars = GetBarsForTF(tf);
+   if (bars < 10) bars = 1000;
+
    MqlRates rates[];
-   ArraySetAsSeries(rates, true); // En yeni bar = 0
+   ArraySetAsSeries(rates, false); // Eski bar 0, yeni bar en sonda (Simülasyon sırası)
 
    int copied = CopyRates(Symbol(), tf, 0, bars, rates);
-   if(copied < 2) return false;
+   if(copied < 10) return false;
 
-   // Basit Rolling Max/Min (Son N bar içinde en yüksek ve en düşük)
-   double highest = rates[0].high;
-   double lowest = rates[0].low;
-   int highest_idx = 0;
-   int lowest_idx = 0;
+   // Arka planda çalışacak geçici State objesi (Çizim YAPMAYACAK)
+   SState sim_state;
 
+   // Başlangıç değerlerini ilk barlara göre ayarla
+   sim_state.min_h   = rates[0].high;
+   sim_state.min_h_i = 0;
+   sim_state.min_l   = rates[0].low;
+   sim_state.min_l_i = 0;
+   sim_state.trig_h  = rates[0].high;
+   sim_state.trig_l  = rates[0].low;
+   sim_state.tmp_h   = rates[0].high;
+   sim_state.tmp_h_i = 0;
+   sim_state.tmp_l   = rates[0].low;
+   sim_state.tmp_l_i = 0;
+   sim_state.min_tr  = (rates[0].close > rates[0].open) ? 1 : -1;
+   sim_state.anc_i   = 0;
+   sim_state.anc_v   = rates[0].close;
+   sim_state.lp_i    = 0;
+   sim_state.lp_p    = rates[0].close;
+
+   sim_state.mb_h = rates[0].high;
+   sim_state.mb_l = rates[0].low;
+   sim_state.mb_i = 0;
+
+   sim_state.t1_h = 0; sim_state.t1_l = 0; sim_state.t1_i = 0;
+   sim_state.d1_h = 0; sim_state.d1_l = 0; sim_state.d1_i = 0;
+   sim_state.t2_h = 0; sim_state.t2_l = 0; sim_state.t2_i = 0;
+   sim_state.choch_dir = 0;
+
+   double initial_atr = (rates[0].high - rates[0].low);
+   if(initial_atr == 0) initial_atr = Point() * 10;
+   double tiny_gap = initial_atr * 0.1;
+
+   sim_state.maj_h = rates[0].high + tiny_gap;
+   sim_state.maj_l = rates[0].low - tiny_gap;
+   sim_state.maj_tr = sim_state.min_tr;
+   sim_state.maj_st = 1;
+   sim_state.bos_i = 0;
+
+   sim_state.maj_h_i = 0;
+   sim_state.maj_l_i = 0;
+
+   // ProcessBar fonksiyonunun imzasını karşılamak için geçici diziler
+   double open_arr[], high_arr[], low_arr[], close_arr[];
+   datetime time_arr[];
+   ArrayResize(open_arr, copied);
+   ArrayResize(high_arr, copied);
+   ArrayResize(low_arr, copied);
+   ArrayResize(close_arr, copied);
+   ArrayResize(time_arr, copied);
+
+   for(int i = 0; i < copied; i++) {
+       open_arr[i]  = rates[i].open;
+       high_arr[i]  = rates[i].high;
+       low_arr[i]   = rates[i].low;
+       close_arr[i] = rates[i].close;
+       time_arr[i]  = rates[i].time;
+   }
+
+   // Barları baştan sona simüle et (Sadece Array'ler ve State üzerinden, grafik sıfır!)
    for(int i = 1; i < copied; i++)
      {
-      if(rates[i].high > highest) { highest = rates[i].high; highest_idx = i; }
-      if(rates[i].low < lowest)   { lowest = rates[i].low; lowest_idx = i; }
+      bool inside = (high_arr[i] <= sim_state.mb_h) && (low_arr[i] >= sim_state.mb_l);
+      if(!inside)
+        {
+         if (high_arr[i] > sim_state.mb_h || low_arr[i] < sim_state.mb_l) {
+            sim_state.mb_h = high_arr[i];
+            sim_state.mb_l = low_arr[i];
+            sim_state.mb_i = i;
+         }
+         // draw_ui = false parametresi ile ProcessBar'ı çağırıyoruz. Hızlıdır ve obje çizmez.
+         ProcessBar(i, open_arr, high_arr, low_arr, close_arr, time_arr, sim_state, true, false);
+        }
      }
 
-   // Trend Yönü: Hangisi daha YENİ (yani index'i daha KÜÇÜK) ise trend odur.
-   // Eğer highest_idx < lowest_idx ise: Önce dip yapmış, sonra tepe yapmış = YUKARI trend.
-   // ArraySetAsSeries true olduğu için index 0 = şu an.
-   if (highest_idx < lowest_idx) {
-       trend = 1; // YUKARI
-   } else {
-       trend = -1; // AŞAĞI
-   }
+   // Simülasyon bitti, son durumu dışarı aktar
+   trend = sim_state.maj_tr;
+
+   ref_h = sim_state.maj_h;
+   ref_l = sim_state.maj_l;
+
+   // Zaman dizilerinde sınır aşımı kontrolü
+   int maj_h_idx = sim_state.maj_h_i < copied ? sim_state.maj_h_i : copied - 1;
+   int maj_l_idx = sim_state.maj_l_i < copied ? sim_state.maj_l_i : copied - 1;
+
+   ref_t_h = time_arr[maj_h_idx];
+   ref_t_l = time_arr[maj_l_idx];
 
    pct = 0.0;
    max_pct = 0.0;
-   double range = highest - lowest;
 
-   if (range > 0) {
-       if (trend == 1) { // Trend BUY ise (Tepe daha yeni)
-           // Tepeden (highest_idx) günümüze (0) kadar olan en düşük fiyata bakılır
-           double local_lowest = rates[0].low;
-           for(int i = 0; i <= highest_idx; i++) {
-               if(rates[i].low < local_lowest) local_lowest = rates[i].low;
+   if (ref_h != EMPTY_VALUE && ref_l != EMPTY_VALUE && ref_h != ref_l) {
+       double range = ref_h - ref_l;
+       if (trend == 1) { // BUY Trend
+           pct = ((ref_h - live_price) / range) * 100.0;
+           double local_lowest = rates[copied-1].low;
+           for(int i = maj_h_idx; i < copied; i++) {
+               if(low_arr[i] < local_lowest) local_lowest = low_arr[i];
            }
-           pct = ((highest - live_price) / range) * 100.0;
-           max_pct = ((highest - local_lowest) / range) * 100.0;
-           if (live_price >= highest) pct = 0;
-       } else { // Trend SELL ise (Dip daha yeni)
-           // Dipten (lowest_idx) günümüze (0) kadar olan en yüksek fiyata bakılır
-           double local_highest = rates[0].high;
-           for(int i = 0; i <= lowest_idx; i++) {
-               if(rates[i].high > local_highest) local_highest = rates[i].high;
+           max_pct = ((ref_h - local_lowest) / range) * 100.0;
+           if (live_price >= ref_h) pct = 0;
+       } else { // SELL Trend
+           pct = ((live_price - ref_l) / range) * 100.0;
+           double local_highest = rates[copied-1].high;
+           for(int i = maj_l_idx; i < copied; i++) {
+               if(high_arr[i] > local_highest) local_highest = high_arr[i];
            }
-           pct = ((live_price - lowest) / range) * 100.0;
-           max_pct = ((local_highest - lowest) / range) * 100.0;
-           if (live_price <= lowest) pct = 0;
+           max_pct = ((local_highest - ref_l) / range) * 100.0;
+           if (live_price <= ref_l) pct = 0;
        }
    }
 
    if(pct < 0) pct = 0;
    if(max_pct < pct) max_pct = pct;
-
-   ref_h = highest;
-   ref_l = lowest;
-   ref_t_h = rates[highest_idx].time;
-   ref_t_l = rates[lowest_idx].time;
 
    return true;
   }
@@ -771,30 +833,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
-          if (!is_history) {
-              string msg = "🔴 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
-              msg += "Yön: ⬇️ AŞAĞI\n";
-              if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.\n";
-              } else {
-                  msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.\n";
-              }
-
-              msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
-
-              // Only alert if we haven't already alerted for THIS specific swing setup
-              static int last_alert_d1_i_bear = 0;
-              if (state.d1_i != last_alert_d1_i_bear) {
-                  if (InpEnableAlertCHoCHBase && draw_ui) {
-                      if(InpAlertPopup) Alert(msg);
-                      if(InpAlertPush) SendNotification(msg);
-                  }
-                  if (InpEnableTradeExecution && draw_ui) {
-                      EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong);
-                  }
-                  last_alert_d1_i_bear = state.d1_i;
-              }
-          }
 
           if (InpShowChoch && draw_ui) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
@@ -812,29 +850,30 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
               DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
-          }
-          state.choch_dir = 0; // Reset after trigger
-      }
-   } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
-      if (val_c > state.d1_h && in_pullback_zone) {
-          // Bullish CHoCH confirmed!
-          double ext_pct = 0;
-          double break_pct = 0;
-          if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
-              double range = state.maj_h - state.maj_l;
-              double extreme_pt = FindTrueLow(low, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
-              if(extreme_pt == EMPTY_VALUE) extreme_pt = (state.t2_l < state.t1_l) ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
 
-              if (state.maj_tr == 1) { // Up Trend Pullback Continuation
-                  ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
-                  break_pct = ((state.maj_h - val_c) / range) * 100.0;
-              } else { // Down Trend Bottom Reversal
-                  ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
-                  break_pct = ((val_c - state.maj_l) / range) * 100.0;
-              }
+              ChartRedraw(); // Force UI update before MTF scan
           }
 
-          bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
+
+          if (InpShowChoch && draw_ui) {
+              color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
+
+              // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
+              string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
+              DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+
+              string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
+              DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
+
+              string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
+              DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+
+              // 2. Draw the short, thick signal marker at breakout level
+              string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
+              DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
+
+              ChartRedraw(); // Force UI update before MTF scan
+          }
 
           if (!is_history) {
               string msg = "🟢 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
@@ -859,24 +898,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   }
                   last_alert_d1_i_bull = state.d1_i;
               }
-          }
-
-          if (InpShowChoch && draw_ui) {
-              color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
-
-              // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
-              string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
-
-              string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
-
-              string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
-
-              // 2. Draw the short, thick signal marker at breakout level
-              string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
-              DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
           }
           state.choch_dir = 0; // Reset after trigger
       }
