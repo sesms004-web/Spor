@@ -581,7 +581,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        if (p_h1 >= 50.0) { // Premium
            if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "İdeal Bölge (Altın Vuruş) -> [+30 Skor]\n"; }
            else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "İdeal Bölgede ama Ters Yön (Riskli!) -> [0 Skor]\n"; }
-       } else if (mp_h1 >= 10.0) { // 10% Pullback Trade Opportunity
+       } else if (p_h1 >= 10.0) { // 10% Pullback Trade Opportunity (Live Pullback)
            if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Erken Çekilme (%10) Onayı -> [+30 Skor]\n"; }
            else               { h1_points = 30; h1_text = "H1: " + stats_h1 + "Yeni Düzeltme (Önü Açık) -> [+30 Skor]\n"; }
        } else { // Shallow
