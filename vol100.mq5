@@ -403,7 +403,11 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
                if(low_arr[i] < local_lowest) local_lowest = low_arr[i];
            }
            max_pct = ((ref_h - local_lowest) / range) * 100.0;
-           if (live_price >= ref_h) pct = 0;
+
+           // Kırılım (Breakout) Durumu SIFIRLAMA
+           // Eğer canlı fiyat, güncel onaylı tepemizi (maj_h) çoktan aştıysa (kırdıysa),
+           // ortada bir "çekilme" kalmamıştır, yeni bir dalga yapıyordur. Yüzdeleri tamamen SIFIRLA.
+           if (live_price >= ref_h) { pct = 0; max_pct = 0; }
        } else { // SELL Trend
            pct = ((live_price - ref_l) / range) * 100.0;
            double local_highest = rates[copied-1].high;
@@ -411,7 +415,9 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
                if(high_arr[i] > local_highest) local_highest = high_arr[i];
            }
            max_pct = ((local_highest - ref_l) / range) * 100.0;
-           if (live_price <= ref_l) pct = 0;
+
+           // Kırılım (Breakout) Durumu SIFIRLAMA
+           if (live_price <= ref_l) { pct = 0; max_pct = 0; }
        }
    }
 
