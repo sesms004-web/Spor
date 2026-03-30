@@ -9,13 +9,8 @@
 #property indicator_chart_window
 #property indicator_plots 0
 
-//--- MTF Pullback & Lookback Settings ---
-input int    InpBarsM1   = 1000;         // M1 Analiz Bar Sayısı
-input int    InpBarsM3   = 500;          // M3 Analiz Bar Sayısı
-input int    InpBarsM5   = 500;          // M5 Analiz Bar Sayısı
-input int    InpBarsM15  = 300;          // M15 Analiz Bar Sayısı
-input int    InpBarsM30  = 300;          // M30 Analiz Bar Sayısı
-input int    InpBarsH1   = 300;          // H1 Analiz Bar Sayısı
+//--- MTF Analiz Geçmişi (Gün Sayısı) ---
+input int    InpDaysM1   = 2;            // M1 Analiz Geçmişi (Gün)
 
 //--- CHoCH Settings ---
 input double InpMinPullbackPct = 40.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
@@ -57,6 +52,7 @@ int g_last_alert_trend = 0;
 
 void DrawLine(string name, datetime time1, double price1, datetime time2, double price2, color clr, int width, ENUM_LINE_STYLE style, bool ray_right=false)
   {
+   if(name == "") return;
    if(ObjectFind(0, name) < 0)
      {
       ObjectCreate(0, name, OBJ_TREND, 0, time1, price1, time2, price2);
@@ -79,12 +75,14 @@ void DrawLine(string name, datetime time1, double price1, datetime time2, double
 
 void DeleteLine(string name)
   {
+   if(name == "") return;
    if(ObjectFind(0, name) >= 0)
       ObjectDelete(0, name);
   }
 
 void CutLine(string name, datetime time_cut)
   {
+   if(name == "") return;
    if(ObjectFind(0, name) >= 0)
      {
       ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, false);
@@ -94,6 +92,7 @@ void CutLine(string name, datetime time_cut)
 
 void UpdateLineLevel(string name, double level)
   {
+   if(name == "") return;
    if(ObjectFind(0, name) >= 0)
      {
       ObjectSetDouble(0, name, OBJPROP_PRICE, 0, level);
@@ -256,15 +255,15 @@ string GetUniqueName(string prefix)
   }
 
 
-int GetBarsForTF(ENUM_TIMEFRAMES tf)
+int GetDaysForTF(ENUM_TIMEFRAMES tf)
   {
-   if(tf == PERIOD_M1) return InpBarsM1;
-   if(tf == PERIOD_M3) return InpBarsM3;
-   if(tf == PERIOD_M5) return InpBarsM5;
-   if(tf == PERIOD_M15) return InpBarsM15;
-   if(tf == PERIOD_M30) return InpBarsM30;
-   if(tf == PERIOD_H1) return InpBarsH1;
-   return 1000;
+   if(tf == PERIOD_M1) return InpDaysM1;
+   if(tf == PERIOD_M3) return 3;
+   if(tf == PERIOD_M5) return 6;
+   if(tf == PERIOD_M15) return 16;
+   if(tf == PERIOD_M30) return 33;
+   if(tf == PERIOD_H1) return 63;
+   return 10;
   }
 
 double FindTrueHigh(const double &high[], int start_idx, int end_idx)
@@ -292,13 +291,16 @@ double FindTrueLow(const double &low[], int start_idx, int end_idx)
 bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct, datetime current_time,
                     double live_price, double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l)
   {
-   int bars = GetBarsForTF(tf);
-   if (bars < 10) bars = 1000;
+      int days = GetDaysForTF(tf);
+   if (days < 1) days = 1;
+
+   datetime start_time = current_time - (days * 86400); // Geriye dönük gün hesaplama
 
    MqlRates rates[];
    ArraySetAsSeries(rates, false); // Eski bar 0, yeni bar en sonda (Simülasyon sırası)
 
-   int copied = CopyRates(Symbol(), tf, 0, bars, rates);
+   // Anlık zamandan (current_time), hesaplanan start_time'a kadar kopyala
+   int copied = CopyRates(Symbol(), tf, start_time, current_time, rates);
    if(copied < 10) return false;
 
    // Arka planda çalışacak geçici State objesi (Çizim YAPMAYACAK)
@@ -810,7 +812,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          state.trig_l = val_l;
         }
      }
-
    // CHoCH Trigger & Drawing Logic
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
       if (val_c < state.d1_l && in_pullback_zone) {
@@ -833,20 +834,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
-
           if (InpShowChoch && draw_ui) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
-
-              // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
-              string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_1, time[state.t1_i], state.t1_h, time[state.d1_i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
-
-              string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_2, time[state.d1_i], state.d1_l, time[state.t2_i], state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
-
-              string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_3, time[state.t2_i], state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
-
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
               DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
@@ -854,20 +843,55 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               ChartRedraw(); // Force UI update before MTF scan
           }
 
+          if (!is_history) {
+              string msg = "🔴 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
+              msg += "Yön: ⬇️ AŞAĞI\n";
+              if (is_strong) {
+                  msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.\n";
+              } else {
+                  msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.\n";
+              }
+
+              msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
+
+              // Only alert if we haven't already alerted for THIS specific swing setup
+              static int last_alert_d1_i_bear = 0;
+              if (state.d1_i != last_alert_d1_i_bear) {
+                  if (InpEnableAlertCHoCHBase && draw_ui) {
+                      if(InpAlertPopup) Alert(msg);
+                      if(InpAlertPush) SendNotification(msg);
+                  }
+                  if (InpEnableTradeExecution && draw_ui) {
+                      EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong);
+                  }
+                  last_alert_d1_i_bear = state.d1_i;
+              }
+          }
+          state.choch_dir = 0; // Reset after trigger
+      }
+   } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
+      if (val_c > state.d1_h && in_pullback_zone) {
+          // Bullish CHoCH confirmed!
+          double ext_pct = 0;
+          double break_pct = 0;
+          if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
+              double range = state.maj_h - state.maj_l;
+              double extreme_pt = FindTrueLow(low, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
+              if(extreme_pt == EMPTY_VALUE) extreme_pt = (state.t2_l < state.t1_l) ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
+
+              if (state.maj_tr == 1) { // Up Trend Pullback Continuation
+                  ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
+                  break_pct = ((state.maj_h - val_c) / range) * 100.0;
+              } else { // Down Trend Bottom Reversal
+                  ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
+                  break_pct = ((val_c - state.maj_l) / range) * 100.0;
+              }
+          }
+
+          bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
           if (InpShowChoch && draw_ui) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
-
-              // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
-              string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
-
-              string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
-
-              string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
-
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
               DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
@@ -902,6 +926,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           state.choch_dir = 0; // Reset after trigger
       }
    }
+
 
    // MAJOR STRUCTURE
    if(state.maj_tr == 0)
@@ -1222,9 +1247,8 @@ int OnCalculate(const int rates_total,
 
    if(prev_calculated == 0)
      {
-      int bars_lookback = GetBarsForTF(Period());
-      // M1 vb. için sadece bar limitine göre tarih belirle (veya son barı al)
-      g_anchor_time = time[MathMax(0, rates_total - bars_lookback - 1)];
+            int days_lookback = GetDaysForTF(Period());
+      g_anchor_time = time[rates_total - 1] - (days_lookback * 86400);
 
       g_counter = 0;
       g_last_alert_maj_h = 0;
