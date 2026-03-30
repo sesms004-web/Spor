@@ -39,19 +39,11 @@ input color  InpColorBear = clrRed;
 
 //--- Alert Settings ---
 input bool   InpEnableAlertTrendChange = true;       // Ana Trend (Kapanış) Dönüş Bildirimini Aç
-input bool   InpEnableAlertMTFLevels   = true;       // %40/%60 MTF Analiz Bildirimini Aç (Bölüm 1/2)
 input bool   InpEnableAlertCHoCHBase   = true;       // Temel CHoCH (Kırılım) Bildirimini Aç
 input bool   InpEnableTradeExecution   = true;       // 50 Skorlık 'İşleme Gir' Analiz Sistemini Aç
 input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Skorları Hesapla ve Bildir
-input double InpTriggerLevel1    = 40.0;             // 1. Bildirim Çekilme % (örn. %40)
-input double InpTriggerLevel2    = 60.0;             // 2. Bildirim Çekilme % (örn. %60)
-input double InpGoodPullbackPct  = 40.0;
-input double InpMomentumMinPeak  = 30.0;
-input double InpMomentumMinBounce= 20.0;
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
-input bool   InpNotificationFilter = false;          // Bildirim Filtresi (True: Sadece Swing İçi, False: Kırılımdan İtibaren)
-input bool   InpTestMode         = false;
 
 //--- Globals ---
 int g_counter = 0;
@@ -62,10 +54,6 @@ datetime g_anchor_time = 0;
 double g_last_alert_maj_h = 0;
 double g_last_alert_maj_l = 0;
 int g_last_alert_trend = 0;
-bool g_level1_triggered = false;
-bool g_level2_triggered = false;
-bool g_level1_missed = false;
-bool g_level2_missed = false;
 
 void DrawLine(string name, datetime time1, double price1, datetime time2, double price2, color clr, int width, ENUM_LINE_STYLE style, bool ray_right=false)
   {
@@ -531,43 +519,6 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    return true;
   }
 
-string GetTimeAgoString(datetime past_time, datetime now_time)
-  {
-   if (past_time == 0) return "";
-   int diff = (int)(now_time - past_time);
-   if (diff < 3600) return IntegerToString(diff/60) + " Dk Önce";
-   if (diff < 86400)
-     {
-      int h = diff/3600;
-      int m = (diff%3600)/60;
-      if (m > 0) return IntegerToString(h) + " Saat " + IntegerToString(m) + " Dk Önce";
-      return IntegerToString(h) + " Saat Önce";
-     }
-   int d = diff/86400;
-   int hd = (diff%86400)/3600;
-   if (hd > 0) return IntegerToString(d) + " Gün " + IntegerToString(hd) + " Saat Önce";
-   return IntegerToString(d) + " Gün Önce";
-  }
-
-string PctToText(double pct, double max_pct, datetime swing_time, datetime current_time)
-  {
-   string age = "\n   └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
-   string base_str = "(Çekilme: %" + DoubleToString(pct, 2) + " ↑↑%" + DoubleToString(max_pct, 2);
-
-   if(pct == 0.0) return base_str + " - Kırılım Gerçekleşti / Trend Devam)" + age;
-
-   if(pct <= 10.0)
-     {
-      if(max_pct <= 10.0) return " (Trend Şişkin, Düzeltme Bekleniyor)" + age;
-      else if(max_pct == pct) return base_str + " - Yeni Dalga Oluşuyor)" + age;
-      else return base_str + " - Kırılıma Hazırlanıyor)" + age;
-     }
-
-   if(pct >= InpGoodPullbackPct && pct <= 75.0) return base_str + " - İdeal Düzeltme)" + age;
-   if(pct > 85.0) return base_str + " - Dönüş Riski)" + age;
-
-   return base_str + ")" + age;
-  }
 
 //+------------------------------------------------------------------+
 //| 50-Point Execution Analysis Engine                               |
@@ -758,295 +709,6 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 //+------------------------------------------------------------------+
 //| MTF Alert System (Smart Algorithmic Decision Engine)             |
 //+------------------------------------------------------------------+
-bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int triggered_level, bool is_revisit=false)
-  {
-
-   int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
-   double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
-   double mp_m1=0, mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
-   double h_m1, l_m1; datetime th_m1, tl_m1;
-   double temp_h_val, temp_l_val; datetime th_m3, tl_m3, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
-
-   bool hm1 = GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, live_price, h_m1, l_m1, th_m1, tl_m1);
-   bool hm3 = GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, live_price, temp_h_val, temp_l_val, th_m3, tl_m3);
-   bool hm5  = GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, live_price, temp_h_val, temp_l_val, th_m5, tl_m5);
-   bool hm15 = GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, live_price, temp_h_val, temp_l_val, th_m15, tl_m15);
-   bool hm30 = GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, live_price, temp_h_val, temp_l_val, th_m30, tl_m30);
-   bool hh1  = GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, live_price, temp_h_val, temp_l_val, th_h1, tl_h1);
-
-   if(!hm1 || !hm3 || !hm5 || !hm15 || !hm30 || !hh1) return false;
-
-// --- Trend Baskınlık Analizi (Trend Dominance Analysis) ---
-   // Büyük Zaman Aralığı (Macro/Core: H1, M30, M15)
-   int macro_score = 0;
-   if(t_h1 == 1) macro_score += 5; else macro_score -= 5;
-   if(t_m30 == 1) macro_score += 4; else macro_score -= 4;
-   if(t_m15 == 1) macro_score += 3; else macro_score -= 3;
-
-   double macro_bull_pct = ((macro_score + 12.0) / 24.0) * 100.0;
-   double macro_bear_pct = 100.0 - macro_bull_pct;
-
-   // Küçük Zaman Aralığı (Micro/Trigger: M5, M3, M1)
-   int micro_score = 0;
-   if(t_m5 == 1) micro_score += 3; else micro_score -= 3;
-   if(t_m3 == 1) micro_score += 2; else micro_score -= 2;
-   if(t_m1 == 1) micro_score += 1; else micro_score -= 1;
-
-   double micro_bull_pct = ((micro_score + 6.0) / 12.0) * 100.0;
-   double micro_bear_pct = 100.0 - micro_bull_pct;
-
-   int total_score = (t_h1 * 5) + (t_m30 * 4) + (t_m15 * 3) + (t_m5 * 2) + (t_m3 * 1) + (t_m1 * 1);
-   double bull_pressure = ((total_score + 16.0) / 32.0) * 100.0;
-   if (bull_pressure < 0) bull_pressure = 0;
-   if (bull_pressure > 100) bull_pressure = 100;
-
-   string lvl_text = (triggered_level == 2) ? DoubleToString(InpTriggerLevel2,0) : DoubleToString(InpTriggerLevel1,0);
-   string msg1 = "🚨 [" + Symbol() + "] M1 Hedef (%" + lvl_text + ") Seviyesinde! (BÖLÜM 1/2)\n";
-   if(InpTestMode) msg1 = "🧪 [TEST MODU - " + Symbol() + "] M1 Hedef (%" + lvl_text + ") Seviyesinde! (BÖLÜM 1/2)\n";
-
-   if(is_revisit)
-     {
-      msg1 += "⚠️ DİKKAT: Fiyat hedefi sert geçmişti. Bu bir geri dönüş (Re-visit) bildirimidir!\n\n";
-     }
-
-   string swing_dir = t_m1 == 1 ? "🟢 YUKARI" : "🔴 AŞAĞI";
-   datetime start_t = t_m1 == 1 ? tl_m1 : th_m1;
-   string swing_start_str = TimeToString(start_t, TIME_DATE|TIME_MINUTES);
-   string ago_str = GetTimeAgoString(start_t, t);
-
-   msg1 += "📌 REFERANS SWING (M1):\n";
-   msg1 += "- Yön: " + swing_dir + "\n";
-   msg1 += "- Başlangıç: " + swing_start_str + "\n";
-   msg1 += "  └ Süre: " + ago_str + "\n";
-   msg1 += "- Swing High: " + DoubleToString(h_m1, _Digits) + "\n";
-   msg1 += "- Swing Low: " + DoubleToString(l_m1, _Digits) + "\n";
-   if(p_m1 == 0.0)
-     {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Kırılım Gerçekleşti)\n\n";
-     }
-   else if(p_m1 <= 10.0)
-     {
-      if(mp_m1 <= 10.0) msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Trend Şişkin, Düzeltme Bekleniyor)\n\n";
-      else if(mp_m1 == p_m1) msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Yeni Dalga Oluşuyor)\n\n";
-      else msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Kırılıma Hazırlanıyor)\n\n";
-     }
-   else
-     {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Maks. Çekilme: %" + DoubleToString(mp_m1, 2) + " | Anlık Uzaklık: %" + DoubleToString(p_m1, 2) + ")\n\n";
-     }
-
-   msg1 += "🧭 MAKRO TREND (H1/M30)\n";
-   msg1 += "Durum: " + (bull_pressure >= 50 ? "🟢 YÜKSELİŞ" : "🔴 DÜŞÜŞ") + " (%" + DoubleToString(bull_pressure, 0) + " Boğa Baskısı)\n";
-   msg1 += "H1:  " + (t_h1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_h1, mp_h1, (t_h1==1?tl_h1:th_h1), t) + "\n";
-   msg1 += "M30: " + (t_m30 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m30, mp_m30, (t_m30==1?tl_m30:th_m30), t) + "\n\n";
-
-   msg1 += "🔬 DÜZELTME VE HEDEF (M15/M5)\n";
-   msg1 += "M15: " + (t_m15 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m15, mp_m15, (t_m15==1?tl_m15:th_m15), t) + "\n";
-   msg1 += "M5:  " + (t_m5 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m5, mp_m5, (t_m5==1?tl_m5:th_m5), t) + "\n\n";
-
-   msg1 += "🎯 TETİK VE ONAY GRUBU (M3/M1)\n";
-   msg1 += "M3:  " + (t_m3 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m3, mp_m3, (t_m3==1?tl_m3:th_m3), t) + "\n";
-   msg1 += "M1:  " + (t_m1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m1, mp_m1, (t_m1==1?tl_m1:th_m1), t) + "\n\n";
-
-   msg1 += "📊 Baskınlık: Makro=↑%" + DoubleToString(macro_bull_pct, 0) + " ↓%" + DoubleToString(macro_bear_pct, 0) + " | Mikro=↑%" + DoubleToString(micro_bull_pct, 0) + " ↓%" + DoubleToString(micro_bear_pct, 0) + "\n";
-  bool macro_bull = (t_h1 == 1 && t_m30 == 1);
-   bool macro_bear = (t_h1 == -1 && t_m30 == -1);
-
-   string decision = "";
-   string detail = "";
-
-   bool m15_pullback_down = (t_m15 == 1 && t_m5 == -1);
-   bool m15_pullback_up   = (t_m15 == -1 && t_m5 == 1);
-
-   if (macro_bull)
-     {
-      if (t_m15 == -1) // M15 is in a Pullback (Down) against Macro
-        {
-         if (p_m15 >= InpGoodPullbackPct && t_m1 == 1 && t_m3 == 1)
-           {
-            decision = "✅ YAPISAL UYUM: İdeal Düzeltme Tamamlandı";
-            detail = "Makro trend YUKARI. M15 yapısı yeterli ucuzluk bölgesine (discount) indi. Alt zaman dilimi tetikleyicileri (M1/M3) ana trend yönüne dönüş sinyali üretiyor. Trendin devam etme ihtimali istatistiksel olarak yüksek.";
-           }
-         else if (t_m1 == -1 && t_m3 == -1 && p_m15 < 30.0)
-           {
-            decision = "⚡ YAPISAL UYUM: Derin Düzeltme Başlangıcı";
-            detail = "Makro trend YUKARI olmasına rağmen, M15 yapısı aşağı yönlü kırıldı ve henüz yeterli ucuzluk bölgesine inmedi. Kısa vadeli aşağı yönlü (Counter-Trend) momentum güçlü, ancak bu hareket makro trende terstir.";
-           }
-         else
-           {
-            decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-            detail = "M15 aşağı yönlü düzeltme aşamasında, ancak M1 ve M3 zıt yönde veya henüz kalıcı bir dönüş yapısı oluşturmadı. Fiyatta anlamlı bir trend yönü yok, izlemek en mantıklısı.";
-           }
-        }
-      else if (t_m15 == 1) // M15 is UP (Aligned with Macro)
-        {
-         if (t_m5 == -1) // M5 is pulling back down
-           {
-            if (p_m15 >= InpGoodPullbackPct && t_m1 == 1 && t_m3 == 1)
-              {
-               decision = "✅ YAPISAL UYUM: Güçlü Trend Devamı";
-               detail = "M15 Yukarı yönde ve yeterli ucuzluk bölgesinde. M5 düzeltmesini bitirmek üzereyken, M1/M3 tetik grubu ana yöne uyum sağladı. Yapı yukarı yönlü genişlemeyi destekliyor.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Kısa Süreli Tepki";
-               detail = "M15 Yukarı ancak M5 şu an fiyatı aşağı çekiyor. M1 yukarı kırmış olsa da M3 yapısı henüz onay vermedi. Bu hareket kalıcı bir dönüş değil, iç yapı düzeltmesidir.";
-              }
-           }
-         else // M15 UP, M5 UP
-           {
-            if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 <= 10.0)
-              {
-               decision = "⚠️ RİSKLİ YAPI: Aşırı Şişkin (Overextended)";
-               detail = "Ana zaman dilimlerinde (M15 ve M5) fiyat son kırılımdan bu yana hiç geri çekilme (pullback) yapmadı. Bu seviyelerden trend yönlü beklentiye girmek yapısal olarak mantıksızdır. Fiyatın dengelenmesi beklenmeli.";
-              }
-            else if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 > 10.0)
-              {
-               decision = "✅ YAPISAL UYUM: Kırılım Gerçekleşiyor (Breakout)";
-               detail = "M15 daha önce düzeltmesini (pullback) tamamlamış ve şu an yapısal direnci kırmak üzere ivmeleniyor. Makro ve mikro trendler tamamen aynı yönde.";
-              }
-            else if (t_m1 == 1 && t_m3 == 1)
-              {
-               decision = "✅ YAPISAL UYUM: Ara Düzeltme Devamı";
-               detail = "Makro ve M15 uyumlu. Fiyat M15'te sığ bir düzeltme yaptıktan sonra tekrar yukarı kırılım sinyali veriyor. Trend ivmesi oldukça güçlü.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-               detail = "Ana yön Yukarı ancak M1 ve M3 kendi içlerinde uyumsuz dalgalanıyor. Net bir yapı onayı gelene kadar işlem yapmak riskli.";
-              }
-           }
-        }
-     }
-   else if (macro_bear)
-     {
-      if (t_m15 == 1) // M15 is in a Pullback (Up) against Macro
-        {
-         if (p_m15 >= InpGoodPullbackPct && t_m1 == -1 && t_m3 == -1)
-           {
-            decision = "✅ YAPISAL UYUM: İdeal Düzeltme Tamamlandı";
-            detail = "Makro trend AŞAĞI. M15 yapısı yeterli pahalılık bölgesine (premium) ulaştı. Alt zaman dilimi tetikleyicileri (M1/M3) ana trend yönüne dönüş sinyali üretiyor. Trendin devam etme ihtimali yüksek.";
-           }
-         else if (t_m1 == 1 && t_m3 == 1 && p_m15 < 30.0)
-           {
-            decision = "⚡ YAPISAL UYUM: Derin Düzeltme Başlangıcı";
-            detail = "Makro trend AŞAĞI olmasına rağmen, M15 yapısı yukarı yönlü kırıldı ve henüz pahalılık bölgesine ulaşmadı. Kısa vadeli yukarı yönlü (Counter-Trend) momentum güçlü, ancak bu makro trende terstir.";
-           }
-         else
-           {
-            decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-            detail = "M15 yukarı çıkıyor (düzeltme). Ancak M1 ve M3 kendi aralarında uyumsuz. Bu bir trend başlangıcı değil, fiyatın denge arayışıdır.";
-           }
-        }
-      else if (t_m15 == -1) // M15 is DOWN (Aligned with Macro)
-        {
-         if (t_m5 == 1) // M5 is pulling back up
-           {
-            if (p_m15 >= InpGoodPullbackPct && t_m1 == -1 && t_m3 == -1)
-              {
-               decision = "✅ YAPISAL UYUM: Güçlü Trend Devamı";
-               detail = "M15 Aşağı yönde ve pahalılık bölgesinde. M5 düzeltmesini bitirirken Tetik Grubu (M1/M3) asıl yöne uyum sağladı. Aşağı yönlü genişleme devam edebilir.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Kısa Süreli Tepki";
-               detail = "M15 Aşağı iniyor ancak M5 şu an fiyatı yukarı çekiyor. M1 ve M3 yapısı dönüş için yeterli onayı vermedi. Henüz asıl trende girilmiş değil.";
-              }
-           }
-         else // M15 DOWN, M5 DOWN
-           {
-            if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 <= 10.0)
-              {
-               decision = "⚠️ RİSKLİ YAPI: Aşırı Şişkin (Overextended)";
-               detail = "Ana zaman dilimlerinde (M15 ve M5) fiyat son kırılımdan bu yana hiç geri çekilme (pullback) yapmadı. Bu seviyelerden ana trend yönlü beklentiye girmek yapısal olarak mantıksızdır, düzeltme beklenmeli.";
-              }
-            else if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 > 10.0)
-              {
-               decision = "✅ YAPISAL UYUM: Kırılım Gerçekleşiyor (Breakout)";
-               detail = "M15 daha önce düzeltmesini (pullback) tamamlamış ve şu an yapısal desteği kırmak üzere ivmeleniyor. Makro ve mikro trendler tamamen aynı yönde.";
-              }
-            else if (t_m1 == -1 && t_m3 == -1)
-              {
-               decision = "✅ YAPISAL UYUM: Ara Düzeltme Devamı";
-               detail = "Makro ve M15 uyumlu. Fiyat M15'te sığ bir tepki verdikten sonra tekrar aşağı kırılım sinyali veriyor. Ayı momentumu devam ediyor.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-               detail = "Ana yön Aşağı ancak M1 ve M3 kendi içlerinde uyumsuz dalgalanıyor. Piyasanın yön bulması beklenmeli.";
-              }
-           }
-        }
-     }
-   else
-     {
-      decision = "⚠️ YAPISAL KARARSIZLIK (Range / Testere)";
-      detail = "Makro trendler (H1 ve M30) birbiriyle uyumsuz durumda. Piyasa konsolidasyon (yatay) sürecinde, büyük zaman diliminde net bir yön tayini yok.";
-     }
-
-   // --- MOMENTUM REJECTION NOTU ---
-   string momentum_note = "";
-
-   if (mp_h1 >= InpMomentumMinPeak && (mp_h1 - p_h1) >= InpMomentumMinBounce) momentum_note += "  └ [H1] Zirveden %" + DoubleToString(mp_h1 - p_h1, 1) + " döndü. " + (t_h1 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m30 >= InpMomentumMinPeak && (mp_m30 - p_m30) >= InpMomentumMinBounce) momentum_note += "  └ [M30] Zirveden %" + DoubleToString(mp_m30 - p_m30, 1) + " döndü. " + (t_m30 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m15 >= InpMomentumMinPeak && (mp_m15 - p_m15) >= InpMomentumMinBounce) momentum_note += "  └ [M15] Zirveden %" + DoubleToString(mp_m15 - p_m15, 1) + " döndü. " + (t_m15 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m5 >= InpMomentumMinPeak && (mp_m5 - p_m5) >= InpMomentumMinBounce) momentum_note += "  └ [M5] Zirveden %" + DoubleToString(mp_m5 - p_m5, 0) + " döndü. " + (t_m5 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m3 >= InpMomentumMinPeak && (mp_m3 - p_m3) >= InpMomentumMinBounce) momentum_note += "  └ [M3] Zirveden %" + DoubleToString(mp_m3 - p_m3, 0) + " döndü. " + (t_m3 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-
-   string final_momentum_str = "";
-   if (momentum_note != "")
-     {
-      final_momentum_str = "🚀 İVME (MOMENTUM):\n" + momentum_note + "  * Fiyat düzeltmeyi sert reddetti, ana trend yönünde tepki güçlü!\n\n";
-     }
-
-   string risk_advice = "";
-   if (StringFind(decision, "Aşırı Şişkin") != -1)
-     {
-      risk_advice = "🔴 RİSKLİ BÖLGE: Mevcut seviyeden trend yönünde beklentiye girmek yapısal olarak yanlıştır. Fiyatın sağlıklı bir düzeltme (pullback) yapması beklenmelidir.";
-     }
-   else if (StringFind(decision, "İdeal Düzeltme") != -1 || StringFind(decision, "Güçlü Trend") != -1)
-     {
-      risk_advice = "🟢 OPTİMAL BÖLGE: Zaman dilimleri tam uyum içinde. Fiyat ideal iskontoda ve trendin devam etme olasılığı çok yüksek.";
-     }
-   else if (StringFind(decision, "Kırılım Gerçekleşiyor") != -1 || StringFind(decision, "Ara Düzeltme") != -1)
-     {
-      risk_advice = "🟡 KABUL EDİLEBİLİR RİSK: Fiyat halihazırda düzeltmesini yapmış ve yapıyı kırmak üzere. Momentum yönlü hareket izlenebilir.";
-     }
-   else if (StringFind(decision, "Derin Düzeltme") != -1)
-     {
-      risk_advice = "🟠 YÜKSEK RİSK (Counter-Trend): Kısa zaman diliminde oluşan momentuma karşı işlem almak (Scalp) mümkündür ancak ana trende terstir. Düşük lot tavsiye edilir.";
-     }
-   else if (StringFind(decision, "Düzensiz Fiyat Hareketi") != -1 || StringFind(decision, "Kısa Süreli Tepki") != -1)
-     {
-      risk_advice = "🔴 UYUMSUZLUK: Yapılar birbiriyle çelişiyor. Trend henüz olgunlaşmadı veya fake-out (sahte kırılım) riski var. İzlemede kalın.";
-     }
-   else
-     {
-      risk_advice = "🔴 BEKLEME ZAMANI: Piyasa yapısında netlik yok. Yeni bir impulsif hareketin oluşumu beklenmelidir.";
-     }
-
-   string msg2 = "🚨 [" + Symbol() + "] BÖLÜM 2/2\n\n";
-   if(InpTestMode) msg2 = "🧪 [TEST MODU - " + Symbol() + "] BÖLÜM 2/2\n\n";
-
-   msg2 += final_momentum_str;
-   msg2 += "🤖 PİYASA DURUMU:\n  " + decision + "\n\n";
-   msg2 += "📝 YAPI ANALİZİ:\n  " + detail + "\n\n";
-   msg2 += "⚠️ ALGORİTMİK SONUÇ:\n  " + risk_advice;
-
-   if(InpAlertPopup)
-     {
-      Alert(msg1);
-      Alert(msg2);
-     }
-   if(InpAlertPush)
-     {
-      SendNotification(msg1);
-      SendNotification(msg2);
-     }
-
-   g_alert_bar_index = current_bar_i;
-   return true;
-  }
 
 //+------------------------------------------------------------------+
 //| Custom indicator initialization function                         |
@@ -1708,10 +1370,6 @@ int OnCalculate(const int rates_total,
       g_last_alert_maj_h = 0;
       g_last_alert_maj_l = 0;
       g_last_alert_trend = 0;
-      g_level1_triggered = false;
-      g_level2_triggered = false;
-      g_level1_missed = false;
-      g_level2_missed = false;
 
       ObjectsDeleteAll(0, "Structure_");
       ObjectsDeleteAll(0, "Minor_");
@@ -1844,36 +1502,6 @@ int OnCalculate(const int rates_total,
 
    if(last_idx > 0 && (Period() == PERIOD_M1))
      {
-      int live_trend = 0;
-      double live_pct = 0.0;
-      double temp_h_val, temp_l_val; datetime temp_th_val, temp_tl_val;
-      double temp_mpct_val;
-
-      // Calculate live_pct directly from live M1 state
-      double h_m1 = g_state_curr.maj_h;
-      double l_m1 = g_state_curr.maj_l;
-      live_trend = g_state_curr.maj_tr;
-
-      if (h_m1 != EMPTY_VALUE && l_m1 != EMPTY_VALUE && h_m1 != l_m1) {
-          double range = h_m1 - l_m1;
-          double live_price = close[last_idx];
-          if (live_trend == 1) {
-              live_pct = ((h_m1 - live_price) / range) * 100.0;
-              if (live_price >= h_m1) live_pct = 0;
-          } else {
-              live_pct = ((live_price - l_m1) / range) * 100.0;
-              if (live_price <= l_m1) live_pct = 0;
-          }
-          if (live_pct < 0) live_pct = 0;
-      }
-
-      if (true)
-        {
-         // Reset triggers if swing changed (only when fully confirmed by a bar close / definitive state update)
-         // Kullanıcının Spam ve Kapanış talebi: "swing çizgisinin üstünde altında BİR KERE KAPANIŞ OLUR 1 kere atar"
-         // Anlık iğnelerde (tick) spam atmasını engellemek için kapanışı bekliyoruz (inside_last == false) veya
-         // sadece bar kapandığında state güncellendiği için geçmiş history tablosunu (g_state_hist) referans alıyoruz.
-
          if (g_state_hist.maj_h != g_last_alert_maj_h ||
              g_state_hist.maj_l != g_last_alert_maj_l ||
              g_state_hist.maj_tr != g_last_alert_trend)
@@ -1888,63 +1516,11 @@ int OnCalculate(const int rates_total,
                    if(InpAlertPush)  SendNotification(trend_msg);
                }
               }
-            g_level1_triggered = false;
-            g_level2_triggered = false;
-            g_level1_missed = false;
-            g_level2_missed = false;
             g_last_alert_maj_h = g_state_hist.maj_h;
             g_last_alert_maj_l = g_state_hist.maj_l;
             g_last_alert_trend = g_state_hist.maj_tr;
            }
-
-         bool trig1 = false;
-         bool trig2 = false;
-         bool is_revisit_1 = false;
-         bool is_revisit_2 = false;
-
-         // "100'e gelince bildirim atıyor onu kökten çöz"
-         // live_pct >= 98.0 demek artık trendin sınırında olması demektir. Bu durumda %100 veya %99 pull back
-         // spam bildirim atmamalı. Çünkü bu an kırılımdır ve "Trend Döndü!" mesajı atılmalıdır.
-         if(live_pct < 98.0)
-           {
-            // Fiyatın hedeften (örn 40) çok uzakta (örn 88) olması durumunda sahte "40" bildirimini engellemek için,
-            // tetiklenme şartını (live_pct) hedefe olan belli bir toleransla sınırlandırıyoruz.
-            // Toleransı (örneğin hedef + 10 puan) yapıyoruz ki hem çok hızlı geçen/atlayan barlarda bildirimi yakalayabilsin
-            // hem de sertçe 88'e çıkan bir fiyat, geri çekilip 40'a geldiğinde hakkı yanmadığı için (g_level_triggered=true yapmadık)
-            // tekrar kesinlikle bildirim atabilsin.
-
-            // Eğer fiyat tolerans bandını çoktan geçmişse (örn: 80'deyse) ve bildirim atmadıysa "missed" bayrağı kalkar.
-            if(live_pct > InpTriggerLevel1 + 10.0 && !g_level1_triggered) g_level1_missed = true;
-            if(live_pct > InpTriggerLevel2 + 10.0 && !g_level2_triggered) g_level2_missed = true;
-
-            if (InpNotificationFilter)
-              {
-               trig1 = (live_pct >= InpTriggerLevel1 && live_pct < InpTriggerLevel2 && !g_level1_triggered);
-               trig2 = (live_pct >= InpTriggerLevel2 && live_pct < 100.0 && !g_level2_triggered);
-              }
-            else
-              {
-               trig1 = (live_pct >= InpTriggerLevel1 && live_pct <= InpTriggerLevel1 + 10.0 && !g_level1_triggered);
-               trig2 = (live_pct >= InpTriggerLevel2 && live_pct <= InpTriggerLevel2 + 10.0 && !g_level2_triggered);
-              }
-
-            if(trig1 && g_level1_missed) is_revisit_1 = true;
-            if(trig2 && g_level2_missed) is_revisit_2 = true;
-           }
-
-         if(InpEnableAlertMTFLevels && (trig1 || trig2))
-           {
-            int trigger_lvl = trig2 ? 2 : 1;
-            bool is_revisit = (trigger_lvl == 2) ? is_revisit_2 : is_revisit_1;
-            bool success = TriggerMTFAlert(last_idx, time[last_idx], close[last_idx], trigger_lvl, is_revisit);
-            if(success) {
-               if(trig1) { g_level1_triggered = true; g_level1_missed = false; }
-               if(trig2) { g_level2_triggered = true; g_level2_missed = false; }
-            }
-           }
-        }
      }
-
    // 🧪 TEST TRIGGER EXECUTION (Yalnızca bir kez ve en güncel veriler işlendikten sonra çalıştırılır)
    static bool is_test_run = false;
    if (prev_calculated == 0) is_test_run = false; // Reset on re-compile/re-attach
@@ -1977,12 +1553,7 @@ int OnCalculate(const int rates_total,
            is_test_run = true;
        }
 
-       // TEST TRIGGER FOR MTF LEVELS
-       if (InpTestMode && !is_test_run) {
-           TriggerMTFAlert(last_idx, TimeCurrent(), close[last_idx], 1, false);
-           is_test_run = true;
-       }
-       if(!InpTestMode && !InpTestTradeExecution) is_test_run = true; // prevent infinite false state if both are off
+       if(!InpTestTradeExecution) is_test_run = true; // prevent infinite false state if both are off
    }
 
    return(rates_total);
