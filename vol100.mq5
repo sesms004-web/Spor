@@ -481,7 +481,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    int m5_points = 0;
    bool m5_momentum = ((mp_m5 - p_m5) >= 20.0);
    bool is_m5_aligned = (t_m5 == trigger_dir);
-   bool is_m5_deep = (mp_m5 >= InpM5MinPullback);
+   bool is_m5_deep = (mp_m5 >= InpPullbackM5);
    bool is_m5_duplicate = (MathAbs(h_m5 - h_m15) < Point() * 5 && MathAbs(l_m5 - l_m15) < Point() * 5);
 
    string stats_m5 = "[Maks Çekilme: %" + DoubleToString(mp_m5, 2) + " | Anlık: %" + DoubleToString(p_m5, 2) + "] ";
