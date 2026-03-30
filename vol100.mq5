@@ -507,7 +507,7 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
 
    if(st.maj_h != EMPTY_VALUE && st.maj_l != EMPTY_VALUE && st.maj_h != st.maj_l)
      {
-      double range = st.tmp_h - st.maj_l;
+      double range = 0;
       if (trend == 1) {
           range = st.tmp_h - st.maj_l;
           if (range > 0) {
