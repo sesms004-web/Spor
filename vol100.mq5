@@ -491,7 +491,7 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
             if(bid < low[i]) low[i] = bid;
            }
 
-         ProcessBar(i, open, high, low, close, time, st, true, false); // false = do not draw UI
+         ProcessBarMathOnly(i, high, low, close, st);
         }
      }
 
@@ -507,40 +507,22 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
 
    if(st.maj_h != EMPTY_VALUE && st.maj_l != EMPTY_VALUE && st.maj_h != st.maj_l)
      {
-      if(trend == 1)
-        {
-         // Find the true peak since the origin (maj_l_i) to current bar
-         double true_peak = FindTrueHigh(high, st.maj_l_i, copied - 1);
-         // Find the deepest pullback from that true peak to current bar
-         int peak_idx = copied - 1;
-         for(int i = st.maj_l_i; i < copied; i++) { if(high[i] == true_peak) { peak_idx = i; break; } }
-         double true_bottom = FindTrueLow(low, peak_idx, copied - 1);
-
-         double range = true_peak - st.maj_l;
-         if (range > 0)
-           {
-            pct = ((true_peak - live_p) / range) * 100.0;
-            max_pct = ((true_peak - true_bottom) / range) * 100.0;
-           }
-         if(live_p >= true_peak) pct = 0;
-        }
-      else if(trend == -1)
-        {
-         // Find the true bottom since the origin (maj_h_i) to current bar
-         double true_bottom = FindTrueLow(low, st.maj_h_i, copied - 1);
-         // Find the highest pullback from that true bottom to current bar
-         int bot_idx = copied - 1;
-         for(int i = st.maj_h_i; i < copied; i++) { if(low[i] == true_bottom) { bot_idx = i; break; } }
-         double true_peak = FindTrueHigh(high, bot_idx, copied - 1);
-
-         double range = st.maj_h - true_bottom;
-         if (range > 0)
-           {
-            pct = ((live_p - true_bottom) / range) * 100.0;
-            max_pct = ((true_peak - true_bottom) / range) * 100.0;
-           }
-         if(live_p <= true_bottom) pct = 0;
-        }
+      double range = st.tmp_h - st.maj_l;
+      if (trend == 1) {
+          range = st.tmp_h - st.maj_l;
+          if (range > 0) {
+              pct = ((st.tmp_h - live_p) / range) * 100.0;
+              max_pct = ((st.tmp_h - st.tmp_l) / range) * 100.0;
+              if (live_p >= st.tmp_h) pct = 0;
+          }
+      } else if (trend == -1) {
+          range = st.maj_h - st.tmp_l;
+          if (range > 0) {
+              pct = ((live_p - st.tmp_l) / range) * 100.0;
+              max_pct = ((st.tmp_h - st.tmp_l) / range) * 100.0;
+              if (live_p <= st.tmp_l) pct = 0;
+          }
+      }
      }
 
    if(pct < 0) pct = 0;
