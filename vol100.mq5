@@ -499,15 +499,19 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
       if (trend == 1) {
           range = st.tmp_h - st.maj_l;
           if (range > 0) {
+              double true_bottom = FindTrueLow(low, st.tmp_h_i, copied - 1);
+              if (true_bottom == EMPTY_VALUE) true_bottom = st.tmp_h; // Fallback
               pct = ((st.tmp_h - live_p) / range) * 100.0;
-              max_pct = ((st.tmp_h - st.tmp_l) / range) * 100.0;
+              max_pct = ((st.tmp_h - true_bottom) / range) * 100.0;
               if (live_p >= st.tmp_h) pct = 0;
           }
       } else if (trend == -1) {
           range = st.maj_h - st.tmp_l;
           if (range > 0) {
+              double true_peak = FindTrueHigh(high, st.tmp_l_i, copied - 1);
+              if (true_peak == EMPTY_VALUE) true_peak = st.tmp_l; // Fallback
               pct = ((live_p - st.tmp_l) / range) * 100.0;
-              max_pct = ((st.tmp_h - st.tmp_l) / range) * 100.0;
+              max_pct = ((true_peak - st.tmp_l) / range) * 100.0;
               if (live_p <= st.tmp_l) pct = 0;
           }
       }
