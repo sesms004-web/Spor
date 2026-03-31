@@ -645,7 +645,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    }
 
    if (total_points >= InpMinTradeScore && InpEnableAutoTradeWriter) {
-       if (current_swing_trades < InpMaxTradesPerSwing) {
+       int allowed_trades = (total_points >= 60) ? InpMaxTradesPerSwing : 1;
+       if (current_swing_trades < allowed_trades) {
 
            double sl = 0.0;
            double tp = 0.0;
@@ -690,7 +691,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
            }
        } else {
-           Print("⚠️ [AUTO-TRADE] Bu majör dalga için maksimum işlem limitine (" + IntegerToString(InpMaxTradesPerSwing) + ") ulaşıldı. Yeni sinyal gönderilmedi.");
+           string reason = (total_points < 60) ? " (Skor 60'ın altında olduğu için bu dalgada sadece 1 işleme izin verilir)" : "";
+           Print("⚠️ [AUTO-TRADE] Bu majör dalga için maksimum işlem limitine (" + IntegerToString(allowed_trades) + ") ulaşıldı" + reason + ". Yeni sinyal gönderilmedi.");
        }
    }
   }
@@ -929,6 +931,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           double ext_pct = 0;
           double break_pct = 0;
           double extreme_pt = (state.t2_h > state.t1_h) ? MathMax(state.t1_h, state.t2_h) : state.t1_h;
+          double trade_sl_anchor = state.t2_h; // İşlem SL'si sadece ufak kırılımı başlatan minör tepeye (T2) konur!
 
           if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
               double range = state.maj_h - state.maj_l;
@@ -974,7 +977,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       if(InpAlertPush) SendNotification(msg);
                   }
                   if (InpEnableTradeExecution && draw_ui) {
-                      EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong, extreme_pt);
+                      EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong, trade_sl_anchor);
                   }
                   last_alert_d1_i_bear = state.d1_i;
               }
@@ -987,6 +990,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           double ext_pct = 0;
           double break_pct = 0;
           double extreme_pt = (state.t2_l < state.t1_l) ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
+          double trade_sl_anchor = state.t2_l; // İşlem SL'si sadece ufak kırılımı başlatan minör dibe (T2) konur!
 
           if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
               double range = state.maj_h - state.maj_l;
@@ -1032,7 +1036,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       if(InpAlertPush) SendNotification(msg);
                   }
                   if (InpEnableTradeExecution && draw_ui) {
-                      EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong, extreme_pt);
+                      EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong, trade_sl_anchor);
                   }
                   last_alert_d1_i_bull = state.d1_i;
               }
