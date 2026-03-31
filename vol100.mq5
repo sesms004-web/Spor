@@ -40,6 +40,7 @@ input int    InpMinTradeScore          = 30;         // Minimum İşleme Giriş 
 input bool   InpEnableAutoTradeWriter  = true;       // MT5 Ortak Klasöre Sinyal Dosyası Gönder (Auto-Trade EA için)
 input int    InpMaxTradesPerSwing      = 2;          // Aynı Majör Dalga İçinde Maksimum Sinyal Sayısı
 input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Skorları Hesapla ve Bildir
+input bool   InpForceTestSignal        = false;      // ⚠️ [TEST] Ayarı 'True' Yapıp Kapatınca Ortak Klasöre Deneme Sinyali Atar!
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
 
@@ -643,7 +644,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        last_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
    }
 
-   if (total_points >= InpMinTradeScore && InpEnableAutoTradeWriter && !is_test) {
+   if (total_points >= InpMinTradeScore && InpEnableAutoTradeWriter) {
        if (current_swing_trades < InpMaxTradesPerSwing) {
 
            double sl = 0.0;
@@ -704,6 +705,29 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 int OnInit()
   {
    IndicatorSetString(INDICATOR_SHORTNAME, "Structure");
+
+   // --- 🧪 MANUEL TEST SİNYALİ FIRLATICI ---
+   if (InpForceTestSignal) {
+       Print("🧪 [TEST SİNYALİ] Gönderiliyor...");
+       string filename = "vol100_signal_" + Symbol() + ".txt";
+       int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
+       if (file_handle != INVALID_HANDLE) {
+           double entry = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
+           double point_size = Point();
+
+           // Sahte bir BUY işlemi simüle edelim: 100 Point (10 Pip) SL, 300 Point (30 Pip) TP
+           double sl = entry - (100 * point_size);
+           double tp = entry + (300 * point_size);
+
+           string trade_cmd = Symbol() + ",BUY," + DoubleToString(entry, 5) + "," + DoubleToString(sl, 5) + "," + DoubleToString(tp, 5);
+           FileWrite(file_handle, trade_cmd);
+           FileClose(file_handle);
+           Print("✅ [TEST BAŞARILI] Ortak Klasöre (Common) Sahte Sinyal Bırakıldı: ", trade_cmd);
+           Print("⚠️ Lütfen bir sonraki gerçek işlem için gösterge ayarlarından 'InpForceTestSignal' ayarını tekrar FALSE yapmayı unutmayın!");
+       } else {
+           Print("❌ [TEST HATASI] Ortak klasöre dosya yazılamadı! Kod: ", GetLastError());
+       }
+   }
    return(INIT_SUCCEEDED);
   }
 
