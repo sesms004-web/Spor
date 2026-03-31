@@ -502,11 +502,11 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "İdeal Bölge (Altın Vuruş) -> [+30 Skor]\n"; }
            else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "İdeal Bölgede ama Ters Yön (Riskli!) -> [0 Skor]\n"; }
        } else if (p_h1 >= 10.0) { // 10% Pullback Trade Opportunity (Live Pullback)
-           if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Erken Çekilme (%10) Onayı -> [+30 Skor]\n"; }
+           if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Yeterli Çekilme (%" + DoubleToString(p_h1, 1) + ") -> [+30 Skor]\n"; }
            else               { h1_points = 30; h1_text = "H1: " + stats_h1 + "Yeni Düzeltme (Önü Açık) -> [+30 Skor]\n"; }
        } else { // Shallow
-           if (is_h1_aligned) { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Yetersiz Çekilme (<%10) -> [0 Skor]\n"; }
-           else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Yetersiz Çekilme (<%10) -> [0 Skor]\n"; }
+           if (is_h1_aligned) { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Yetersiz Çekilme (%" + DoubleToString(p_h1, 1) + " / Min %10) -> [0 Skor]\n"; }
+           else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Yetersiz Çekilme (%" + DoubleToString(p_h1, 1) + " / Min %10) -> [0 Skor]\n"; }
        }
    }
    total_points += h1_points;
