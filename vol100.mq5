@@ -495,18 +495,18 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string stats_h1 = "[Maks Çekilme: %" + DoubleToString(mp_h1, 2) + " | Anlık: %" + DoubleToString(p_h1, 2) + "] ";
 
    if (h1_momentum) {
-       if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Sert Dönüş (İvme) -> [+30 Skor]\n"; }
-       else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Ters İvme (Tehlike) -> [0 Skor]\n"; }
+       if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Ana Yön İle Uyumlu Sert İvme (Momentum) -> [+30 Skor]\n"; }
+       else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Ana Yöne Ters Sert İvme Var (Riskli) -> [0 Skor]\n"; }
    } else {
        if (p_h1 >= 50.0) { // Premium
-           if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "İdeal Bölge (Altın Vuruş) -> [+30 Skor]\n"; }
-           else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "İdeal Bölgede ama Ters Yön (Riskli!) -> [0 Skor]\n"; }
+           if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Ana Yöne Uyumlu %50+ Mükemmel İndirim/Premium Bölgesi -> [+30 Skor]\n"; }
+           else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "%50+ İndirim Bölgesinde Ancak Ana Yöne Ters! (Riskli) -> [0 Skor]\n"; }
        } else if (p_h1 >= 10.0) { // 10% Pullback Trade Opportunity (Live Pullback)
-           if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Yeterli Çekilme (%" + DoubleToString(p_h1, 1) + ") -> [+30 Skor]\n"; }
-           else               { h1_points = 30; h1_text = "H1: " + stats_h1 + "Yeni Düzeltme (Önü Açık) -> [+30 Skor]\n"; }
+           if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Ana Yöne Uyumlu ve Anlık Çekilme Yeterli (Min %10 Şartı Sağlandı) -> [+30 Skor]\n"; }
+           else               { h1_points = 30; h1_text = "H1: " + stats_h1 + "Yeni Karşıt Düzeltme Başladı, Ana Yöne Doğru Gidecek Yeri Var -> [+30 Skor]\n"; }
        } else { // Shallow
-           if (is_h1_aligned) { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Yetersiz Çekilme (%" + DoubleToString(p_h1, 1) + " / Min %10) -> [0 Skor]\n"; }
-           else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Yetersiz Çekilme (%" + DoubleToString(p_h1, 1) + " / Min %10) -> [0 Skor]\n"; }
+           if (is_h1_aligned) { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Anlık Çekilme Yetersiz (Fiyat Henüz Esnemedi, Min %10 Lazım) -> [0 Skor]\n"; }
+           else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Anlık Çekilme Yetersiz (Fiyat Henüz Esnemedi, Min %10 Lazım) -> [0 Skor]\n"; }
        }
    }
    total_points += h1_points;
@@ -520,18 +520,18 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string stats_m30 = "[Maks Çekilme: %" + DoubleToString(mp_m30, 2) + " | Anlık: %" + DoubleToString(p_m30, 2) + "] ";
 
    if (is_m30_duplicate) {
-       m30_points = 0; m30_text = "M30: " + stats_m30 + "H1 ile aynı dalga -> [0 Skor]\n";
+       m30_points = 0; m30_text = "M30: " + stats_m30 + "Fiyat Yapısı Üst Zaman Dilimi (H1) İle Birebir Aynı, Çift Puan Önleme -> [0 Skor]\n";
    } else {
        if (m30_momentum) {
-           if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "Sert İvme (Onay) -> [+15 Skor]\n"; }
-           else                { m30_points = -5; m30_text = "M30: " + stats_m30 + "Ters İvme (Tehlike) -> [-5 Skor]\n"; }
+           if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "H1 Ana Yönüne Uyumlu Aşırı Sert İvme (Momentum Var) -> [+15 Skor]\n"; }
+           else                { m30_points = -5; m30_text = "M30: " + stats_m30 + "H1 Ana Yönüne Ters Sert İvme Var (Geri Çekebilir!) -> [-5 Skor (Ceza)]\n"; }
        } else {
            if (p_m30 >= 50.0) {
-               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Şişkin Bölgede Destek -> [+10 Skor]\n"; }
-               else                { m30_points = -10; m30_text = "M30: " + stats_m30 + "Şişkin Bölgede Direnç -> [-10 Skor]\n"; }
+               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Fiyat %50+ Şişkin Bölgede Ama Ana Yöne Uyumlu -> [+10 Skor]\n"; }
+               else                { m30_points = -10; m30_text = "M30: " + stats_m30 + "Fiyat %50+ Şişkin Bölgede Ve Ana Yöne Ters (Zarar Riski!) -> [-10 Skor (Ceza)]\n"; }
            } else {
-               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Yolun Başında Destek -> [+10 Skor]\n"; }
-               else                { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Sağlıklı Düzeltme -> [+10 Skor]\n"; }
+               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Düzeltme Henüz %50'ye Ulaşmadı, Ana Yönde Fırsat Var -> [+10 Skor]\n"; }
+               else                { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Ufak (%50 Altı) Bir Karşıt Düzeltme, Ana Yöne Giderken Alan Var -> [+10 Skor]\n"; }
            }
        }
    }
@@ -546,18 +546,18 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string stats_m15 = "[Maks Çekilme: %" + DoubleToString(mp_m15, 2) + " | Anlık: %" + DoubleToString(p_m15, 2) + "] ";
 
    if (is_m15_duplicate) {
-       m15_points = 0; m15_text = "M15: " + stats_m15 + "M30 ile aynı dalga -> [0 Skor]\n";
+       m15_points = 0; m15_text = "M15: " + stats_m15 + "Fiyat Yapısı Üst Zaman Dilimi (M30) İle Birebir Aynı, Çift Puan Önleme -> [0 Skor]\n";
    } else {
        if (m15_momentum) {
-           if (is_m15_aligned) { m15_points = 10; m15_text = "M15: " + stats_m15 + "Sert İvme (Onay) -> [+10 Skor]\n"; }
-           else                { m15_points = 0;  m15_text = "M15: " + stats_m15 + "Ters İvme (Zayıf Etki) -> [0 Skor]\n"; }
+           if (is_m15_aligned) { m15_points = 10; m15_text = "M15: " + stats_m15 + "Ana Yöne Uyumlu Net Ara Momentum Var -> [+10 Skor]\n"; }
+           else                { m15_points = 0;  m15_text = "M15: " + stats_m15 + "Ana Yöne Ters Yönde Ara Momentum (Etkisiz) -> [0 Skor]\n"; }
        } else {
            if (p_m15 >= 50.0) {
-               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Şişkin Bölgede Destek -> [+5 Skor]\n"; }
-               else                { m15_points = -5; m15_text = "M15: " + stats_m15 + "Şişkin Bölgede Direnç -> [-5 Skor]\n"; }
+               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "%50+ Dinlenmiş Uyumlu Bölge -> [+5 Skor]\n"; }
+               else                { m15_points = -5; m15_text = "M15: " + stats_m15 + "%50+ Şişkin ve Ters Yön (Ufak Risk) -> [-5 Skor (Ceza)]\n"; }
            } else {
-               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Yolun Başında Destek -> [+5 Skor]\n"; }
-               else                { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Sağlıklı Düzeltme -> [+5 Skor]\n"; }
+               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Düzeltme Yolu Açık, Uyumlu Yön -> [+5 Skor]\n"; }
+               else                { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Karşıt Minör Düzeltme İşlemi Mümkün -> [+5 Skor]\n"; }
            }
        }
    }
@@ -573,24 +573,24 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string stats_m5 = "[Maks Çekilme: %" + DoubleToString(mp_m5, 2) + " | Anlık: %" + DoubleToString(p_m5, 2) + "] ";
 
    if (is_m5_duplicate) {
-       m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "M15 ile aynı dalga -> [0 Skor]\n";
+       m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Fiyat Yapısı Üst Zaman Dilimi (M15) İle Birebir Aynı, Çift Puan Önleme -> [0 Skor]\n";
    } else {
        if (m5_momentum) {
            if (is_m5_aligned) {
                if (is_m5_deep) {
-                   m5_points = 15; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme + Sert İvme -> [+15 Skor]\n";
+                   m5_points = 15; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Maksimum Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Tamamlanmış ve Ana Yöne Sert İvme Var -> [+15 Skor]\n";
                } else {
-                   m5_points = 10; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Sert İvme (Onay) -> [+10 Skor]\n";
+                   m5_points = 10; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme Şartı Sağlanmamış, Sadece Ana Yöne Sert İvme Var -> [+10 Skor]\n";
                }
            }
            else {
-               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ters İvme (Zayıf Etki) -> [0 Skor]\n";
+               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ana Yöne Ters Yönde Anlık İvme (Mikro Düzeltme İçi) -> [0 Skor]\n";
            }
        } else {
            if (is_m5_aligned && is_m5_deep) {
-               m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme Onayı -> [+5 Skor]\n";
+               m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Maksimum Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Şartı Başarıyla Tamamlanmış, Yön Uyumlu -> [+5 Skor]\n";
            } else {
-               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Çekilme Onayı Yok -> [0 Skor]\n";
+               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Maksimum Çekilme Yetersiz (Fiyat Yeterince Dinlenmedi) -> [0 Skor]\n";
            }
        }
    }
