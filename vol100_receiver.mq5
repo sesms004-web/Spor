@@ -10,6 +10,7 @@
 #include <Trade\Trade.mqh>
 
 input double InpRiskUSD = 20.0; // İşlem Başına Riske Atılacak Tutar ($)
+input string InpSignalSymbol = ""; // Sinyal Dosyasındaki Sembol Adı (Örn: XAUUSD) Boşsa Grafiği Kullanır
 input int InpPollDelayMs = 500; // Dosya Okuma Gecikmesi (Milisaniye)
 
 CTrade trade;
@@ -38,7 +39,8 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
   {
-   string filename = "vol100_signal_" + Symbol() + ".txt";
+   string listen_sym = (InpSignalSymbol != "") ? InpSignalSymbol : Symbol();
+   string filename = "vol100_signal_" + listen_sym + ".txt";
 
    // Eğer dosya yoksa direkt çık
    if (!FileIsExist(filename, FILE_COMMON)) return;
@@ -75,17 +77,20 @@ void OnTimer()
    double sl_p = StringToDouble(parts[3]);
    double tp_p = StringToDouble(parts[4]);
 
-   if (sym != Symbol()) {
-       Print("⚠️ [VOL100 RECEIVER] Yanlış Sembol! Gelen: ", sym, " Robot Sembolü: ", Symbol());
+   // Sinyalin ait olduğu sembol kontrolü
+   // Eğer özel bir sinyal sembolü tanımladıysak, dosyanın o isme ait olduğunu doğrula.
+   if (sym != listen_sym) {
+       Print("⚠️ [VOL100 RECEIVER] Yanlış Sembol! Gelen Sinyal: ", sym, " Beklenen Sinyal: ", listen_sym);
        return;
    }
 
    // --- RİSK & LOT HESAPLAMASI (20$ SABİT RİSK) ---
+   // İşlemi HER ZAMAN grafiğin kendi orijinal sembolü üzerinden açacağız (Örn: XAUUSDr)
    double tick_value = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_VALUE); // 1 lot için 1 tick/puan değeri ($)
    double tick_size = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_SIZE);
 
    if (tick_value <= 0 || tick_size <= 0) {
-       Print("❌ [VOL100 RECEIVER] Sembol tick değeri okunamadı!");
+       Print("❌ [VOL100 RECEIVER] Sembol tick değeri okunamadı: ", Symbol());
        return;
    }
 
@@ -118,17 +123,17 @@ void OnTimer()
    if (dir == "BUY") {
        double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
        if (trade.Buy(final_lot, Symbol(), ask, sl_p, tp_p, "VOL100 Auto-Trade")) {
-           Print("✅ [VOL100 RECEIVER] BUY İşlemi Açıldı! Lot: ", final_lot, " SL: ", sl_p, " TP: ", tp_p, " (Risk: $", InpRiskUSD, ")");
+           Print("✅ [VOL100 RECEIVER] BUY İşlemi Açıldı (", Symbol(), ")! Lot: ", final_lot, " SL: ", sl_p, " TP: ", tp_p, " (Risk: $", InpRiskUSD, ")");
        } else {
-           Print("❌ [VOL100 RECEIVER] BUY İşlemi BAŞARISIZ! Hata Kodu: ", trade.ResultRetcode());
+           Print("❌ [VOL100 RECEIVER] BUY İşlemi BAŞARISIZ! Sembol: ", Symbol(), " Hata Kodu: ", trade.ResultRetcode());
        }
    }
    else if (dir == "SELL") {
        double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
        if (trade.Sell(final_lot, Symbol(), bid, sl_p, tp_p, "VOL100 Auto-Trade")) {
-           Print("✅ [VOL100 RECEIVER] SELL İşlemi Açıldı! Lot: ", final_lot, " SL: ", sl_p, " TP: ", tp_p, " (Risk: $", InpRiskUSD, ")");
+           Print("✅ [VOL100 RECEIVER] SELL İşlemi Açıldı (", Symbol(), ")! Lot: ", final_lot, " SL: ", sl_p, " TP: ", tp_p, " (Risk: $", InpRiskUSD, ")");
        } else {
-           Print("❌ [VOL100 RECEIVER] SELL İşlemi BAŞARISIZ! Hata Kodu: ", trade.ResultRetcode());
+           Print("❌ [VOL100 RECEIVER] SELL İşlemi BAŞARISIZ! Sembol: ", Symbol(), " Hata Kodu: ", trade.ResultRetcode());
        }
    }
   }
