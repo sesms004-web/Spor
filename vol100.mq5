@@ -928,10 +928,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           // Bearish CHoCH confirmed!
           double ext_pct = 0;
           double break_pct = 0;
+          double extreme_pt = (state.t2_h > state.t1_h) ? MathMax(state.t1_h, state.t2_h) : state.t1_h;
+
           if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
               double range = state.maj_h - state.maj_l;
-              double extreme_pt = FindTrueHigh(high, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
-              if(extreme_pt == EMPTY_VALUE) extreme_pt = (state.t2_h > state.t1_h) ? MathMax(state.t1_h, state.t2_h) : state.t1_h;
+              double true_h = FindTrueHigh(high, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
+              if(true_h != EMPTY_VALUE) extreme_pt = true_h;
 
               if (state.maj_tr == 1) { // Up Trend Top Reversal
                   ext_pct = ((extreme_pt - state.maj_l) / range) * 100.0;
@@ -984,10 +986,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           // Bullish CHoCH confirmed!
           double ext_pct = 0;
           double break_pct = 0;
+          double extreme_pt = (state.t2_l < state.t1_l) ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
+
           if (state.maj_h != EMPTY_VALUE && state.maj_l != EMPTY_VALUE && state.maj_h != state.maj_l) {
               double range = state.maj_h - state.maj_l;
-              double extreme_pt = FindTrueLow(low, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
-              if(extreme_pt == EMPTY_VALUE) extreme_pt = (state.t2_l < state.t1_l) ? MathMin(state.t1_l, state.t2_l) : state.t1_l;
+              double true_l = FindTrueLow(low, state.maj_h_i < state.maj_l_i ? state.maj_l_i : state.maj_h_i, i);
+              if(true_l != EMPTY_VALUE) extreme_pt = true_l;
 
               if (state.maj_tr == 1) { // Up Trend Pullback Continuation
                   ext_pct = ((state.maj_h - extreme_pt) / range) * 100.0;
