@@ -660,7 +660,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                } else { // Likidite alınmadı (Zayıf)
                    double raw_sl = ext_pt;
                    double dist = entry - raw_sl;
-                   sl = raw_sl - dist; // Zayıf dibin 1 boy daha altına (güvenlik)
+                   sl = raw_sl - (dist * 0.5); // Zayıf dibin 0.5 boy daha altına (toplam 1.5 boy SL mesafesi)
                    double new_dist = entry - sl;
                    tp = entry + (new_dist * 3.0); // 1:3 RR
                }
@@ -672,7 +672,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                } else {
                    double raw_sl = ext_pt;
                    double dist = raw_sl - entry;
-                   sl = raw_sl + dist; // Zayıf tepenin 1 boy daha üstüne (güvenlik)
+                   sl = raw_sl + (dist * 0.5); // Zayıf tepenin 0.5 boy daha üstüne (toplam 1.5 boy SL mesafesi)
                    double new_dist = sl - entry;
                    tp = entry - (new_dist * 3.0); // 1:3 RR
                }
