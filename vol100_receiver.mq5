@@ -16,6 +16,19 @@ input int InpPollDelayMs = 500; // Dosya Okuma Gecikmesi (Milisaniye)
 CTrade trade;
 
 //+------------------------------------------------------------------+
+//| Get Base Symbol (Strips broker suffixes like 'r', '.m', '_c')    |
+//+------------------------------------------------------------------+
+string GetBaseSymbol(string full_symbol)
+  {
+   // Genellikle Forex ve Altın (Metaller) 6 karakterdir (Örn: EURUSD, XAUUSD)
+   // Eğer sembol 6 karakterden uzunsa (Örn: XAUUSDr, EURUSD.m), sadece ilk 6 karakteri al.
+   if (StringLen(full_symbol) > 6) {
+       return StringSubstr(full_symbol, 0, 6);
+   }
+   return full_symbol;
+  }
+
+//+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
@@ -39,7 +52,8 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
   {
-   string listen_sym = (InpSignalSymbol != "") ? InpSignalSymbol : Symbol();
+   string base_sym = GetBaseSymbol(Symbol()); // Otomatik 'XAUUSDr' -> 'XAUUSD' çevirici
+   string listen_sym = (InpSignalSymbol != "") ? InpSignalSymbol : base_sym;
    string filename = "vol100_signal_" + listen_sym + ".txt";
 
    // Eğer dosya yoksa direkt çık
