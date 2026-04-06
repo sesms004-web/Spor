@@ -508,9 +508,9 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        } else if (p_h1 >= 10.0) { // 10% Pullback Trade Opportunity (Live Pullback)
            if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Ana Yöne Uyumlu ve Anlık Çekilme Yeterli (Min %10 Şartı Sağlandı) -> [+30 Skor]\n"; }
            else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Ana Yöne Ters! Fiyat Çoktan Düzeltmeye Başlamış, Her An Ana Trende Dönebilir! (Riskli) -> [0 Skor]\n"; }
-       } else { // Shallow
-           if (is_h1_aligned) { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Anlık Çekilme Yetersiz (Fiyat Henüz Esnemedi, Min %10 Lazım) -> [0 Skor]\n"; }
-           else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Anlık Çekilme Yetersiz (Fiyat Henüz Esnemedi, Min %10 Lazım) -> [0 Skor]\n"; }
+       } else { // Shallow (p_h1 < 10.0)
+           if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "H1 Trendi Çok Güçlü (Çekilme <%10), Ana Yöne Uyumlu Kırılım Geldi (Trende Katıl) -> [+30 Skor]\n"; }
+           else               { h1_points = 30; h1_text = "H1: " + stats_h1 + "H1 Trendi Çok Uzadı (Çekilme <%10), Ana Yöne Ters Yeni Karşıt Düzeltme Fırsatı Başladı (Önü Açık!) -> [+30 Skor]\n"; }
        }
    }
    total_points += h1_points;
