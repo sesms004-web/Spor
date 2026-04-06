@@ -467,6 +467,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, live_price, h_m30, l_m30, th_m30, tl_m30);
    GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, live_price, h_h1, l_h1, th_h1, tl_h1);
 
+   double true_live_m1 = p_m1; // M1'in gerçek anlık çekilmesini (kırılım anındaki esnemeyi) koru
+
    // Override the triggered timeframe's direction safely (because during a CHoCH bar,
    // the history scan might still read the old trend if the bar hasn't closed)
    if (trigger_dir != 0) {
@@ -645,7 +647,13 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    }
 
    if (total_points >= InpMinTradeScore && InpEnableAutoTradeWriter) {
-       int allowed_trades = (total_points >= 50) ? InpMaxTradesPerSwing : 1;
+       // --- DİNAMİK M1 ÇEKİLME İŞLEM LİMİTİ ---
+       // Kural: Eğer M1 dalgasının Maksimum Çekilmesi (%60) seviyesine ulaşmışsa VE
+       // kırılım anındaki Anlık Çekilme esnemesi (%50) sınırının altına DÜŞMEDİYSE, 2 işleme izin ver.
+       // Aksi takdirde (örneğin %40'ta sığ kırılımsa veya %60'tan %49'a esnediyse) SADECE 1 işleme izin ver.
+       bool is_deep_elastic = (mp_m1 >= 60.0 && true_live_m1 >= 50.0);
+       int allowed_trades = is_deep_elastic ? InpMaxTradesPerSwing : 1;
+
        if (current_swing_trades < allowed_trades) {
 
            double sl = 0.0;
@@ -691,7 +699,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
            }
        } else {
-           string reason = (total_points < 50) ? " (Skor 50'nin altında olduğu için bu dalgada sadece 1 işleme izin verilir)" : "";
+           string reason = (!is_deep_elastic) ? " (M1 Çekilmesi yeterince derin (%60) veya esnek (%50) olmadığı için sadece 1 işleme izin verildi)" : "";
            Print("⚠️ [AUTO-TRADE] Bu majör dalga için maksimum işlem limitine (" + IntegerToString(allowed_trades) + ") ulaşıldı" + reason + ". Yeni sinyal gönderilmedi.");
        }
    }
