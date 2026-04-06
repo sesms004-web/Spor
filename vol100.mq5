@@ -645,7 +645,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    }
 
    if (total_points >= InpMinTradeScore && InpEnableAutoTradeWriter) {
-       int allowed_trades = (total_points >= 60) ? InpMaxTradesPerSwing : 1;
+       int allowed_trades = (total_points >= 50) ? InpMaxTradesPerSwing : 1;
        if (current_swing_trades < allowed_trades) {
 
            double sl = 0.0;
@@ -691,7 +691,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
            }
        } else {
-           string reason = (total_points < 60) ? " (Skor 60'ın altında olduğu için bu dalgada sadece 1 işleme izin verilir)" : "";
+           string reason = (total_points < 50) ? " (Skor 50'nin altında olduğu için bu dalgada sadece 1 işleme izin verilir)" : "";
            Print("⚠️ [AUTO-TRADE] Bu majör dalga için maksimum işlem limitine (" + IntegerToString(allowed_trades) + ") ulaşıldı" + reason + ". Yeni sinyal gönderilmedi.");
        }
    }
