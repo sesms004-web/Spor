@@ -16,6 +16,24 @@ input int InpPollDelayMs = 500; // Dosya Okuma Gecikmesi (Milisaniye)
 CTrade trade;
 
 //+------------------------------------------------------------------+
+//| Ayni sembolde acik pozisyon var mi kontrol et                    |
+//+------------------------------------------------------------------+
+bool HasOpenPosition(string target_symbol)
+  {
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0)
+        {
+         string pos_sym = PositionGetString(POSITION_SYMBOL);
+         if(pos_sym == target_symbol)
+            return true;
+        }
+     }
+   return false;
+  }
+
+//+------------------------------------------------------------------+
 //| Get Base Symbol (Strips broker suffixes like 'r', '.m', '_c')    |
 //+------------------------------------------------------------------+
 string GetBaseSymbol(string full_symbol)
@@ -95,6 +113,12 @@ void OnTimer()
    // Eğer özel bir sinyal sembolü tanımladıysak, dosyanın o isme ait olduğunu doğrula.
    if (sym != listen_sym) {
        Print("⚠️ [VOL100 RECEIVER] Yanlış Sembol! Gelen Sinyal: ", sym, " Beklenen Sinyal: ", listen_sym);
+       return;
+   }
+
+   // --- AÇIK POZİSYON (CONCURRENT TRADE) KONTROLÜ ---
+   if (HasOpenPosition(Symbol())) {
+       Print("⚠️ [VOL100 RECEIVER] Hali hazırda açık bir ", Symbol(), " işlemi bulunuyor. Yeni sinyal reddedildi (Sinyal dosyası silindi).");
        return;
    }
 

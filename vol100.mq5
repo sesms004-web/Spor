@@ -50,6 +50,12 @@ datetime g_last_alert_time = 0;
 int g_alert_bar_index = -1;
 datetime g_anchor_time = 0;
 
+//--- Virtual Trade Tracking ---
+bool g_virtual_trade_active = false;
+int g_virtual_trade_dir = 0; // 1 = BUY, -1 = SELL
+double g_virtual_sl = 0.0;
+double g_virtual_tp = 0.0;
+
 double g_last_alert_maj_h = 0;
 double g_last_alert_maj_l = 0;
 int g_last_alert_trend = 0;
@@ -647,10 +653,14 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    }
 
    if (total_points >= InpMinTradeScore && InpEnableAutoTradeWriter) {
+
+       // Eğer halihazırda takip ettiğimiz sanal bir işlem varsa, yeni sinyali çöpe at!
+       if (g_virtual_trade_active) {
+           Print("⚠️ [VIRTUAL TRADE] İçeride aktif bir sanal işlem var (SL/TP bekleniyor). Yeni sinyal reddedildi.");
+           return;
+       }
+
        // --- DİNAMİK M1 ÇEKİLME İŞLEM LİMİTİ ---
-       // Kural: Eğer M1 dalgasının Maksimum Çekilmesi (%60) seviyesine ulaşmışsa VE
-       // kırılım anındaki Anlık Çekilme esnemesi (%50) sınırının altına DÜŞMEDİYSE, 2 işleme izin ver.
-       // Aksi takdirde (örneğin %40'ta sığ kırılımsa veya %60'tan %49'a esnediyse) SADECE 1 işleme izin ver.
        bool is_deep_elastic = (mp_m1 >= 60.0 && true_live_m1 >= 50.0);
        int allowed_trades = is_deep_elastic ? InpMaxTradesPerSwing : 1;
 
@@ -695,6 +705,14 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                FileClose(file_handle);
                Print("✅ [AUTO-TRADE] Sinyal Gönderildi: ", trade_cmd);
                current_swing_trades++; // Aynı dalgadaki işlem sayısını artır
+
+               // Sanal İşlemi Başlat
+               g_virtual_trade_active = true;
+               g_virtual_trade_dir = trigger_dir;
+               g_virtual_sl = sl;
+               g_virtual_tp = tp;
+               Print("🟢 [VIRTUAL TRADE] Sanal İşlem Takipli Başladı! Yön: ", dir_str, " SL: ", sl, " TP: ", tp);
+
            } else {
                Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
            }
@@ -1509,6 +1527,30 @@ int OnCalculate(const int rates_total,
         }
       DrawLine("LiveLeg", time[g_state_curr.lp_i], g_state_curr.lp_p, time[leg_i], leg_p, InpColorMin, 1, STYLE_DOT);
      }
+
+   // --- 🕵️‍♂️ VIRTUAL TRADE TRACKER (Sanal SL/TP Kontrolü) ---
+   if (g_virtual_trade_active) {
+       double live_bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+       double live_ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
+
+       if (g_virtual_trade_dir == 1) { // BUY Trade
+           if (live_bid <= g_virtual_sl) {
+               Print("🔴 [VIRTUAL TRADE] BUY İşlemi Sanal SL Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_trade_active = false;
+           } else if (live_bid >= g_virtual_tp) {
+               Print("🟢 [VIRTUAL TRADE] BUY İşlemi Sanal TP Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_trade_active = false;
+           }
+       } else if (g_virtual_trade_dir == -1) { // SELL Trade
+           if (live_ask >= g_virtual_sl) {
+               Print("🔴 [VIRTUAL TRADE] SELL İşlemi Sanal SL Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_trade_active = false;
+           } else if (live_ask <= g_virtual_tp) {
+               Print("🟢 [VIRTUAL TRADE] SELL İşlemi Sanal TP Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_trade_active = false;
+           }
+       }
+   }
 
    if(last_idx > 0 && (Period() == PERIOD_M1))
      {
