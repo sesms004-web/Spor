@@ -536,14 +536,17 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    } else {
        if (m30_momentum) {
            if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "H1 Ana Yönüne Uyumlu Aşırı Sert İvme (Momentum Var) -> [+15 Skor]\n"; }
-           else                { m30_points = -5; m30_text = "M30: " + stats_m30 + "H1 Ana Yönüne Ters Sert İvme Var (Geri Çekebilir!) -> [-5 Skor (Ceza)]\n"; }
+           else                { m30_points = 0;  m30_text = "M30: " + stats_m30 + "H1 Ana Yönüne Ters Sert İvme Var (Geri Çekebilir!) -> [0 Skor]\n"; }
        } else {
            if (p_m30 >= 50.0) {
                if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Fiyat %50+ Şişkin Bölgede Ama Ana Yöne Uyumlu -> [+10 Skor]\n"; }
-               else                { m30_points = -10; m30_text = "M30: " + stats_m30 + "Fiyat %50+ Şişkin Bölgede Ve Ana Yöne Ters (Zarar Riski!) -> [-10 Skor (Ceza)]\n"; }
-           } else {
-               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Düzeltme Henüz %50'ye Ulaşmadı, Ana Yönde Fırsat Var -> [+10 Skor]\n"; }
-               else                { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Ufak (%50 Altı) Bir Karşıt Düzeltme, Ana Yöne Giderken Alan Var -> [+10 Skor]\n"; }
+               else                { m30_points = 0;   m30_text = "M30: " + stats_m30 + "Fiyat %50+ Şişkin Bölgede Ve Ana Yöne Ters (Tuzak Riski!) -> [0 Skor]\n"; }
+           } else if (p_m30 >= 20.0) {
+               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Ana Yöne Uyumlu Çekilme Devam Ediyor -> [+10 Skor]\n"; }
+               else                { m30_points = 0;   m30_text = "M30: " + stats_m30 + "Ana Yöne Ters! Fiyat Çoktan Düzeltmeye Başlamış (%20+), Her An Ana Trende Dönebilir! (Riskli) -> [0 Skor]\n"; }
+           } else { // Shallow (p_m30 < 20.0)
+               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "M30 Trendi Güçlü (Çekilme <%20), Ana Yöne Uyumlu -> [+10 Skor]\n"; }
+               else                { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Karşıt Düzeltme Henüz Yeni Başlıyor (Çekilme <%20), Önü Açık! -> [+10 Skor]\n"; }
            }
        }
    }
@@ -566,10 +569,13 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        } else {
            if (p_m15 >= 50.0) {
                if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "%50+ Dinlenmiş Uyumlu Bölge -> [+5 Skor]\n"; }
-               else                { m15_points = -5; m15_text = "M15: " + stats_m15 + "%50+ Şişkin ve Ters Yön (Ufak Risk) -> [-5 Skor (Ceza)]\n"; }
-           } else {
-               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Düzeltme Yolu Açık, Uyumlu Yön -> [+5 Skor]\n"; }
-               else                { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Karşıt Minör Düzeltme İşlemi Mümkün -> [+5 Skor]\n"; }
+               else                { m15_points = 0;  m15_text = "M15: " + stats_m15 + "%50+ Şişkin ve Ana Yöne Ters (Tuzak Riski) -> [0 Skor]\n"; }
+           } else if (p_m15 >= 20.0) {
+               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Ana Yöne Uyumlu Çekilme Devam Ediyor -> [+5 Skor]\n"; }
+               else                { m15_points = 0;  m15_text = "M15: " + stats_m15 + "Ana Yöne Ters! Düzeltme İlerledi (%20+), Tehlikeli Bölge -> [0 Skor]\n"; }
+           } else { // Shallow (p_m15 < 20.0)
+               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Düzeltme Yolu Açık, Uyumlu Yön (Çekilme <%20) -> [+5 Skor]\n"; }
+               else                { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Erken Karşıt Minör Düzeltme İşlemi (Çekilme <%20) -> [+5 Skor]\n"; }
            }
        }
    }
@@ -599,10 +605,26 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ana Yöne Ters Yönde Anlık İvme (Mikro Düzeltme İçi) -> [0 Skor]\n";
            }
        } else {
-           if (is_m5_aligned && is_m5_deep) {
-               m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Maksimum Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Şartı Başarıyla Tamamlanmış, Yön Uyumlu -> [+5 Skor]\n";
-           } else {
-               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Maksimum Çekilme Yetersiz (Fiyat Yeterince Dinlenmedi) -> [0 Skor]\n";
+           if (p_m5 >= 20.0) {
+               if (is_m5_aligned) {
+                   if (is_m5_deep) {
+                       m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Maksimum Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Şartı Başarıyla Tamamlanmış, Yön Uyumlu -> [+5 Skor]\n";
+                   } else {
+                       m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Maksimum Çekilme Yetersiz (Fiyat Yeterince Dinlenmedi) -> [0 Skor]\n";
+                   }
+               } else {
+                   m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ana Yöne Ters! Düzeltme İlerledi (%20+), Tehlikeli Bölge -> [0 Skor]\n";
+               }
+           } else { // Shallow (p_m5 < 20.0)
+               if (is_m5_aligned) {
+                   if (is_m5_deep) {
+                       m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Maksimum Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Şartı Başarıyla Tamamlanmış, Yön Uyumlu -> [+5 Skor]\n";
+                   } else {
+                       m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Maksimum Çekilme Yetersiz (Fiyat Yeterince Dinlenmedi) -> [0 Skor]\n";
+                   }
+               } else {
+                   m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Erken Karşıt Minör Düzeltme İşlemi (Çekilme <%20) -> [+5 Skor]\n";
+               }
            }
        }
    }
