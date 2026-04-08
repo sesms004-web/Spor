@@ -402,15 +402,18 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // --- M1 BASE SETUP ---
    int m1_points = is_strong ? 5 : 0;
    total_points += m1_points;
-   if(is_strong) m1_text = "   └ Durum: 🔥 GÜÇLÜ (Ana likiditeyi süpürerek kırdı) -> [+5 Skor]\n";
-   else          m1_text = "   └ Durum: ⚠️ ZAYIF (Süpürme yapmadan kırılım geldi) -> [+0 Skor]\n";
+
+   string stats_m1 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m1, 2) + " | Anlık: %" + DoubleToString(p_m1, 2) + "]\n";
+
+   if(is_strong) m1_text = stats_m1 + "   └ Durum: 🔥 GÜÇLÜ (Ana likiditeyi süpürerek kırdı) -> [+5 Skor]\n";
+   else          m1_text = stats_m1 + "   └ Durum: ⚠️ ZAYIF (Süpürme yapmadan kırılım geldi) -> [+0 Skor]\n";
 
    // --- H1 MACRO LOGIC ---
    int h1_points = 0;
    bool h1_momentum = ((mp_h1 - p_h1) >= 20.0);
    bool is_h1_aligned = (t_h1 == trigger_dir);
 
-   string stats_h1 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_h1, 0) + " | Anlık: %" + DoubleToString(p_h1, 0) + "]\n";
+   string stats_h1 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_h1, 2) + " | Anlık: %" + DoubleToString(p_h1, 2) + "]\n";
    string trend_h1 = "   └ Yön -> " + FormatTrendStr(t_h1) + "\n";
 
    if (h1_momentum) {
@@ -436,7 +439,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool is_m30_aligned = (t_m30 == trigger_dir);
    bool is_m30_duplicate = (MathAbs(h_m30 - h_h1) < Point() * 5 && MathAbs(l_m30 - l_h1) < Point() * 5);
 
-   string stats_m30 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m30, 0) + " | Anlık: %" + DoubleToString(p_m30, 0) + "]\n";
+   string stats_m30 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m30, 2) + " | Anlık: %" + DoubleToString(p_m30, 2) + "]\n";
    string trend_m30 = "   └ Yön -> " + FormatTrendStr(t_m30) + "\n";
 
    if (is_m30_duplicate) {
@@ -463,7 +466,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool is_m15_aligned = (t_m15 == trigger_dir);
    bool is_m15_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
 
-   string stats_m15 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m15, 0) + " | Anlık: %" + DoubleToString(p_m15, 0) + "]\n";
+   string stats_m15 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m15, 2) + " | Anlık: %" + DoubleToString(p_m15, 2) + "]\n";
    string trend_m15 = "   └ Yön -> " + FormatTrendStr(t_m15) + "\n";
 
    if (is_m15_duplicate) {
@@ -491,7 +494,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool is_m5_deep = (mp_m5 >= InpPullbackM5);
    bool is_m5_duplicate = (MathAbs(h_m5 - h_m15) < Point() * 5 && MathAbs(l_m5 - l_m15) < Point() * 5);
 
-   string stats_m5 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m5, 0) + " | Anlık: %" + DoubleToString(p_m5, 0) + "]\n";
+   string stats_m5 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m5, 2) + " | Anlık: %" + DoubleToString(p_m5, 2) + "]\n";
    string trend_m5 = "   └ Yön -> " + FormatTrendStr(t_m5) + "\n";
 
    if (is_m5_duplicate) {
@@ -1560,8 +1563,9 @@ int OnCalculate(const int rates_total,
       ProcessBar(last_idx, open, high, low, close, time, g_state_curr, false, true);
      }
 
-   if(last_idx > 0)
+   if(last_idx >= 0)
      {
+      // Force Global Variable update so Master on M1 instantly sees fresh data
       UpdateGlobalVariables(last_idx, close, time);
      }
 
