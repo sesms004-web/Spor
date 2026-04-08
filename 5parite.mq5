@@ -531,7 +531,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // --- FINAL VERDICT ---
    string verdict = "";
    if (total_points >= InpMinTradeScore) verdict = "✅ İŞLEME GİRİLEBİLİR (Skor Algoritmayı Geçti)";
-   else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Skor Barajın Altında Kaldı)";
+   else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Skor " + IntegerToString(InpMinTradeScore) + " Puanlık Barajın Altında Kaldı)";
 
    string dir_str = (trigger_dir == 1) ? "BUY" : "SELL";
    string dir_emoji = (trigger_dir == 1) ? "🟢 YUKARI (BUY Alımı)" : "🔴 AŞAĞI (SELL Satışı)";
