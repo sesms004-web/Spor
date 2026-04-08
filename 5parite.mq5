@@ -39,10 +39,12 @@ input int    InpMaxTradesPerSwing      = 2;          // Aynı Majör Dalga İçi
 
 //--- Trade Execution (Gerçek İşlem Açma) ---
 input bool   InpEnableAutoTradeWriter  = false;      // ⚠️ DİKKAT: Ortak Klasöre İşlem (Sinyal Dosyası) Gönder
+input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Tıklandığında Anında Sahte İşlem (Telefon Testi) Gönder
 
-//--- Bildirim Ayarları (Sadece İşlem Onayı Alındığında Atar) ---
+//--- Bildirim Ayarları ---
 input bool   InpAlertPopup             = true;       // Ekrana Popup (Uyarı) Penceresi Çıkar
 input bool   InpAlertPush              = true;       // Telefona MT5 Push Bildirimi Gönder
+input bool   InpEnableAlertCHoCHBase   = true;       // Ana CHoCH (Kırılım) Bildirimi Gönder
 
 //--- Globals ---
 int g_counter = 0;
@@ -528,6 +530,12 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    msg += "Hesaplanan: " + IntegerToString(total_points) + " Skor (Gerekli Baraj: " + IntegerToString(InpMinTradeScore) + " Skor)\n";
    msg += "KARAR: " + verdict;
 
+   if (is_test) {
+       if(InpAlertPopup) Alert(msg);
+       if(InpAlertPush) SendNotification(msg);
+       Print(msg);
+   }
+
    // --- AUTO-TRADE / SIGNAL WRITER LOGIC ---
    static int last_maj_i = -1;
    static int current_swing_trades = 0;
@@ -539,6 +547,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        g_virtual_last_sl_price = 0.0;
        last_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
    }
+
+   if (is_test) return; // Test runs do not execute trades or track virtual setups.
 
    if (total_points >= InpMinTradeScore) {
 
@@ -966,10 +976,13 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
 
-              // Sadece İşlem Kontrolü Yap (CHoCH bildirimi atılmaz)
               static int last_alert_d1_i_bear = 0;
               if (state.d1_i != last_alert_d1_i_bear) {
                   if (draw_ui && Period() == PERIOD_M1) {
+                      if (InpEnableAlertCHoCHBase) {
+                          if(InpAlertPopup) Alert(msg);
+                          if(InpAlertPush) SendNotification(msg);
+                      }
                       EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong, trade_sl_anchor);
                   }
                   last_alert_d1_i_bear = state.d1_i;
@@ -1021,10 +1034,13 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
 
-              // Sadece İşlem Kontrolü Yap (CHoCH bildirimi atılmaz)
               static int last_alert_d1_i_bull = 0;
               if (state.d1_i != last_alert_d1_i_bull) {
                   if (draw_ui && Period() == PERIOD_M1) {
+                      if (InpEnableAlertCHoCHBase) {
+                          if(InpAlertPopup) Alert(msg);
+                          if(InpAlertPush) SendNotification(msg);
+                      }
                       EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong, trade_sl_anchor);
                   }
                   last_alert_d1_i_bull = state.d1_i;
@@ -1594,12 +1610,26 @@ int OnCalculate(const int rates_total,
              g_state_hist.maj_l != g_last_alert_maj_l ||
              g_state_hist.maj_tr != g_last_alert_trend)
            {
-            // Sadece değişkenleri güncelle (Trend Alert İptal Edildi)
             g_last_alert_maj_h = g_state_hist.maj_h;
             g_last_alert_maj_l = g_state_hist.maj_l;
             g_last_alert_trend = g_state_hist.maj_tr;
            }
      }
+
+   // 🧪 TEST TRIGGER EXECUTION (Toggled by User)
+   static bool is_test_run = false;
+   if (prev_calculated == 0) is_test_run = false;
+
+   if (!is_test_run && last_idx > 0) {
+       if (InpTestTradeExecution && Period() == PERIOD_M1) {
+           double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+           int test_choch_dir = g_state_curr.maj_tr;
+           // Pass fake pct (e.g. 50%) to force signal evaluation
+           EvaluateTradeSignal(last_idx, TimeCurrent(), bid, test_choch_dir, 50.0, true, bid, true);
+           is_test_run = true; // Sadece bir kere çalışsın
+       }
+       if (!InpTestTradeExecution) is_test_run = false; // Reset if user toggles off
+   }
 
    return(rates_total);
   }
