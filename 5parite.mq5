@@ -329,6 +329,16 @@ bool ReadGlobalVariableMTF(string s, string tf, int &tr, double &p, double &mp, 
   }
 
 //+------------------------------------------------------------------+
+//| Helper for Localized Trend Text                                  |
+//+------------------------------------------------------------------+
+string FormatTrendStr(int t)
+  {
+   if (t == 1) return "🟢 YÜKSELİŞ (Boğa)";
+   if (t == -1) return "🔴 DÜŞÜŞ (Ayı)";
+   return "⚪ YATAY (Range)";
+  }
+
+//+------------------------------------------------------------------+
 //| 50-Point Execution Analysis Engine                               |
 //+------------------------------------------------------------------+
 void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double ext_pt, bool is_test = false)
@@ -384,13 +394,6 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string m15_text = "";
    string m5_text = "";
    string m1_text = "";
-
-   // Helper function for rendering localized trend text
-   auto FormatTrendStr = [](int t) -> string {
-       if (t == 1) return "🟢 YÜKSELİŞ (Boğa)";
-       if (t == -1) return "🔴 DÜŞÜŞ (Ayı)";
-       return "⚪ YATAY (Range)";
-   };
 
    // --- M1 BASE SETUP ---
    int m1_points = is_strong ? 5 : 0;
