@@ -34,17 +34,15 @@ input color  InpColorBull = clrGreen;
 input color  InpColorBear = clrRed;
 
 //--- Alert Settings ---
-input bool   InpEnableAlertTrendChange = true;       // Ana Trend (Kapanış) Dönüş Bildirimini Aç
-input bool   InpEnableAlertCHoCHBase   = true;       // Temel CHoCH (Kırılım) Bildirimini Aç
-input bool   InpOneShotAlert           = true;       // 1 Kere Bildirim At ve Dur (Aç kapa yapmak gerekir)
-input bool   InpEnableTradeExecution   = true;       // Özel Skorluk 'İşleme Gir' Analiz Sistemini Aç
 input int    InpMinTradeScore          = 30;         // Minimum İşleme Giriş Skoru (Varsayılan 30)
-input bool   InpEnableAutoTradeWriter  = true;       // MT5 Ortak Klasöre Sinyal Dosyası Gönder (Auto-Trade EA için)
 input int    InpMaxTradesPerSwing      = 2;          // Aynı Majör Dalga İçinde Maksimum Sinyal Sayısı
-input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Skorları Hesapla ve Bildir
-input bool   InpForceTestSignal        = false;      // ⚠️ [TEST] Ayarı 'True' Yapıp Kapatınca Ortak Klasöre Deneme Sinyali Atar!
-input bool   InpAlertPopup       = true;
-input bool   InpAlertPush        = false;
+
+//--- Trade Execution (Gerçek İşlem Açma) ---
+input bool   InpEnableAutoTradeWriter  = false;      // ⚠️ DİKKAT: Ortak Klasöre İşlem (Sinyal Dosyası) Gönder
+
+//--- Bildirim Ayarları (Sadece İşlem Onayı Alındığında Atar) ---
+input bool   InpAlertPopup             = true;       // Ekrana Popup (Uyarı) Penceresi Çıkar
+input bool   InpAlertPush              = true;       // Telefona MT5 Push Bildirimi Gönder
 
 //--- Globals ---
 int g_counter = 0;
@@ -52,7 +50,6 @@ datetime g_last_alert_time = 0;
 int g_alert_bar_index = -1;
 datetime g_anchor_time = 0;
 uint g_last_dash_tick = 0;
-bool g_has_fired_alert = false; // Tek atımlık bildirim durumu
 
 //--- Virtual Trade Tracking ---
 bool g_virtual_trade_active = false;
@@ -531,10 +528,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    msg += "Hesaplanan: " + IntegerToString(total_points) + " Skor (Gerekli Baraj: " + IntegerToString(InpMinTradeScore) + " Skor)\n";
    msg += "KARAR: " + verdict;
 
-   if(InpAlertPopup) Alert(msg);
-   if(InpAlertPush) SendNotification(msg);
-
-   // --- AUTO-TRADE FILE WRITER LOGIC ---
+   // --- AUTO-TRADE / SIGNAL WRITER LOGIC ---
    static int last_maj_i = -1;
    static int current_swing_trades = 0;
 
@@ -546,7 +540,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        last_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
    }
 
-   if (total_points >= InpMinTradeScore && InpEnableAutoTradeWriter) {
+   if (total_points >= InpMinTradeScore) {
 
        // Eğer halihazırda takip ettiğimiz sanal bir işlem varsa, yeni sinyali çöpe at!
        if (g_virtual_trade_active) {
@@ -563,11 +557,11 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            // --- Testere/Aynı Bölge Koruması (Sadece 1. işlem SL olduysa geçerli) ---
            if (current_swing_trades > 0 && g_virtual_last_outcome == -1) {
                if (trigger_dir == 1 && live_price > g_virtual_last_sl_price) {
-                   Print("⚠️ [AUTO-TRADE] BUY İşlemi Reddedildi: Fiyat eski Stop Loss seviyesinin (", g_virtual_last_sl_price, ") altında değil! Aynı bölgeden işleme girilmeyecek.");
+                   Print("⚠️ [TRADE REJECTED] BUY İşlemi Reddedildi: Fiyat eski Stop Loss seviyesinin (", g_virtual_last_sl_price, ") altında değil! Aynı bölgeden işleme girilmeyecek.");
                    return;
                }
                if (trigger_dir == -1 && live_price < g_virtual_last_sl_price) {
-                   Print("⚠️ [AUTO-TRADE] SELL İşlemi Reddedildi: Fiyat eski Stop Loss seviyesinin (", g_virtual_last_sl_price, ") üstünde değil! Aynı bölgeden işleme girilmeyecek.");
+                   Print("⚠️ [TRADE REJECTED] SELL İşlemi Reddedildi: Fiyat eski Stop Loss seviyesinin (", g_virtual_last_sl_price, ") üstünde değil! Aynı bölgeden işleme girilmeyecek.");
                    return;
                }
            }
@@ -602,29 +596,42 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                }
            }
 
-           // Dosyayı Common klasörüne yaz (Her iki MT5 terminalinin okuyabilmesi için)
-           string filename = "vol100_signal_" + Symbol() + ".txt";
-           int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
-           if (file_handle != INVALID_HANDLE) {
-               string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl, 5) + "," + DoubleToString(tp, 5);
-               FileWrite(file_handle, trade_cmd);
-               FileClose(file_handle);
-               Print("✅ [AUTO-TRADE] Sinyal Gönderildi: ", trade_cmd);
-               current_swing_trades++; // Aynı dalgadaki işlem sayısını artır
+           // --- BİLDİRİM (NOTIFICATION) ---
+           string trade_msg = "🚨 [" + Symbol() + "] YENİ İŞLEM (Skor: " + IntegerToString(total_points) + ") 🚨\n";
+           trade_msg += "Yön: " + dir_emoji + "\n";
+           trade_msg += "Entry: " + DoubleToString(entry, 5) + "\n";
+           trade_msg += "Stop Loss (SL): " + DoubleToString(sl, 5) + "\n";
+           trade_msg += "Take Profit (TP): " + DoubleToString(tp, 5) + "\n";
 
-               // Sanal İşlemi Başlat
-               g_virtual_trade_active = true;
-               g_virtual_trade_dir = trigger_dir;
-               g_virtual_sl = sl;
-               g_virtual_tp = tp;
-               Print("🟢 [VIRTUAL TRADE] Sanal İşlem Takipli Başladı! Yön: ", dir_str, " SL: ", sl, " TP: ", tp);
+           if(InpAlertPopup) Alert(trade_msg);
+           if(InpAlertPush) SendNotification(trade_msg);
+           Print(trade_msg);
 
-           } else {
-               Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
+           // --- DOSYAYA YAZMA (EA İÇİN) ---
+           if (InpEnableAutoTradeWriter) {
+               string filename = "vol100_signal_" + Symbol() + ".txt";
+               int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
+               if (file_handle != INVALID_HANDLE) {
+                   string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl, 5) + "," + DoubleToString(tp, 5);
+                   FileWrite(file_handle, trade_cmd);
+                   FileClose(file_handle);
+                   Print("✅ [AUTO-TRADE] EA İçin Sinyal Dosyası Gönderildi: ", trade_cmd);
+               } else {
+                   Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
+               }
            }
+
+           // Sanal İşlemi Başlat (Dosyaya yazılmasa bile arka planda takip eder)
+           current_swing_trades++; // Aynı dalgadaki işlem sayısını artır
+           g_virtual_trade_active = true;
+           g_virtual_trade_dir = trigger_dir;
+           g_virtual_sl = sl;
+           g_virtual_tp = tp;
+           Print("🟢 [VIRTUAL TRADE] Sanal İşlem Takipli Başladı! Yön: ", dir_str, " SL: ", sl, " TP: ", tp);
+
        } else {
            string reason = (!is_deep_elastic) ? " (M1 Çekilmesi %40 seviyesine ulaşmadığı için sadece 1 işleme izin verildi)" : "";
-           Print("⚠️ [AUTO-TRADE] Bu majör dalga için maksimum işlem limitine (" + IntegerToString(allowed_trades) + ") ulaşıldı" + reason + ". Yeni sinyal gönderilmedi.");
+           Print("⚠️ [TRADE LIMIT] Bu majör dalga için maksimum işlem limitine (" + IntegerToString(allowed_trades) + ") ulaşıldı" + reason + ".");
        }
    }
   }
@@ -720,29 +727,6 @@ string BuildDashboardText(double live_price)
 int OnInit()
   {
    IndicatorSetString(INDICATOR_SHORTNAME, "Structure");
-
-   // --- 🧪 MANUEL TEST SİNYALİ FIRLATICI ---
-   if (InpForceTestSignal) {
-       Print("🧪 [TEST SİNYALİ] Gönderiliyor...");
-       string filename = "vol100_signal_" + Symbol() + ".txt";
-       int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
-       if (file_handle != INVALID_HANDLE) {
-           double entry = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
-           double point_size = Point();
-
-           // Sahte bir BUY işlemi simüle edelim: 100 Point (10 Pip) SL, 300 Point (30 Pip) TP
-           double sl = entry - (100 * point_size);
-           double tp = entry + (300 * point_size);
-
-           string trade_cmd = Symbol() + ",BUY," + DoubleToString(entry, 5) + "," + DoubleToString(sl, 5) + "," + DoubleToString(tp, 5);
-           FileWrite(file_handle, trade_cmd);
-           FileClose(file_handle);
-           Print("✅ [TEST BAŞARILI] Ortak Klasöre (Common) Sahte Sinyal Bırakıldı: ", trade_cmd);
-           Print("⚠️ Lütfen bir sonraki gerçek işlem için gösterge ayarlarından 'InpForceTestSignal' ayarını tekrar FALSE yapmayı unutmayın!");
-       } else {
-           Print("❌ [TEST HATASI] Ortak klasöre dosya yazılamadı! Kod: ", GetLastError());
-       }
-   }
    return(INIT_SUCCEEDED);
   }
 
@@ -982,15 +966,10 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
 
-              // Only alert if we haven't already alerted for THIS specific swing setup
+              // Sadece İşlem Kontrolü Yap (CHoCH bildirimi atılmaz)
               static int last_alert_d1_i_bear = 0;
               if (state.d1_i != last_alert_d1_i_bear) {
-                  if (InpEnableAlertCHoCHBase && draw_ui && (!InpOneShotAlert || !g_has_fired_alert)) {
-                      if(InpAlertPopup) Alert(msg);
-                      if(InpAlertPush) SendNotification(msg);
-                      g_has_fired_alert = true;
-                  }
-                  if (InpEnableTradeExecution && draw_ui && Period() == PERIOD_M1) {
+                  if (draw_ui && Period() == PERIOD_M1) {
                       EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong, trade_sl_anchor);
                   }
                   last_alert_d1_i_bear = state.d1_i;
@@ -1042,15 +1021,10 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
 
-              // Only alert if we haven't already alerted for THIS specific swing setup
+              // Sadece İşlem Kontrolü Yap (CHoCH bildirimi atılmaz)
               static int last_alert_d1_i_bull = 0;
               if (state.d1_i != last_alert_d1_i_bull) {
-                  if (InpEnableAlertCHoCHBase && draw_ui && (!InpOneShotAlert || !g_has_fired_alert)) {
-                      if(InpAlertPopup) Alert(msg);
-                      if(InpAlertPush) SendNotification(msg);
-                      g_has_fired_alert = true;
-                  }
-                  if (InpEnableTradeExecution && draw_ui && Period() == PERIOD_M1) {
+                  if (draw_ui && Period() == PERIOD_M1) {
                       EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong, trade_sl_anchor);
                   }
                   last_alert_d1_i_bull = state.d1_i;
@@ -1620,56 +1594,12 @@ int OnCalculate(const int rates_total,
              g_state_hist.maj_l != g_last_alert_maj_l ||
              g_state_hist.maj_tr != g_last_alert_trend)
            {
-            // g_state_hist kapanışta işlendiği için burada kırılım onaylıdır. Oyalanma anındaki iğneler tetiklemez.
-            if (g_last_alert_trend != 0 && g_state_hist.maj_tr != g_last_alert_trend)
-              {
-               if (InpEnableAlertTrendChange && (!InpOneShotAlert || !g_has_fired_alert)) {
-                   string new_dir = (g_state_hist.maj_tr == 1) ? "YUKARI" : "AŞAĞI";
-                   string trend_msg = "🚨 [" + Symbol() + "] M1 Trend Döndü! Yeni Yön: " + new_dir;
-                   if(InpAlertPopup) Alert(trend_msg);
-                   if(InpAlertPush)  SendNotification(trend_msg);
-                   g_has_fired_alert = true;
-               }
-              }
+            // Sadece değişkenleri güncelle (Trend Alert İptal Edildi)
             g_last_alert_maj_h = g_state_hist.maj_h;
             g_last_alert_maj_l = g_state_hist.maj_l;
             g_last_alert_trend = g_state_hist.maj_tr;
            }
      }
-   // 🧪 TEST TRIGGER EXECUTION (Yalnızca bir kez ve en güncel veriler işlendikten sonra çalıştırılır)
-   static bool is_test_run = false;
-   if (prev_calculated == 0) is_test_run = false; // Reset on re-compile/re-attach
-
-   if (!is_test_run && last_idx > 0) {
-       // TEST TRIGGER FOR TRADE EXECUTION
-       if (InpTestTradeExecution) {
-           int live_tr = g_state_curr.maj_tr;
-           double live_pct = 0.0;
-
-           double h_m1 = g_state_curr.maj_h;
-           double l_m1 = g_state_curr.maj_l;
-           double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-           if (h_m1 != EMPTY_VALUE && l_m1 != EMPTY_VALUE && h_m1 != l_m1) {
-               double range = h_m1 - l_m1;
-               if (live_tr == 1) {
-                   live_pct = ((h_m1 - bid) / range) * 100.0;
-                   if (bid >= h_m1) live_pct = 0;
-               } else {
-                   live_pct = ((bid - l_m1) / range) * 100.0;
-                   if (bid <= l_m1) live_pct = 0;
-               }
-               if (live_pct < 0) live_pct = 0;
-           }
-
-           // Test Analizi, kullanıcının "Pullback sonrası ana trend devamı (BOS/Continuation CHoCH)" mantığına göre simüle edilir.
-           int test_choch_dir = live_tr; // Trend Yönü ile aynı olmalı
-
-           EvaluateTradeSignal(last_idx, TimeCurrent(), bid, test_choch_dir, live_pct, true, bid, true);
-           is_test_run = true;
-       }
-
-       if(!InpTestTradeExecution) is_test_run = true; // prevent infinite false state if both are off
-   }
 
    return(rates_total);
   }
