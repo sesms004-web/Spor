@@ -371,8 +371,12 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool hh1 = ReadGlobalVariableMTF(sym, "PERIOD_H1", t_h1, p_h1, mp_h1, h_h1, l_h1);
 
    if(!hm3 || !hm5 || !hm15 || !hm30 || !hh1) {
-       if(!is_test) Print("MTF Verileri eksik veya eski. Lütfen tüm zaman aralıklarına(M3-H1) indikatörü ekleyin. İşlem iptal.");
-       return;
+       if(!is_test) {
+           Print("MTF Verileri eksik veya eski. Lütfen tüm zaman aralıklarına(M3-H1) indikatörü ekleyin. İşlem iptal.");
+           return;
+       }
+       // Eğer test ediyorsak geri dönme, sadece uyarı ver ki algoritmanın o kısımlarının neden sıfır puan verdiğini anlasın
+       Print("TEST MODU: Bazı MTF verileri eksik ancak test devam ediyor...");
    }
 
    double true_live_m1 = p_m1; // M1'in gerçek anlık çekilmesini (kırılım anındaki esnemeyi) koru
@@ -1648,19 +1652,23 @@ int OnCalculate(const int rates_total,
        // Sadece InpTestTradeExecution durumu FALSE'tan TRUE'ya geçtiğinde (Tetiklendiğinde) 1 kez çalışır
        if (InpTestTradeExecution && !g_prev_test_state) {
            double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-           double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
-           double point = Point();
+           int test_choch_dir = g_state_curr.maj_tr;
+           double live_pct = 0.0;
 
-           // Sahte Başarılı İşlem Bildirimi Yarat (Sistemin çalıştığını görmek için)
-           string trade_msg = "🧪 [TEST - " + Symbol() + "] YENİ İŞLEM (Skor: 50) 🚨\n";
-           trade_msg += "Yön: ⬆️ YUKARI (BUY)\n";
-           trade_msg += "Entry: " + DoubleToString(ask, 5) + "\n";
-           trade_msg += "Stop Loss (SL): " + DoubleToString(ask - (100 * point), 5) + "\n";
-           trade_msg += "Take Profit (TP): " + DoubleToString(ask + (300 * point), 5) + "\n";
+           if (g_state_curr.maj_h != EMPTY_VALUE && g_state_curr.maj_l != EMPTY_VALUE && g_state_curr.maj_h != g_state_curr.maj_l) {
+               double range = g_state_curr.maj_h - g_state_curr.maj_l;
+               if (test_choch_dir == 1) {
+                   live_pct = ((g_state_curr.maj_h - bid) / range) * 100.0;
+                   if (bid >= g_state_curr.maj_h) live_pct = 0;
+               } else if (test_choch_dir == -1) {
+                   live_pct = ((bid - g_state_curr.maj_l) / range) * 100.0;
+                   if (bid <= g_state_curr.maj_l) live_pct = 0;
+               }
+               if (live_pct < 0) live_pct = 0;
+           }
 
-           if(InpAlertPopup) Alert(trade_msg);
-           if(InpAlertPush) SendNotification(trade_msg);
-           Print(trade_msg);
+           // Gerçek algoritmaya tamamen gerçek verilerle TEST emri yolla (Sahte veri yok)
+           EvaluateTradeSignal(last_idx, TimeCurrent(), bid, test_choch_dir, live_pct, true, bid, true);
        }
        // Mevcut durumu kaydet (Bir sonraki tick'te tekrar atmasını engeller, kapatıp açılmayı bekler)
        g_prev_test_state = InpTestTradeExecution;
