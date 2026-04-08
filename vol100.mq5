@@ -39,6 +39,12 @@ input bool   InpEnableTradeExecution   = true;       // Özel Skorluk 'İşleme 
 input int    InpMinTradeScore          = 30;         // Minimum İşleme Giriş Skoru (Varsayılan 30)
 input bool   InpEnableAutoTradeWriter  = true;       // MT5 Ortak Klasöre Sinyal Dosyası Gönder (Auto-Trade EA için)
 input int    InpMaxTradesPerSwing      = 2;          // Aynı Majör Dalga İçinde Maksimum Sinyal Sayısı
+
+//--- Trade Geometry (SL/TP) Settings ---
+input double InpStrongSLMultiplier     = 1.0;        // Güçlü İşlem Stop Loss Çarpanı (Varsayılan: 1.0)
+input double InpWeakSLMultiplier       = 1.5;        // Zayıf İşlem Stop Loss Çarpanı (Varsayılan: 1.5)
+input double InpTPRewardRatio          = 3.0;        // İşlem Kâr/Zarar (R:R) Oranı (Varsayılan: 3.0 -> 1:3 RR)
+
 input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Skorları Hesapla ve Bildir
 input bool   InpForceTestSignal        = false;      // ⚠️ [TEST] Ayarı 'True' Yapıp Kapatınca Ortak Klasöre Deneme Sinyali Atar!
 input bool   InpAlertPopup       = true;
@@ -687,29 +693,23 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            double entry = live_price;
 
            if (trigger_dir == 1) { // BUY
+               double base_dist = entry - ext_pt;
                if (is_strong) { // Likidite alındı (Güçlü)
-                   sl = ext_pt; // SL direkt en dibe konur
-                   double dist = entry - sl;
-                   tp = entry + (dist * 3.0); // 1:3 RR
+                   sl = entry - (base_dist * InpStrongSLMultiplier);
                } else { // Likidite alınmadı (Zayıf)
-                   double raw_sl = ext_pt;
-                   double dist = entry - raw_sl;
-                   sl = raw_sl - (dist * 0.5); // Zayıf dibin 0.5 boy daha altına (toplam 1.5 boy SL mesafesi)
-                   double new_dist = entry - sl;
-                   tp = entry + (new_dist * 3.0); // 1:3 RR
+                   sl = entry - (base_dist * InpWeakSLMultiplier);
                }
+               double final_dist = entry - sl;
+               tp = entry + (final_dist * InpTPRewardRatio);
            } else { // SELL
-               if (is_strong) {
-                   sl = ext_pt; // SL direkt en tepeye konur
-                   double dist = sl - entry;
-                   tp = entry - (dist * 3.0); // 1:3 RR
-               } else {
-                   double raw_sl = ext_pt;
-                   double dist = raw_sl - entry;
-                   sl = raw_sl + (dist * 0.5); // Zayıf tepenin 0.5 boy daha üstüne (toplam 1.5 boy SL mesafesi)
-                   double new_dist = sl - entry;
-                   tp = entry - (new_dist * 3.0); // 1:3 RR
+               double base_dist = ext_pt - entry;
+               if (is_strong) { // Likidite alındı (Güçlü)
+                   sl = entry + (base_dist * InpStrongSLMultiplier);
+               } else { // Likidite alınmadı (Zayıf)
+                   sl = entry + (base_dist * InpWeakSLMultiplier);
                }
+               double final_dist = sl - entry;
+               tp = entry - (final_dist * InpTPRewardRatio);
            }
 
            // Dosyayı Common klasörüne yaz (Her iki MT5 terminalinin okuyabilmesi için)
