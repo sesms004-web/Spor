@@ -55,6 +55,8 @@ bool g_virtual_trade_active = false;
 int g_virtual_trade_dir = 0; // 1 = BUY, -1 = SELL
 double g_virtual_sl = 0.0;
 double g_virtual_tp = 0.0;
+int g_virtual_last_outcome = 0; // 0 = Yok, -1 = SL Oldu, 1 = TP Oldu
+double g_virtual_last_sl_price = 0.0; // SL olunan fiyat seviyesini hafızada tutar
 
 double g_last_alert_maj_h = 0;
 double g_last_alert_maj_l = 0;
@@ -649,6 +651,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // Yeni bir ana dalga (swing) oluştuğunda sayaçları sıfırla
    if (g_state_curr.maj_h_i != last_maj_i && g_state_curr.maj_l_i != last_maj_i) {
        current_swing_trades = 0;
+       g_virtual_last_outcome = 0; // Yeni dalgada eski SL hafızasını sıfırla
+       g_virtual_last_sl_price = 0.0;
        last_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
    }
 
@@ -665,6 +669,18 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        int allowed_trades = is_deep_elastic ? InpMaxTradesPerSwing : 1;
 
        if (current_swing_trades < allowed_trades) {
+
+           // --- Testere/Aynı Bölge Koruması (Sadece 1. işlem SL olduysa geçerli) ---
+           if (current_swing_trades > 0 && g_virtual_last_outcome == -1) {
+               if (trigger_dir == 1 && live_price > g_virtual_last_sl_price) {
+                   Print("⚠️ [AUTO-TRADE] BUY İşlemi Reddedildi: Fiyat eski Stop Loss seviyesinin (", g_virtual_last_sl_price, ") altında değil! Aynı bölgeden işleme girilmeyecek.");
+                   return;
+               }
+               if (trigger_dir == -1 && live_price < g_virtual_last_sl_price) {
+                   Print("⚠️ [AUTO-TRADE] SELL İşlemi Reddedildi: Fiyat eski Stop Loss seviyesinin (", g_virtual_last_sl_price, ") üstünde değil! Aynı bölgeden işleme girilmeyecek.");
+                   return;
+               }
+           }
 
            double sl = 0.0;
            double tp = 0.0;
@@ -1536,17 +1552,23 @@ int OnCalculate(const int rates_total,
        if (g_virtual_trade_dir == 1) { // BUY Trade
            if (live_bid <= g_virtual_sl) {
                Print("🔴 [VIRTUAL TRADE] BUY İşlemi Sanal SL Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_last_outcome = -1;
+               g_virtual_last_sl_price = g_virtual_sl;
                g_virtual_trade_active = false;
            } else if (live_bid >= g_virtual_tp) {
                Print("🟢 [VIRTUAL TRADE] BUY İşlemi Sanal TP Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_last_outcome = 1;
                g_virtual_trade_active = false;
            }
        } else if (g_virtual_trade_dir == -1) { // SELL Trade
            if (live_ask >= g_virtual_sl) {
                Print("🔴 [VIRTUAL TRADE] SELL İşlemi Sanal SL Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_last_outcome = -1;
+               g_virtual_last_sl_price = g_virtual_sl;
                g_virtual_trade_active = false;
            } else if (live_ask <= g_virtual_tp) {
                Print("🟢 [VIRTUAL TRADE] SELL İşlemi Sanal TP Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_last_outcome = 1;
                g_virtual_trade_active = false;
            }
        }
