@@ -535,18 +535,15 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        m30_points = 0; m30_text = "M30: " + stats_m30 + "Fiyat Yapısı Üst Zaman Dilimi (H1) İle Birebir Aynı, Çift Puan Önleme -> [0 Skor]\n";
    } else {
        if (m30_momentum) {
-           if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "H1 Ana Yönüne Uyumlu Aşırı Sert İvme (Momentum Var) -> [+15 Skor]\n"; }
-           else                { m30_points = 0;  m30_text = "M30: " + stats_m30 + "H1 Ana Yönüne Ters Sert İvme Var (Geri Çekebilir!) -> [0 Skor]\n"; }
+           if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "Ana Yöne Uyumlu Sert İvme (Zirveden/Dipten %20+ Dönüş) -> [+15 Skor]\n"; }
+           else                { m30_points = 0;  m30_text = "M30: " + stats_m30 + "Ana Yöne Ters! Zirveden/Dipten Sert %20 İvme İle Dönmüş (Tuzak Riski!) -> [0 Skor]\n"; }
        } else {
            if (p_m30 >= 50.0) {
                if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Fiyat %50+ Şişkin Bölgede Ama Ana Yöne Uyumlu -> [+10 Skor]\n"; }
                else                { m30_points = 0;   m30_text = "M30: " + stats_m30 + "Fiyat %50+ Şişkin Bölgede Ve Ana Yöne Ters (Tuzak Riski!) -> [0 Skor]\n"; }
-           } else if (p_m30 >= 20.0) {
-               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Ana Yöne Uyumlu Çekilme Devam Ediyor -> [+10 Skor]\n"; }
-               else                { m30_points = 0;   m30_text = "M30: " + stats_m30 + "Ana Yöne Ters! Fiyat Çoktan Düzeltmeye Başlamış (%20+), Her An Ana Trende Dönebilir! (Riskli) -> [0 Skor]\n"; }
-           } else { // Shallow (p_m30 < 20.0)
-               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "M30 Trendi Güçlü (Çekilme <%20), Ana Yöne Uyumlu -> [+10 Skor]\n"; }
-               else                { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Karşıt Düzeltme Henüz Yeni Başlıyor (Çekilme <%20), Önü Açık! -> [+10 Skor]\n"; }
+           } else { // Shallow (p_m30 < 50.0)
+               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Düzeltme Henüz %50'ye Ulaşmadı, Ana Yönde Fırsat Var -> [+10 Skor]\n"; }
+               else                { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Ufak (%50 Altı) Karşıt Düzeltme Fırsatı, Önü Açık! -> [+10 Skor]\n"; }
            }
        }
    }
@@ -564,18 +561,15 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        m15_points = 0; m15_text = "M15: " + stats_m15 + "Fiyat Yapısı Üst Zaman Dilimi (M30) İle Birebir Aynı, Çift Puan Önleme -> [0 Skor]\n";
    } else {
        if (m15_momentum) {
-           if (is_m15_aligned) { m15_points = 10; m15_text = "M15: " + stats_m15 + "Ana Yöne Uyumlu Net Ara Momentum Var -> [+10 Skor]\n"; }
-           else                { m15_points = 0;  m15_text = "M15: " + stats_m15 + "Ana Yöne Ters Yönde Ara Momentum (Etkisiz) -> [0 Skor]\n"; }
+           if (is_m15_aligned) { m15_points = 10; m15_text = "M15: " + stats_m15 + "Ana Yöne Uyumlu Sert İvme (Zirveden/Dipten %20+ Dönüş) -> [+10 Skor]\n"; }
+           else                { m15_points = 0;  m15_text = "M15: " + stats_m15 + "Ana Yöne Ters! Zirveden/Dipten Sert %20 İvme İle Dönmüş (Tuzak Riski!) -> [0 Skor]\n"; }
        } else {
            if (p_m15 >= 50.0) {
                if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "%50+ Dinlenmiş Uyumlu Bölge -> [+5 Skor]\n"; }
                else                { m15_points = 0;  m15_text = "M15: " + stats_m15 + "%50+ Şişkin ve Ana Yöne Ters (Tuzak Riski) -> [0 Skor]\n"; }
-           } else if (p_m15 >= 20.0) {
-               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Ana Yöne Uyumlu Çekilme Devam Ediyor -> [+5 Skor]\n"; }
-               else                { m15_points = 0;  m15_text = "M15: " + stats_m15 + "Ana Yöne Ters! Düzeltme İlerledi (%20+), Tehlikeli Bölge -> [0 Skor]\n"; }
-           } else { // Shallow (p_m15 < 20.0)
-               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Düzeltme Yolu Açık, Uyumlu Yön (Çekilme <%20) -> [+5 Skor]\n"; }
-               else                { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Erken Karşıt Minör Düzeltme İşlemi (Çekilme <%20) -> [+5 Skor]\n"; }
+           } else { // Shallow (p_m15 < 50.0)
+               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Düzeltme Yolu Açık, Uyumlu Yön -> [+5 Skor]\n"; }
+               else                { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Ufak (%50 Altı) Karşıt Düzeltme İşlemi Mümkün -> [+5 Skor]\n"; }
            }
        }
    }
@@ -596,35 +590,19 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        if (m5_momentum) {
            if (is_m5_aligned) {
                if (is_m5_deep) {
-                   m5_points = 15; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Maksimum Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Tamamlanmış ve Ana Yöne Sert İvme Var -> [+15 Skor]\n";
+                   m5_points = 15; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Ve Sert İvme Var -> [+15 Skor]\n";
                } else {
-                   m5_points = 10; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme Şartı Sağlanmamış, Sadece Ana Yöne Sert İvme Var -> [+10 Skor]\n";
+                   m5_points = 10; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme Yok, Sadece Ana Yöne Sert İvme Var -> [+10 Skor]\n";
                }
            }
            else {
-               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ana Yöne Ters Yönde Anlık İvme (Mikro Düzeltme İçi) -> [0 Skor]\n";
+               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ana Yöne Ters! Zirveden/Dipten Sert %20 İvme İle Dönmüş (Tuzak Riski!) -> [0 Skor]\n";
            }
        } else {
-           if (p_m5 >= 20.0) {
-               if (is_m5_aligned) {
-                   if (is_m5_deep) {
-                       m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Maksimum Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Şartı Başarıyla Tamamlanmış, Yön Uyumlu -> [+5 Skor]\n";
-                   } else {
-                       m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Maksimum Çekilme Yetersiz (Fiyat Yeterince Dinlenmedi) -> [0 Skor]\n";
-                   }
-               } else {
-                   m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ana Yöne Ters! Düzeltme İlerledi (%20+), Tehlikeli Bölge -> [0 Skor]\n";
-               }
-           } else { // Shallow (p_m5 < 20.0)
-               if (is_m5_aligned) {
-                   if (is_m5_deep) {
-                       m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Maksimum Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Şartı Başarıyla Tamamlanmış, Yön Uyumlu -> [+5 Skor]\n";
-                   } else {
-                       m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Maksimum Çekilme Yetersiz (Fiyat Yeterince Dinlenmedi) -> [0 Skor]\n";
-                   }
-               } else {
-                   m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Erken Karşıt Minör Düzeltme İşlemi (Çekilme <%20) -> [+5 Skor]\n";
-               }
+           if (is_m5_aligned && is_m5_deep) {
+               m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Başarılı, Yön Uyumlu -> [+5 Skor]\n";
+           } else {
+               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Maksimum Çekilme Yetersiz (Fiyat Yeterince Dinlenmedi) -> [0 Skor]\n";
            }
        }
    }
