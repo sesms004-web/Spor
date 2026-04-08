@@ -476,12 +476,11 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            if (is_m15_aligned) { m15_points = 10; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: ⚡ %20'den fazla harika bir sıçrama/düşüş ivmesi var ve işlem yönüyle eşleşiyor! -> [+10 Skor]\n\n"; }
            else                { m15_points = 0;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 🛑 M15 ters yönde %20 momentum kopartmış. Bu dalgaya karşı işlem açmak riskli. Puan sıfırlandı. -> [+0 Skor]\n\n"; }
        } else {
-           if (p_m15 >= 50.0) {
-               if (is_m15_aligned) { m15_points = 5;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: ✅ Fiyat %50'lik pahalılık/ucuzluk seviyesine ulaşmış, yönümüz de uyumlu. Standart onay. -> [+5 Skor]\n\n"; }
-               else                { m15_points = 0;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: ⚠️ Fiyat %50 seviyesinde şişkin ancak işlem yönümüze TERS. Tuzak kırılım olabilir. -> [+0 Skor]\n\n"; }
-           } else { // Shallow (p_m15 < 50.0)
-               if (is_m15_aligned) { m15_points = 5;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 📈 Yön uyumlu ve fiyatın %50 hedefine yürümesi için önünde güzel bir marj (boşluk) var. -> [+5 Skor]\n\n"; }
-               else                { m15_points = 5;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 🎯 Yönümüz ters ama M15 çok sığ (%50 altı). Düzeltme hareketinin potansiyeli sebebiyle desteklendi. -> [+5 Skor]\n\n"; }
+           if (is_m15_aligned) {
+               m15_points = 5; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: ✅ M15 Ana Yönü işlemimizle tamamen uyumlu. Ekstra düzeltme şartı aranmadan onaylandı. -> [+5 Skor]\n\n";
+           } else {
+               if (p_m15 >= 50.0) { m15_points = 0; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: ⚠️ Fiyat %50 seviyesinde şişkin ancak işlem yönümüze TERS. Tuzak kırılım olabilir. -> [+0 Skor]\n\n"; }
+               else               { m15_points = 5; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 🎯 Yönümüz ters ama M15 henüz çok sığ (%50 altı). Düzeltme hareketinin potansiyeli sebebiyle desteklendi. -> [+5 Skor]\n\n"; }
            }
        }
    }
@@ -512,10 +511,10 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                m5_points = 0; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 🛑 Bize ters yönde güçlü bir (%20+) momentum patlaması yaşanıyor. Çok tehlikeli! Puan yok. -> [+0 Skor]\n\n";
            }
        } else {
-           if (is_m5_aligned && is_m5_deep) {
-               m5_points = 5; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: ✅ Ayarlarda istenen (%" + DoubleToString(InpPullbackM5, 1) + "+) derin çekilme yapılmış ve M5 yönü bizim işlemimizle tamamen aynı. -> [+5 Skor]\n\n";
+           if (is_m5_aligned) {
+               m5_points = 5; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: ✅ M5 Ana Yönü işlemimizle uyumlu. Düzeltme şartı göz ardı edilerek onaylandı. -> [+5 Skor]\n\n";
            } else {
-               m5_points = 0; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: ⚠️ Fiyat M5 grafiğinde yeterince düzeltme/dinlenme yapmamış (Şişkin). Mikro zaman için riskli. -> [+0 Skor]\n\n";
+               m5_points = 0; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: ⚠️ M5 yönü TERS. İşlemimiz desteklenmiyor, mikro zaman filtresinden geçemedi. -> [+0 Skor]\n\n";
            }
        }
    }
