@@ -683,7 +683,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        }
 
        // --- DİNAMİK M1 ÇEKİLME İŞLEM LİMİTİ ---
-       bool is_deep_elastic = (mp_m1 >= 60.0 && true_live_m1 >= 50.0);
+       bool is_deep_elastic = (mp_m1 >= 40.0);
        int allowed_trades = is_deep_elastic ? InpMaxTradesPerSwing : 1;
 
        if (current_swing_trades < allowed_trades) {
@@ -739,7 +739,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
            }
        } else {
-           string reason = (!is_deep_elastic) ? " (M1 Çekilmesi yeterince derin (%60) veya esnek (%50) olmadığı için sadece 1 işleme izin verildi)" : "";
+           string reason = (!is_deep_elastic) ? " (M1 Çekilmesi %40 seviyesine ulaşmadığı için sadece 1 işleme izin verildi)" : "";
            Print("⚠️ [AUTO-TRADE] Bu majör dalga için maksimum işlem limitine (" + IntegerToString(allowed_trades) + ") ulaşıldı" + reason + ". Yeni sinyal gönderilmedi.");
        }
    }
