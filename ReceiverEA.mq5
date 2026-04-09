@@ -26,7 +26,7 @@ int OnInit()
    // Her 1 saniyede bir klasörü kontrol et
    EventSetTimer(1);
 
-   trade.SetExpertMagicNumber(55555);
+   trade.SetExpertMagicNumber(454545);
 
    Print("📡 [ReceiverEA] Başlatıldı. Beklenen sinyal dosyası: vol100_signal_", base_symbol, ".txt");
    return(INIT_SUCCEEDED);
@@ -84,7 +84,7 @@ void OnTimer()
 
    Print("📥 [YENİ SİNYAL] Yön: ", sig_dir, " | SL Puan: ", sl_pts, " | TP Puan: ", tp_pts);
 
-   // Halihazırda açık işlem var mı kontrol et
+   // SADECE BİZİM BOTA AİT (Magic Number) açık işlem var mı kontrol et. Diğer botların işlemine karışma!
    if(PositionsTotal() > 0)
      {
       for(int i = PositionsTotal() - 1; i >= 0; i--)
@@ -92,8 +92,12 @@ void OnTimer()
          string pos_sym = PositionGetSymbol(i);
          if(pos_sym == Symbol())
            {
-            Print("⚠️ Halihazırda " + Symbol() + " üzerinde açık işlem var. Yeni sinyal reddedildi.");
-            return;
+            long pos_magic = PositionGetInteger(POSITION_MAGIC);
+            if(pos_magic == 454545) // Sadece bizim sihirli numaramız
+              {
+               Print("⚠️ Bizim botun " + Symbol() + " üzerinde zaten açık bir işlemi var. Yeni sinyal reddedildi.");
+               return;
+              }
            }
         }
      }
