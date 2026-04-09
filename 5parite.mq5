@@ -426,7 +426,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    } else {
        if (p_h1 >= 50.0) { // Premium
            if (is_h1_aligned) { h1_points = 30; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 💎 Fiyat %50'nin üstünde mükemmel bir indirim/pahalı (Premium) bölgesine girdi ve yönümüzle aynı. Çok güvenli. -> [+30 Skor]\n\n"; }
-           else               { h1_points = 0;  h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 📉 Fiyat %50 Premium bölgesinde fakat H1'in ana trendi işlemimize ters! Puan verilmedi. -> [+0 Skor]\n\n"; }
+           else               { h1_points = 20; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 📈 Yönümüz TERS ve fiyat %50 Premium bölgesinde, ANCAK momentumlu çekilme yok, gidecek yolu var! -> [+20 Skor]\n\n"; }
        } else { // %50 Altında Kalan Tüm Çekilmeler (Aşırı Şişkin Piyasa Fırsatları)
            if (is_h1_aligned) { h1_points = 30; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 🔥 H1 Trendi güçlü, henüz %50 Premium'a gelmedi. Şişkin piyasada trende katılıyoruz! -> [+30 Skor]\n\n"; }
            else               { h1_points = 30; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 🎯 H1 Trendi henüz %50 indirim bölgesine ulaşmadı (Aşırı Şişkin). Karşı trend yönünde (Düzeltme) yepyeni ve kârlı bir dalga fırsatı! -> [+30 Skor]\n\n"; }
@@ -679,12 +679,16 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                }
            }
 
+           // Hesaplamaları önce yap ki mesafeleri bildirime ekleyebilelim
+           double sl_dist_raw = MathAbs(entry - sl);
+           double tp_dist_raw = MathAbs(entry - tp);
+
            // --- BİLDİRİM (NOTIFICATION) - DETAYLI VE EMOJİLİ ---
            string trade_msg2 = msg2; // Bölüm 2'nin sonuna işlem sınırlarını ekle
            trade_msg2 += "💰 İŞLEM SEVİYELERİ:\n";
            trade_msg2 += "   └ Entry (Giriş): " + DoubleToString(entry, 5) + "\n";
-           trade_msg2 += "   └ Stop Loss: " + DoubleToString(sl, 5) + "\n";
-           trade_msg2 += "   └ Take Profit: " + DoubleToString(tp, 5) + "\n";
+           trade_msg2 += "   └ Stop Loss: " + DoubleToString(sl, 5) + " (Mesafe: " + DoubleToString(sl_dist_raw, 2) + ")\n";
+           trade_msg2 += "   └ Take Profit: " + DoubleToString(tp, 5) + " (Mesafe: " + DoubleToString(tp_dist_raw, 2) + ")\n";
            trade_msg2 += "===================\n";
 
            if(InpAlertPopup) { Alert(msg1); Alert(trade_msg2); }
@@ -696,16 +700,12 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                string filename = "vol100_signal_" + Symbol() + ".txt";
                int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
                if (file_handle != INVALID_HANDLE) {
-                   // Fiyat farklarını Puan (Point) cinsinden hesapla
-                   double sl_dist_points = MathAbs(entry - sl) / Point();
-                   double tp_dist_points = MathAbs(entry - tp) / Point();
-
-                   // EA'ya direkt fiyat göndermek yerine Entry ve Mesafe gönderiyoruz
-                   // Format: Sembol, Yön, Giriş Fiyatı, SL Mesafesi (Puan), TP Mesafesi (Puan)
-                   string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl_dist_points, 0) + "," + DoubleToString(tp_dist_points, 0);
+                   // EA'ya direkt fiyat göndermek yerine Entry ve Net Fiyat Mesafesi gönderiyoruz
+                   // Format: Sembol, Yön, Giriş Fiyatı, SL Mesafesi (Net), TP Mesafesi (Net)
+                   string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl_dist_raw, 5) + "," + DoubleToString(tp_dist_raw, 5);
                    FileWrite(file_handle, trade_cmd);
                    FileClose(file_handle);
-                   Print("✅ [AUTO-TRADE] EA İçin Sinyal Dosyası Gönderildi: ", trade_cmd, " (SL: ", DoubleToString(sl_dist_points,0), " Puan, TP: ", DoubleToString(tp_dist_points,0), " Puan)");
+                   Print("✅ [AUTO-TRADE] EA İçin Sinyal Dosyası Gönderildi: ", trade_cmd, " (SL Mesafe: ", DoubleToString(sl_dist_raw,5), ", TP Mesafe: ", DoubleToString(tp_dist_raw,5), ")");
                } else {
                    Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
                }

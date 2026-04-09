@@ -66,7 +66,7 @@ void OnTimer()
 
    if(line == "") return;
 
-   // Gelen Format: XAUUSD,BUY,2350.50,500,1500
+   // Gelen Format: XAUUSD,BUY,2350.50,5.91,17.73
    string parts[];
    int count = StringSplit(line, ',', parts);
 
@@ -79,10 +79,10 @@ void OnTimer()
    string sig_sym  = parts[0];
    string sig_dir  = parts[1];
    double sig_ent  = StringToDouble(parts[2]);
-   double sl_pts   = StringToDouble(parts[3]);
-   double tp_pts   = StringToDouble(parts[4]);
+   double sl_dist_raw = StringToDouble(parts[3]);
+   double tp_dist_raw = StringToDouble(parts[4]);
 
-   Print("📥 [YENİ SİNYAL] Yön: ", sig_dir, " | SL Puan: ", sl_pts, " | TP Puan: ", tp_pts);
+   Print("📥 [YENİ SİNYAL] Yön: ", sig_dir, " | SL Net Mesafe: ", sl_dist_raw, " | TP Net Mesafe: ", tp_dist_raw);
 
    // SADECE BİZİM BOTA AİT (Magic Number) açık işlem var mı kontrol et. Diğer botların işlemine karışma!
    if(PositionsTotal() > 0)
@@ -109,9 +109,12 @@ void OnTimer()
 
    if(tick_size == 0 || point == 0) return;
 
+   // EA tarafında kendi puan değerini (point) bulup net fiyat mesafesini puana çevirelim (Lot hesabı için)
+   double ea_sl_pts = sl_dist_raw / point;
+
    // 1 lot için puan başına zarar
    double loss_per_point_1_lot = tick_value / (tick_size / point);
-   double total_loss_1_lot = sl_pts * loss_per_point_1_lot;
+   double total_loss_1_lot = ea_sl_pts * loss_per_point_1_lot;
 
    double lot = InpMinLotSize;
    if(total_loss_1_lot > 0)
@@ -134,16 +137,17 @@ void OnTimer()
 
    if(sig_dir == "BUY")
      {
-      sl_price = ask - (sl_pts * point);
-      tp_price = ask + (tp_pts * point);
+      // Direkt olarak fiyat bazında çıkarma ve toplama yapıyoruz, broker'ın "Point" tuzağına düşmüyoruz
+      sl_price = ask - sl_dist_raw;
+      tp_price = ask + tp_dist_raw;
 
       Print("🚀 BUY İşlemi Açılıyor... Lot: ", DoubleToString(lot, 2), " SL: ", DoubleToString(sl_price, 5), " TP: ", DoubleToString(tp_price, 5));
       trade.Buy(lot, Symbol(), ask, sl_price, tp_price, "5parite Receiver");
      }
    else if(sig_dir == "SELL")
      {
-      sl_price = bid + (sl_pts * point);
-      tp_price = bid - (tp_pts * point);
+      sl_price = bid + sl_dist_raw;
+      tp_price = bid - tp_dist_raw;
 
       Print("🚀 SELL İşlemi Açılıyor... Lot: ", DoubleToString(lot, 2), " SL: ", DoubleToString(sl_price, 5), " TP: ", DoubleToString(tp_price, 5));
       trade.Sell(lot, Symbol(), bid, sl_price, tp_price, "5parite Receiver");
