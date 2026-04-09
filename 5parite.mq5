@@ -39,7 +39,11 @@ input int    InpMaxTradesPerSwing      = 2;          // 🔄 Aynı Majör Dalgad
 
 //--- Trade Execution (Gerçek İşlem Açma) ---
 input bool   InpEnableAutoTradeWriter  = false;      // ⚠️ DİKKAT: Ortak Klasöre İşlem (Sinyal Dosyası) Gönder
-input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Tıklandığında Anında Sahte İşlem (Telefon Testi) Gönder
+
+//--- Manuel Test İşlemi (EA Testi) ---
+input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] EA'ya 0.01 Lotluk Test İşlemi Gönder (Tıklandığında)
+input double InpTestTargetSL           = 0.0;        // 🧪 [TEST] Hedef SL Fiyatı (Örn: XAUUSD için 2350.00)
+input double InpTestTargetTP           = 0.0;        // 🧪 [TEST] Hedef TP Fiyatı (Örn: XAUUSD için 2360.00)
 
 //--- Bildirim Ayarları ---
 input bool   InpAlertPopup             = true;       // Ekrana Popup (Uyarı) Penceresi Çıkar
@@ -1712,23 +1716,49 @@ int OnCalculate(const int rates_total,
        // Sadece InpTestTradeExecution durumu FALSE'tan TRUE'ya geçtiğinde (Tetiklendiğinde) 1 kez çalışır
        if (InpTestTradeExecution && !g_prev_test_state) {
            double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-           int test_choch_dir = g_state_curr.maj_tr;
-           double live_pct = 0.0;
+           double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
 
-           if (g_state_curr.maj_h != EMPTY_VALUE && g_state_curr.maj_l != EMPTY_VALUE && g_state_curr.maj_h != g_state_curr.maj_l) {
-               double range = g_state_curr.maj_h - g_state_curr.maj_l;
-               if (test_choch_dir == 1) {
-                   live_pct = ((g_state_curr.maj_h - bid) / range) * 100.0;
-                   if (bid >= g_state_curr.maj_h) live_pct = 0;
-               } else if (test_choch_dir == -1) {
-                   live_pct = ((bid - g_state_curr.maj_l) / range) * 100.0;
-                   if (bid <= g_state_curr.maj_l) live_pct = 0;
+           if (InpTestTargetSL > 0 && InpTestTargetTP > 0) {
+               // MANUEL TEST: Gerçek analizi atla ve EA'ya doğrudan manuel hedefleri (0.01 lot test olarak) gönder
+               int dir = (InpTestTargetSL < bid) ? 1 : -1; // SL fiyattan düşükse BUY, yüksekse SELL
+               string dir_str = (dir == 1) ? "TEST_BUY" : "TEST_SELL";
+               double entry_price = (dir == 1) ? ask : bid;
+
+               double sl_dist_raw = MathAbs(entry_price - InpTestTargetSL);
+               double tp_dist_raw = MathAbs(entry_price - InpTestTargetTP);
+
+               if (InpEnableAutoTradeWriter) {
+                   string filename = "vol100_signal_" + Symbol() + ".txt";
+                   int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
+                   if (file_handle != INVALID_HANDLE) {
+                       string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry_price, 5) + "," + DoubleToString(sl_dist_raw, 5) + "," + DoubleToString(tp_dist_raw, 5);
+                       FileWrite(file_handle, trade_cmd);
+                       FileClose(file_handle);
+                       Print("✅ [TEST AUTO-TRADE] EA İçin Özel (0.01 Lot) Test Sinyali Gönderildi: ", trade_cmd);
+                       Alert("🧪 TEST İŞLEMİ GÖNDERİLDİ! Yön: ", dir_str, " | Entry: ", DoubleToString(entry_price, 5), " | SL Mesafe: ", DoubleToString(sl_dist_raw, 5), " | TP Mesafe: ", DoubleToString(tp_dist_raw, 5));
+                   } else {
+                       Print("❌ [TEST AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
+                   }
+               } else {
+                   Alert("⚠️ Test butonuna bastın ama 'Sinyal Dosyası Gönder' (InpEnableAutoTradeWriter) ayarı kapalı! Sinyal EA'ya ulaşmayacak.");
                }
-               if (live_pct < 0) live_pct = 0;
+           } else {
+               // Eski standart TEST (Sadece analizi görmek için, manuel SL/TP girilmemişse)
+               int test_choch_dir = g_state_curr.maj_tr;
+               double live_pct = 0.0;
+               if (g_state_curr.maj_h != EMPTY_VALUE && g_state_curr.maj_l != EMPTY_VALUE && g_state_curr.maj_h != g_state_curr.maj_l) {
+                   double range = g_state_curr.maj_h - g_state_curr.maj_l;
+                   if (test_choch_dir == 1) {
+                       live_pct = ((g_state_curr.maj_h - bid) / range) * 100.0;
+                       if (bid >= g_state_curr.maj_h) live_pct = 0;
+                   } else if (test_choch_dir == -1) {
+                       live_pct = ((bid - g_state_curr.maj_l) / range) * 100.0;
+                       if (bid <= g_state_curr.maj_l) live_pct = 0;
+                   }
+                   if (live_pct < 0) live_pct = 0;
+               }
+               EvaluateTradeSignal(last_idx, TimeCurrent(), bid, test_choch_dir, live_pct, true, bid, true);
            }
-
-           // Gerçek algoritmaya tamamen gerçek verilerle TEST emri yolla (Sahte veri yok)
-           EvaluateTradeSignal(last_idx, TimeCurrent(), bid, test_choch_dir, live_pct, true, bid, true);
        }
        // Mevcut durumu kaydet (Bir sonraki tick'te tekrar atmasını engeller, kapatıp açılmayı bekler)
        g_prev_test_state = InpTestTradeExecution;

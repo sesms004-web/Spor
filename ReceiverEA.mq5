@@ -135,7 +135,14 @@ void OnTimer()
    double sl_price = 0.0;
    double tp_price = 0.0;
 
-   if(sig_dir == "BUY")
+   // Test Sinyali ise Lot Miktarını zorla 0.01 yap
+   if(sig_dir == "TEST_BUY" || sig_dir == "TEST_SELL")
+     {
+      lot = InpMinLotSize;
+      Print("🧪 TEST SİNYALİ ALGILANDI: Lot miktarı güvenli test için ", DoubleToString(lot, 2), " olarak ayarlandı.");
+     }
+
+   if(sig_dir == "BUY" || sig_dir == "TEST_BUY")
      {
       // Direkt olarak fiyat bazında çıkarma ve toplama yapıyoruz, broker'ın "Point" tuzağına düşmüyoruz
       sl_price = ask - sl_dist_raw;
@@ -144,7 +151,7 @@ void OnTimer()
       Print("🚀 BUY İşlemi Açılıyor... Lot: ", DoubleToString(lot, 2), " SL: ", DoubleToString(sl_price, 5), " TP: ", DoubleToString(tp_price, 5));
       trade.Buy(lot, Symbol(), ask, sl_price, tp_price, "5parite Receiver");
      }
-   else if(sig_dir == "SELL")
+   else if(sig_dir == "SELL" || sig_dir == "TEST_SELL")
      {
       sl_price = bid + sl_dist_raw;
       tp_price = bid - tp_dist_raw;
