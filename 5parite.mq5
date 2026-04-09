@@ -44,7 +44,6 @@ input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Tıklandığ
 //--- Bildirim Ayarları ---
 input bool   InpAlertPopup             = true;       // Ekrana Popup (Uyarı) Penceresi Çıkar
 input bool   InpAlertPush              = true;       // Telefona MT5 Push Bildirimi Gönder
-input bool   InpEnableAlertCHoCHBase   = true;       // Ana CHoCH (Kırılım) Bildirimi Gönder
 
 //--- Globals ---
 int g_counter = 0;
@@ -998,23 +997,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           }
 
           if (!is_history) {
-              string msg = "🔴 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
-              msg += "Yön: ⬇️ AŞAĞI\n";
-              if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.\n";
-              } else {
-                  msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.\n";
-              }
-
-              msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
-
               static int last_alert_d1_i_bear = 0;
               if (state.d1_i != last_alert_d1_i_bear) {
                   if (draw_ui && Period() == PERIOD_M1) {
-                      if (InpEnableAlertCHoCHBase) {
-                          if(InpAlertPopup) Alert(msg);
-                          if(InpAlertPush) SendNotification(msg);
-                      }
                       EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong, trade_sl_anchor);
                   }
                   last_alert_d1_i_bear = state.d1_i;
@@ -1056,23 +1041,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           }
 
           if (!is_history) {
-              string msg = "🟢 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
-              msg += "Yön: ⬆️ YUKARI\n";
-              if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Dip likiditesi alındı.\n";
-              } else {
-                  msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.\n";
-              }
-
-              msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
-
               static int last_alert_d1_i_bull = 0;
               if (state.d1_i != last_alert_d1_i_bull) {
                   if (draw_ui && Period() == PERIOD_M1) {
-                      if (InpEnableAlertCHoCHBase) {
-                          if(InpAlertPopup) Alert(msg);
-                          if(InpAlertPush) SendNotification(msg);
-                      }
                       EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong, trade_sl_anchor);
                   }
                   last_alert_d1_i_bull = state.d1_i;
