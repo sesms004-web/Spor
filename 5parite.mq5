@@ -644,6 +644,28 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                }
            }
 
+           // --- TP SINIRLANDIRMASI (SWING + %10 KURALI) ---
+           double maj_h = g_state_curr.maj_h;
+           double maj_l = g_state_curr.maj_l;
+           if (maj_h != EMPTY_VALUE && maj_l != EMPTY_VALUE && maj_h > maj_l) {
+               double swing_range = maj_h - maj_l;
+               double buffer_10pct = swing_range * 0.10;
+
+               if (trigger_dir == 1) { // BUY -> TP aşırı yukarıdaysa reddet
+                   double max_allowed_tp = maj_h + buffer_10pct;
+                   if (tp > max_allowed_tp) {
+                       Print("⚠️ [TRADE REJECTED] BUY İptal: TP noktası (", tp, "), Swing Tepesi + %10 sınırını (", max_allowed_tp, ") aşıyor. Hedef ulaşılamaz.");
+                       return;
+                   }
+               } else if (trigger_dir == -1) { // SELL -> TP aşırı aşağıdaysa reddet
+                   double min_allowed_tp = maj_l - buffer_10pct;
+                   if (tp < min_allowed_tp) {
+                       Print("⚠️ [TRADE REJECTED] SELL İptal: TP noktası (", tp, "), Swing Dibi - %10 sınırını (", min_allowed_tp, ") aşıyor. Hedef ulaşılamaz.");
+                       return;
+                   }
+               }
+           }
+
            // --- BİLDİRİM (NOTIFICATION) - DETAYLI VE EMOJİLİ ---
            string trade_msg2 = msg2; // Bölüm 2'nin sonuna işlem sınırlarını ekle
            trade_msg2 += "💰 İŞLEM SEVİYELERİ:\n";

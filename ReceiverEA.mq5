@@ -1,0 +1,148 @@
+//+------------------------------------------------------------------+
+//|                                                 ReceiverEA.mq5   |
+//|                                     5parite Sinyal Alıcı EA      |
+//+------------------------------------------------------------------+
+#property copyright "Jules"
+#property link      ""
+#property version   "1.00"
+
+#include <Trade\Trade.mqh>
+
+input double InpRiskAmountUSD = 20.0;    // İşlem Başına Risk (USD)
+input double InpMaxLotSize    = 10.0;    // Maksimum Lot Sınırı
+input double InpMinLotSize    = 0.01;    // Minimum Lot Sınırı
+
+CTrade trade;
+string base_symbol = "";
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+  {
+   // Aracı kurum eklerini temizle (Örn: XAUUSDr -> XAUUSD)
+   base_symbol = StringSubstr(Symbol(), 0, 6);
+
+   // Her 1 saniyede bir klasörü kontrol et
+   EventSetTimer(1);
+
+   trade.SetExpertMagicNumber(55555);
+
+   Print("📡 [ReceiverEA] Başlatıldı. Beklenen sinyal dosyası: vol100_signal_", base_symbol, ".txt");
+   return(INIT_SUCCEEDED);
+  }
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+  {
+   EventKillTimer();
+  }
+
+//+------------------------------------------------------------------+
+//| Timer function                                                   |
+//+------------------------------------------------------------------+
+void OnTimer()
+  {
+   string filename = "vol100_signal_" + base_symbol + ".txt";
+
+   // Dosya yoksa çık
+   if(!FileIsExist(filename, FILE_COMMON)) return;
+
+   // Dosya varsa oku
+   int handle = FileOpen(filename, FILE_READ | FILE_TXT | FILE_COMMON);
+   if(handle == INVALID_HANDLE)
+     {
+      Print("❌ Sinyal dosyası açılamadı! Hata: ", GetLastError());
+      return;
+     }
+
+   string line = FileReadString(handle);
+   FileClose(handle);
+
+   // Okuduktan hemen sonra sil (Aynı işlemi tekrar açmamak için)
+   FileDelete(filename, FILE_COMMON);
+
+   if(line == "") return;
+
+   // Gelen Format: XAUUSD,BUY,2350.50,500,1500
+   string parts[];
+   int count = StringSplit(line, ',', parts);
+
+   if(count < 5)
+     {
+      Print("❌ Hatalı sinyal formatı: ", line);
+      return;
+     }
+
+   string sig_sym  = parts[0];
+   string sig_dir  = parts[1];
+   double sig_ent  = StringToDouble(parts[2]);
+   double sl_pts   = StringToDouble(parts[3]);
+   double tp_pts   = StringToDouble(parts[4]);
+
+   Print("📥 [YENİ SİNYAL] Yön: ", sig_dir, " | SL Puan: ", sl_pts, " | TP Puan: ", tp_pts);
+
+   // Halihazırda açık işlem var mı kontrol et
+   if(PositionsTotal() > 0)
+     {
+      for(int i = PositionsTotal() - 1; i >= 0; i--)
+        {
+         string pos_sym = PositionGetSymbol(i);
+         if(pos_sym == Symbol())
+           {
+            Print("⚠️ Halihazırda " + Symbol() + " üzerinde açık işlem var. Yeni sinyal reddedildi.");
+            return;
+           }
+        }
+     }
+
+   // Lot hesaplama (Risk bazlı)
+   double tick_value = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_VALUE);
+   double tick_size  = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_SIZE);
+   double point      = SymbolInfoDouble(Symbol(), SYMBOL_POINT);
+
+   if(tick_size == 0 || point == 0) return;
+
+   // 1 lot için puan başına zarar
+   double loss_per_point_1_lot = tick_value / (tick_size / point);
+   double total_loss_1_lot = sl_pts * loss_per_point_1_lot;
+
+   double lot = InpMinLotSize;
+   if(total_loss_1_lot > 0)
+     {
+      lot = InpRiskAmountUSD / total_loss_1_lot;
+     }
+
+   // Lot yuvarlama
+   double lot_step = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_STEP);
+   lot = MathRound(lot / lot_step) * lot_step;
+
+   if(lot < InpMinLotSize) lot = InpMinLotSize;
+   if(lot > InpMaxLotSize) lot = InpMaxLotSize;
+
+   double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
+   double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+
+   double sl_price = 0.0;
+   double tp_price = 0.0;
+
+   if(sig_dir == "BUY")
+     {
+      sl_price = ask - (sl_pts * point);
+      tp_price = ask + (tp_pts * point);
+
+      Print("🚀 BUY İşlemi Açılıyor... Lot: ", DoubleToString(lot, 2), " SL: ", DoubleToString(sl_price, 5), " TP: ", DoubleToString(tp_price, 5));
+      trade.Buy(lot, Symbol(), ask, sl_price, tp_price, "5parite Receiver");
+     }
+   else if(sig_dir == "SELL")
+     {
+      sl_price = bid + (sl_pts * point);
+      tp_price = bid - (tp_pts * point);
+
+      Print("🚀 SELL İşlemi Açılıyor... Lot: ", DoubleToString(lot, 2), " SL: ", DoubleToString(sl_price, 5), " TP: ", DoubleToString(tp_price, 5));
+      trade.Sell(lot, Symbol(), bid, sl_price, tp_price, "5parite Receiver");
+     }
+  }
+//+------------------------------------------------------------------+
