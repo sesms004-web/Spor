@@ -44,6 +44,7 @@ input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Tıklandığ
 //--- Bildirim Ayarları ---
 input bool   InpAlertPopup             = true;       // Ekrana Popup (Uyarı) Penceresi Çıkar
 input bool   InpAlertPush              = true;       // Telefona MT5 Push Bildirimi Gönder
+input bool   InpAlertRejectedTrades    = true;       // ⚠️ Düşük Puanlı/İptal Edilen Sinyalleri de Bildir (Sorun Tespiti)
 
 //--- Globals ---
 int g_counter = 0;
@@ -450,9 +451,10 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        if (!is_m30_aligned) { // YÖN TERS
            if (p_m30 >= 50.0) {
                if (m30_momentum) { m30_points = 0;  m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 🛑 Premium bölgede TERS yönlü %15 momentum var. Düzeltme bitiyor olabilir, riskli! -> [+0 Skor]\n\n"; }
-               else              { m30_points = 15; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 📈 Premium bölgede TERS yönlü işlem, henüz dönüş momentumu yok, gidecek yolu var. -> [+15 Skor]\n\n"; }
-           } else {
-               m30_points = 0; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 📉 M30 henüz şişkin bölgede ve YÖN TERS. Çok tehlikeli! -> [+0 Skor]\n\n";
+               else              { m30_points = 10; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 📈 Premium bölgede TERS yönlü işlem, henüz dönüş momentumu yok, gidecek yolu var. -> [+10 Skor]\n\n"; }
+           } else { // Shallow (< 50%)
+               if (m30_momentum) { m30_points = 0;  m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 🛑 Şişkin bölgede TERS yönlü %15 momentum var. Tehlikeli! -> [+0 Skor]\n\n"; }
+               else              { m30_points = 10; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 📉 M30 henüz şişkin bölgede, YÖN TERS ama ivme yok. Düzeltme potansiyeli! -> [+10 Skor]\n\n"; }
            }
        } else { // YÖN UYUMLU
            if (p_m30 < 50.0) {
@@ -483,9 +485,10 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        if (!is_m15_aligned) { // YÖN TERS
            if (p_m15 >= 50.0) {
                if (m15_momentum) { m15_points = 0;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 🛑 Premium bölgede TERS yönlü %15 momentum var. Düzeltme bitiyor olabilir, riskli! -> [+0 Skor]\n\n"; }
-               else              { m15_points = 10; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 📈 Premium bölgede TERS yönlü işlem, henüz dönüş momentumu yok, gidecek yolu var. -> [+10 Skor]\n\n"; }
-           } else {
-               m15_points = 0; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 📉 M15 henüz şişkin bölgede ve YÖN TERS. Çok tehlikeli! -> [+0 Skor]\n\n";
+               else              { m15_points = 5;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 📈 Premium bölgede TERS yönlü işlem, henüz dönüş momentumu yok, gidecek yolu var. -> [+5 Skor]\n\n"; }
+           } else { // Shallow (< 50%)
+               if (m15_momentum) { m15_points = 0;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 🛑 Şişkin bölgede TERS yönlü %15 momentum var. Tehlikeli! -> [+0 Skor]\n\n"; }
+               else              { m15_points = 5;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 📉 M15 henüz şişkin bölgede, YÖN TERS ama ivme yok. Düzeltme potansiyeli! -> [+5 Skor]\n\n"; }
            }
        } else { // YÖN UYUMLU
            if (p_m15 < 50.0) {
@@ -517,8 +520,9 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            if (p_m5 >= 50.0) {
                if (m5_momentum) { m5_points = 0; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 🛑 Premium bölgede TERS yönlü %15 momentum var. Riskli! -> [+0 Skor]\n\n"; }
                else             { m5_points = 5; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 📈 Premium bölgede TERS yönlü işlem, gidecek yolu var. -> [+5 Skor]\n\n"; }
-           } else {
-               m5_points = 0; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 📉 M5 henüz şişkin bölgede ve YÖN TERS. -> [+0 Skor]\n\n";
+           } else { // Shallow (< 50%)
+               if (m5_momentum) { m5_points = 0; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 🛑 Şişkin bölgede TERS yönlü %15 momentum var. Tehlikeli! -> [+0 Skor]\n\n"; }
+               else             { m5_points = 5; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 📉 M5 henüz şişkin bölgede, YÖN TERS ama ivme yok. Düzeltme potansiyeli! -> [+5 Skor]\n\n"; }
            }
        } else { // YÖN UYUMLU
            if (p_m5 < 50.0) {
@@ -574,13 +578,55 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    msg2 += "📈 TOPLAM SKOR: " + IntegerToString(total_points) + " / " + IntegerToString(InpMinTradeScoreLimit) + "\n";
    msg2 += "KARAR: " + verdict + "\n";
 
-   // TEST bildirimiyse detaylı mesajı hemen bas ve çık
-   if (is_test) {
-       if(InpAlertPopup) { Alert(msg1); Alert(msg2); }
-       if(InpAlertPush) { SendNotification(msg1); SendNotification(msg2); }
-       Print(msg1); Print(msg2);
-       return; // Test runs do not execute trades or track virtual setups.
+   // SL ve TP hesaplamalarını önceden yapalım ki bildirime ekleyebilelim
+   double sl = 0.0;
+   double tp = 0.0;
+   double entry = live_price;
+
+   if (trigger_dir == 1) { // BUY
+       if (is_strong) { // Likidite alındı (Güçlü)
+           sl = ext_pt; // SL direkt en dibe konur
+           double dist = entry - sl;
+           tp = entry + (dist * 3.0); // 1:3 RR
+       } else { // Likidite alınmadı (Zayıf)
+           double raw_sl = ext_pt;
+           double dist = entry - raw_sl;
+           sl = raw_sl - (dist * 0.5); // Zayıf dibin 0.5 boy daha altına (toplam 1.5 boy SL mesafesi)
+           double new_dist = entry - sl;
+           tp = entry + (new_dist * 3.0); // 1:3 RR
+       }
+   } else { // SELL
+       if (is_strong) {
+           sl = ext_pt; // SL direkt en tepeye konur
+           double dist = sl - entry;
+           tp = entry - (dist * 3.0); // 1:3 RR
+       } else {
+           double raw_sl = ext_pt;
+           double dist = raw_sl - entry;
+           sl = raw_sl + (dist * 0.5); // Zayıf tepenin 0.5 boy daha üstüne (toplam 1.5 boy SL mesafesi)
+           double new_dist = sl - entry;
+           tp = entry - (new_dist * 3.0); // 1:3 RR
+       }
    }
+
+   double sl_dist_raw = MathAbs(entry - sl);
+   double tp_dist_raw = MathAbs(entry - tp);
+
+   string trade_msg2 = msg2; // Bölüm 2'nin sonuna işlem sınırlarını ekle
+   trade_msg2 += "💰 İŞLEM SEVİYELERİ:\n";
+   trade_msg2 += "   └ Entry (Giriş): " + DoubleToString(entry, 5) + "\n";
+   trade_msg2 += "   └ Stop Loss: " + DoubleToString(sl, 5) + " (Mesafe: " + DoubleToString(sl_dist_raw, 2) + ")\n";
+   trade_msg2 += "   └ Take Profit: " + DoubleToString(tp, 5) + " (Mesafe: " + DoubleToString(tp_dist_raw, 2) + ")\n";
+   trade_msg2 += "===================\n";
+
+   // --- BİLDİRİM GÖNDERİMİ (Her CHoCH'ta tetiklenir, reddedilenleri de içerir) ---
+   if (is_test || total_points >= InpMinTradeScoreLimit || InpAlertRejectedTrades) {
+       if(InpAlertPopup) { Alert(msg1); Alert(trade_msg2); }
+       if(InpAlertPush) { SendNotification(msg1); SendNotification(trade_msg2); }
+       Print(msg1); Print(trade_msg2);
+   }
+
+   if (is_test) return; // Test runs do not execute trades or track virtual setups.
 
    // --- AUTO-TRADE / SIGNAL WRITER LOGIC ---
    static int last_maj_i = -1;
@@ -627,36 +673,6 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                }
            }
 
-           double sl = 0.0;
-           double tp = 0.0;
-           double entry = live_price;
-
-           if (trigger_dir == 1) { // BUY
-               if (is_strong) { // Likidite alındı (Güçlü)
-                   sl = ext_pt; // SL direkt en dibe konur
-                   double dist = entry - sl;
-                   tp = entry + (dist * 3.0); // 1:3 RR
-               } else { // Likidite alınmadı (Zayıf)
-                   double raw_sl = ext_pt;
-                   double dist = entry - raw_sl;
-                   sl = raw_sl - (dist * 0.5); // Zayıf dibin 0.5 boy daha altına (toplam 1.5 boy SL mesafesi)
-                   double new_dist = entry - sl;
-                   tp = entry + (new_dist * 3.0); // 1:3 RR
-               }
-           } else { // SELL
-               if (is_strong) {
-                   sl = ext_pt; // SL direkt en tepeye konur
-                   double dist = sl - entry;
-                   tp = entry - (dist * 3.0); // 1:3 RR
-               } else {
-                   double raw_sl = ext_pt;
-                   double dist = raw_sl - entry;
-                   sl = raw_sl + (dist * 0.5); // Zayıf tepenin 0.5 boy daha üstüne (toplam 1.5 boy SL mesafesi)
-                   double new_dist = sl - entry;
-                   tp = entry - (new_dist * 3.0); // 1:3 RR
-               }
-           }
-
            // --- TP SINIRLANDIRMASI (SWING + %10 KURALI) ---
            double maj_h = g_state_curr.maj_h;
            double maj_l = g_state_curr.maj_l;
@@ -678,22 +694,6 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                    }
                }
            }
-
-           // Hesaplamaları önce yap ki mesafeleri bildirime ekleyebilelim
-           double sl_dist_raw = MathAbs(entry - sl);
-           double tp_dist_raw = MathAbs(entry - tp);
-
-           // --- BİLDİRİM (NOTIFICATION) - DETAYLI VE EMOJİLİ ---
-           string trade_msg2 = msg2; // Bölüm 2'nin sonuna işlem sınırlarını ekle
-           trade_msg2 += "💰 İŞLEM SEVİYELERİ:\n";
-           trade_msg2 += "   └ Entry (Giriş): " + DoubleToString(entry, 5) + "\n";
-           trade_msg2 += "   └ Stop Loss: " + DoubleToString(sl, 5) + " (Mesafe: " + DoubleToString(sl_dist_raw, 2) + ")\n";
-           trade_msg2 += "   └ Take Profit: " + DoubleToString(tp, 5) + " (Mesafe: " + DoubleToString(tp_dist_raw, 2) + ")\n";
-           trade_msg2 += "===================\n";
-
-           if(InpAlertPopup) { Alert(msg1); Alert(trade_msg2); }
-           if(InpAlertPush) { SendNotification(msg1); SendNotification(trade_msg2); }
-           Print(msg1); Print(trade_msg2);
 
            // --- DOSYAYA YAZMA (EA İÇİN) ---
            if (InpEnableAutoTradeWriter) {
