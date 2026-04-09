@@ -60,6 +60,7 @@ double g_virtual_sl = 0.0;
 double g_virtual_tp = 0.0;
 int g_virtual_last_outcome = 0; // 0 = Yok, -1 = SL Oldu, 1 = TP Oldu
 double g_virtual_last_sl_price = 0.0; // SL olunan fiyat seviyesini hafızada tutar
+double g_virtual_last_entry_price = 0.0; // İlk işlemin giriş (kırılım) seviyesi
 
 double g_last_alert_maj_h = 0;
 double g_last_alert_maj_l = 0;
@@ -577,6 +578,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        current_swing_trades = 0;
        g_virtual_last_outcome = 0; // Yeni dalgada eski SL hafızasını sıfırla
        g_virtual_last_sl_price = 0.0;
+       g_virtual_last_entry_price = 0.0;
        last_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
    }
 
@@ -596,13 +598,19 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
            // --- Testere/Aynı Bölge Koruması (Sadece 1. işlem SL olduysa geçerli) ---
            if (current_swing_trades > 0 && g_virtual_last_outcome == -1) {
-               if (trigger_dir == 1 && live_price > g_virtual_last_sl_price) {
-                   Print("⚠️ [TRADE REJECTED] BUY İşlemi Reddedildi: Fiyat eski Stop Loss seviyesinin (", g_virtual_last_sl_price, ") altında değil! Aynı bölgeden işleme girilmeyecek.");
-                   return;
+               // Kullanıcının Mantığı: 2. Sinyalin "live_price" (kırılım) seviyesi, 1. işlemin SL seviyesi ile Entry seviyesi arasında olmalı.
+               // Eğer fiyat SL seviyesini tamamen aşağı kırmışsa (live_price <= SL) veya eski Entry'yi geçmişse (live_price >= Entry) işlem alınmaz.
+               if (trigger_dir == 1) { // BUY
+                   if (live_price <= g_virtual_last_sl_price || live_price >= g_virtual_last_entry_price) {
+                       Print("⚠️ [TRADE REJECTED] 2. BUY Reddedildi: Kırılım seviyesi (", live_price, "), SL (", g_virtual_last_sl_price, ") ile Kırılım Kutusu (", g_virtual_last_entry_price, ") arasında değil!");
+                       return;
+                   }
                }
-               if (trigger_dir == -1 && live_price < g_virtual_last_sl_price) {
-                   Print("⚠️ [TRADE REJECTED] SELL İşlemi Reddedildi: Fiyat eski Stop Loss seviyesinin (", g_virtual_last_sl_price, ") üstünde değil! Aynı bölgeden işleme girilmeyecek.");
-                   return;
+               if (trigger_dir == -1) { // SELL
+                   if (live_price >= g_virtual_last_sl_price || live_price <= g_virtual_last_entry_price) {
+                       Print("⚠️ [TRADE REJECTED] 2. SELL Reddedildi: Kırılım seviyesi (", live_price, "), SL (", g_virtual_last_sl_price, ") ile Kırılım Kutusu (", g_virtual_last_entry_price, ") arasında değil!");
+                       return;
+                   }
                }
            }
 
@@ -668,6 +676,9 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            g_virtual_trade_dir = trigger_dir;
            g_virtual_sl = sl;
            g_virtual_tp = tp;
+       if (current_swing_trades == 1) {
+           g_virtual_last_entry_price = entry; // 1. işlemin giriş (kırılım) fiyatını kaydet
+       }
            Print("🟢 [VIRTUAL TRADE] Sanal İşlem Takipli Başladı! Yön: ", dir_str, " SL: ", sl, " TP: ", tp);
 
        } else {
