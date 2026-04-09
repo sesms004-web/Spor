@@ -33,9 +33,9 @@ input color  InpColorMin = clrRed;
 input color  InpColorBull = clrGreen;
 input color  InpColorBear = clrRed;
 
-//--- Alert Settings ---
-input int    InpMinTradeScore          = 40;         // Minimum İşleme Giriş Skoru (Varsayılan 40)
-input int    InpMaxTradesPerSwing      = 2;          // Aynı Majör Dalga İçinde Maksimum Sinyal Sayısı
+//--- Algoritma Ayarları (Puanlama) ---
+input int    InpMinTradeScoreLimit     = 40;         // 🎯 İşleme Giriş İçin Gerekli Minimum Puan Barajı
+input int    InpMaxTradesPerSwing      = 2;          // 🔄 Aynı Majör Dalgada Maksimum Sinyal Sayısı
 
 //--- Trade Execution (Gerçek İşlem Açma) ---
 input bool   InpEnableAutoTradeWriter  = false;      // ⚠️ DİKKAT: Ortak Klasöre İşlem (Sinyal Dosyası) Gönder
@@ -530,8 +530,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    // --- FINAL VERDICT ---
    string verdict = "";
-   if (total_points >= InpMinTradeScore) verdict = "✅ İŞLEME GİRİLEBİLİR (Skor Algoritmayı Geçti)";
-   else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Skor " + IntegerToString(InpMinTradeScore) + " Puanlık Barajın Altında Kaldı)";
+   if (total_points >= InpMinTradeScoreLimit) verdict = "✅ İŞLEME GİRİLEBİLİR (Skor Algoritmayı Geçti)";
+   else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Skor " + IntegerToString(InpMinTradeScoreLimit) + " Puanlık Barajın Altında Kaldı)";
 
    string dir_str = (trigger_dir == 1) ? "BUY" : "SELL";
    string dir_emoji = (trigger_dir == 1) ? "🟢 YUKARI (BUY Alımı)" : "🔴 AŞAĞI (SELL Satışı)";
@@ -558,7 +558,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    msg2 += m15_text;
    msg2 += m5_text;
    msg2 += "🎯 MENZİL: " + range_text + "\n\n";
-   msg2 += "📈 TOPLAM SKOR: " + IntegerToString(total_points) + " / " + IntegerToString(InpMinTradeScore) + "\n";
+   msg2 += "📈 TOPLAM SKOR: " + IntegerToString(total_points) + " / " + IntegerToString(InpMinTradeScoreLimit) + "\n";
    msg2 += "KARAR: " + verdict + "\n";
 
    // TEST bildirimiyse detaylı mesajı hemen bas ve çık
@@ -581,7 +581,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        last_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
    }
 
-   if (total_points >= InpMinTradeScore) {
+   if (total_points >= InpMinTradeScoreLimit) {
 
        // Eğer halihazırda takip ettiğimiz sanal bir işlem varsa, yeni sinyali çöpe at!
        if (g_virtual_trade_active) {
