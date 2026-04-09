@@ -661,10 +661,16 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                string filename = "vol100_signal_" + Symbol() + ".txt";
                int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
                if (file_handle != INVALID_HANDLE) {
-                   string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl, 5) + "," + DoubleToString(tp, 5);
+                   // Fiyat farklarını Puan (Point) cinsinden hesapla
+                   double sl_dist_points = MathAbs(entry - sl) / Point();
+                   double tp_dist_points = MathAbs(entry - tp) / Point();
+
+                   // EA'ya direkt fiyat göndermek yerine Entry ve Mesafe gönderiyoruz
+                   // Format: Sembol, Yön, Giriş Fiyatı, SL Mesafesi (Puan), TP Mesafesi (Puan)
+                   string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl_dist_points, 0) + "," + DoubleToString(tp_dist_points, 0);
                    FileWrite(file_handle, trade_cmd);
                    FileClose(file_handle);
-                   Print("✅ [AUTO-TRADE] EA İçin Sinyal Dosyası Gönderildi: ", trade_cmd);
+                   Print("✅ [AUTO-TRADE] EA İçin Sinyal Dosyası Gönderildi: ", trade_cmd, " (SL: ", DoubleToString(sl_dist_points,0), " Puan, TP: ", DoubleToString(tp_dist_points,0), " Puan)");
                } else {
                    Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
                }
