@@ -673,27 +673,62 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                }
            }
 
-           // --- TP SINIRLANDIRMASI (SWING + %10 KURALI) ---
+           // --- TP SINIRLANDIRMASI (SWING + %10 KURALI) & DİNAMİK DARALTMA ---
            double maj_h = g_state_curr.maj_h;
            double maj_l = g_state_curr.maj_l;
            if (maj_h != EMPTY_VALUE && maj_l != EMPTY_VALUE && maj_h > maj_l) {
                double swing_range = maj_h - maj_l;
                double buffer_10pct = swing_range * 0.10;
 
-               if (trigger_dir == 1) { // BUY -> TP aşırı yukarıdaysa reddet
-                   double max_allowed_tp = maj_h + buffer_10pct;
-                   if (tp > max_allowed_tp) {
-                       Print("⚠️ [TRADE REJECTED] BUY İptal: TP noktası (", tp, "), Swing Tepesi + %10 sınırını (", max_allowed_tp, ") aşıyor. Hedef ulaşılamaz.");
-                       return;
+               bool is_tp_overflow = false;
+               double max_allowed_tp = maj_h + buffer_10pct;
+               double min_allowed_tp = maj_l - buffer_10pct;
+
+               if (trigger_dir == 1 && tp > max_allowed_tp) is_tp_overflow = true;
+               if (trigger_dir == -1 && tp < min_allowed_tp) is_tp_overflow = true;
+
+               if (is_tp_overflow) {
+                   Print("⚠️ TP Hedefi %10 sınırını aştı! İşlemi kurtarmak için SL daraltılıp RR (1:2) seviyesine düşürülüyor...");
+
+                   // DİNAMİK DARALTMA (COMPRESSION)
+                   if (trigger_dir == 1) { // BUY Daraltma
+                       if (is_strong) {
+                           sl = ext_pt + ((entry - ext_pt) * 0.1); // 1.0 yerine 0.9'a denk gelir (dipten %10 daha yukarıda, girişin altına doğru)
+                       } else {
+                           double raw_sl = ext_pt;
+                           double dist = entry - raw_sl;
+                           sl = raw_sl - (dist * 0.2); // Zayıf dip için 1.5x yerine 1.2x uzağa atar (0.5 yerine 0.2 uzatma)
+                       }
+                       double new_dist = entry - sl;
+                       tp = entry + (new_dist * 2.0); // RR'ı 3'ten 2'ye düşürdük
+
+                       if (tp > max_allowed_tp) {
+                           Print("❌ [TRADE REJECTED] BUY İptal: Daraltılmış (2RR) TP noktası bile (", tp, "), Swing sınırını aşıyor. İşlem reddedildi.");
+                           return;
+                       }
+                   } else { // SELL Daraltma
+                       if (is_strong) {
+                           sl = ext_pt - ((ext_pt - entry) * 0.1); // 1.0 yerine 0.9'a denk gelir (tepeden %10 daha aşağıda)
+                       } else {
+                           double raw_sl = ext_pt;
+                           double dist = raw_sl - entry;
+                           sl = raw_sl + (dist * 0.2); // Zayıf tepe için 1.5x yerine 1.2x uzağa atar
+                       }
+                       double new_dist = sl - entry;
+                       tp = entry - (new_dist * 2.0); // RR'ı 3'ten 2'ye düşürdük
+
+                       if (tp < min_allowed_tp) {
+                           Print("❌ [TRADE REJECTED] SELL İptal: Daraltılmış (2RR) TP noktası bile (", tp, "), Swing sınırını aşıyor. İşlem reddedildi.");
+                           return;
+                       }
                    }
-               } else if (trigger_dir == -1) { // SELL -> TP aşırı aşağıdaysa reddet
-                   double min_allowed_tp = maj_l - buffer_10pct;
-                   if (tp < min_allowed_tp) {
-                       Print("⚠️ [TRADE REJECTED] SELL İptal: TP noktası (", tp, "), Swing Dibi - %10 sınırını (", min_allowed_tp, ") aşıyor. Hedef ulaşılamaz.");
-                       return;
-                   }
+                   Print("✅ İşlem başarıyla daraltıldı! Yeni RR: 1:2");
                }
            }
+
+           // Daraltma yapılmış olma ihtimaline karşı EA için net mesafeleri baştan hesaplıyoruz
+           sl_dist_raw = MathAbs(entry - sl);
+           tp_dist_raw = MathAbs(entry - tp);
 
            // --- DOSYAYA YAZMA (EA İÇİN) ---
            if (InpEnableAutoTradeWriter) {
