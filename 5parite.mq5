@@ -679,20 +679,17 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // Bilgisayar ekranı (Alert) limiti aşmaz, tüm detayları birleştirip basabiliriz
    string popup_msg = (is_test ? "🧪 TEST [" : "🚨 YENİ [" ) + Symbol() + "] Yön: " + dir_emoji + "\n" + m1_text + "\n" + h1_text + "\n" + m30_text + "\n" + m15_text + "\n" + m5_text + "\nKARAR: " + verdict + "\nSKOR: " + IntegerToString(total_points) + "\n💰 Entry: " + DoubleToString(entry, 5) + "\nSL Mesafe: " + DoubleToString(sl_dist_raw, 2) + "\nTP Mesafe: " + DoubleToString(tp_dist_raw, 2);
 
-   // Telefona gidecek özet (Push) bildirimi (Sadece 2 mesaj, MT5 spam filtresine takılmasın diye)
-   string push_ozet1 = (is_test ? "🧪 TEST [" : "🚨 YENİ [" ) + Symbol() + "]\nYön: " + dir_emoji + "\nSkor: " + IntegerToString(total_points) + "/" + IntegerToString(InpMinTradeScoreLimit) + "\n\n📊 Puan Dağılımı:\nM1 (Güç): " + IntegerToString(m1_points) + "\nH1 (Makro): " + IntegerToString(h1_points) + "\nM30 (Orta): " + IntegerToString(m30_points) + "\nM15 (Kısa): " + IntegerToString(m15_points) + "\nM5 (Mikro): " + IntegerToString(m5_points);
-
-   string push_ozet2 = "KARAR: " + verdict + "\n\n💰 İŞLEM SEVİYELERİ:\nEntry: " + DoubleToString(entry, 5) + "\nSL (Fark): " + DoubleToString(sl_dist_raw, 2) + "\nTP (Fark): " + DoubleToString(tp_dist_raw, 2);
+   // Telefona gidecek özet (Push) bildirimi (Tek mesaj, MT5 spam filtresini kesin atlatmak için)
+   string push_tek = (is_test ? "🧪 TEST [" : "🚨 YENİ [" ) + Symbol() + "] Yön: " + dir_emoji + "\n" +
+                     "Skor: " + IntegerToString(total_points) + "/" + IntegerToString(InpMinTradeScoreLimit) + "\n" +
+                     "Puanlar: M1:" + IntegerToString(m1_points) + " H1:" + IntegerToString(h1_points) + " M30:" + IntegerToString(m30_points) + " M15:" + IntegerToString(m15_points) + " M5:" + IntegerToString(m5_points) + "\n" +
+                     "Karar: " + verdict + "\n" +
+                     "Entry: " + DoubleToString(entry, 5) + " | SL Fark: " + DoubleToString(sl_dist_raw, 2) + " | TP Fark: " + DoubleToString(tp_dist_raw, 2);
 
    // --- BİLDİRİM GÖNDERİMİ ---
    if (is_test || execute_trade || InpAlertRejectedTrades) {
        if(InpAlertPopup) { Alert(popup_msg); }
-       if(InpAlertPush) {
-           SendNotification(push_ozet1);
-           // Spam korumasını tetiklememek için ufak bir gecikme ekliyoruz
-           Sleep(200);
-           SendNotification(push_ozet2);
-       }
+       if(InpAlertPush) { SendNotification(push_tek); }
        Print(popup_msg);
    }
 
@@ -1752,12 +1749,19 @@ int OnCalculate(const int rates_total,
                        FileWrite(file_handle, trade_cmd);
                        FileClose(file_handle);
                        Print("✅ [TEST AUTO-TRADE] EA İçin Özel (0.01 Lot) Test Sinyali Gönderildi: ", trade_cmd);
-                       Alert("🧪 TEST İŞLEMİ GÖNDERİLDİ! Yön: ", dir_str, " | Entry: ", DoubleToString(entry_price, 5), " | SL Mesafe: ", DoubleToString(sl_dist_raw, 5), " | TP Mesafe: ", DoubleToString(tp_dist_raw, 5));
+                       string test_alert = "🧪 TEST İŞLEMİ GÖNDERİLDİ! Yön: " + dir_str + " | Entry: " + DoubleToString(entry_price, 5) + " | SL Mesafe: " + DoubleToString(sl_dist_raw, 5) + " | TP Mesafe: " + DoubleToString(tp_dist_raw, 5);
+                       if (InpAlertPopup) Alert(test_alert);
+                       if (InpAlertPush) SendNotification(test_alert);
                    } else {
-                       Print("❌ [TEST AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
+                       string err_msg = "❌ [TEST AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: " + IntegerToString(GetLastError());
+                       Print(err_msg);
+                       if (InpAlertPopup) Alert(err_msg);
+                       if (InpAlertPush) SendNotification(err_msg);
                    }
                } else {
-                   Alert("⚠️ Test butonuna bastın ama 'Sinyal Dosyası Gönder' (InpEnableAutoTradeWriter) ayarı kapalı! Sinyal EA'ya ulaşmayacak.");
+                   string warn_msg = "⚠️ Test butonuna bastın ama 'Sinyal Dosyası Gönder' (InpEnableAutoTradeWriter) ayarı kapalı! Sinyal EA'ya ulaşmayacak.";
+                   if (InpAlertPopup) Alert(warn_msg);
+                   if (InpAlertPush) SendNotification(warn_msg);
                }
            } else {
                // Eski standart TEST (Sadece analizi görmek için, manuel SL/TP girilmemişse)
