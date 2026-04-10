@@ -93,20 +93,22 @@ void OnTimer()
        return; // Silinemezse isleme girmeyelim, yoksa sonsuz islem acar
    }
 
-   // Yeni Format: SYMBOL, DIR, SL_POINTS, TP_POINTS
-   // Örn: EURUSD,BUY,150,450
+   // Format: SYMBOL, DIR, ENTRY, SL, TP, BASE_EXTREME
+   // Örn: EURUSD,BUY,1.08500,1.08400,1.08800,1.08450
    string parts[];
    int count = StringSplit(signal_data, ',', parts);
 
-   if (count != 4) {
-       Print("❌ [VOL100 RECEIVER] Sinyal formatı hatalı (4 Parça bekleniyor): ", signal_data);
+   if (count != 6) {
+       Print("❌ [VOL100 RECEIVER] Sinyal formatı hatalı (6 Parça bekleniyor): ", signal_data);
        return;
    }
 
    string sym = parts[0];
    string dir = parts[1];
-   double sl_points = StringToDouble(parts[2]);
-   double tp_points = StringToDouble(parts[3]);
+   double entry_p = StringToDouble(parts[2]);
+   double sl_p = StringToDouble(parts[3]);
+   double tp_p = StringToDouble(parts[4]);
+   double ext_pt = StringToDouble(parts[5]); // 1.0x (Sıfır Çarpanlı) Ana SL Mesafesi İçin Referans
 
    // Sinyalin ait olduğu sembol kontrolü
    if (sym != listen_sym) {
@@ -120,63 +122,72 @@ void OnTimer()
        return;
    }
 
-   // --- RİSK & LOT HESAPLAMASI (20$ SABİT RİSK) ---
+   // --- RİSK & LOT HESAPLAMASI (20$ SABİT BAZ RİSK) ---
+   // Kullanıcı çarpanı (örn: 2.0x SL) arttırsa bile, lot hesabı DAİMA 1.0x ana kırılım (ext_pt) mesafesine göre yapılır.
+   // Bu sayede SL ne kadar uzağa çekilirse çekilsin, kayıp orantılı olarak artar (örn: 2.0x SL = 40$ Risk olur).
    double tick_value = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_VALUE); // 1 lot için 1 tick/puan değeri ($)
    double tick_size = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_SIZE);
-   double pnt = Point();
 
    if (tick_value <= 0 || tick_size <= 0) {
        Print("❌ [VOL100 RECEIVER] Sembol tick değeri okunamadı: ", Symbol());
        return;
    }
 
-   // SL_POINTS değerini brokerin tick formatına çevir (Çoğu brokerda point ve tick size aynıdır, ama emin olalım)
-   double distance_in_price = sl_points * pnt;
-   double ticks_to_sl = distance_in_price / tick_size;
+   // BAZ SL MESAFESİ: Canlı giriş noktası (entry) ile ana kırılım noktası (ext_pt) arasındaki 1.0x mesafe
+   double base_distance_in_price = MathAbs(entry_p - ext_pt);
+   double base_ticks_to_sl = base_distance_in_price / tick_size;
 
-   if (ticks_to_sl <= 0) {
-       Print("❌ [VOL100 RECEIVER] SL mesafesi çok küçük veya 0!");
+   if (base_ticks_to_sl <= 0) {
+       Print("❌ [VOL100 RECEIVER] SL baz mesafesi çok küçük veya 0!");
        return;
    }
 
-   // 1 Lot açsaydık SL olunca kaç dolar kaybederdik?
-   double loss_per_lot = ticks_to_sl * tick_value;
+   // 1 Lot açsaydık bu BAZ MESAFEDE (1.0x) kaç dolar kaybederdik?
+   double loss_per_lot = base_ticks_to_sl * tick_value;
 
-   // 20$ kaybetmek için kaç lot açmalıyız?
+   // Tam 20$ (veya ayarlanan InpRiskUSD) riski bu 1.0x BAZ MESAFEYE gömmek için kaç lot açmalıyız?
    double calculated_lot = InpRiskUSD / loss_per_lot;
 
    // Lot Miktarını Limitle (Örn: En az 0.01, Step 0.01)
    double min_lot = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_MIN);
    double max_lot = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_MAX);
    double step_lot = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_STEP);
+   if (step_lot <= 0) step_lot = 0.01;
 
    double final_lot = MathRound(calculated_lot / step_lot) * step_lot;
 
    if (final_lot < min_lot) final_lot = min_lot;
    if (final_lot > max_lot) final_lot = max_lot;
 
-   // --- FİYAT HESAPLAMALARI VE İŞLEME GİRİŞ ---
+   // FİİLİ (GERÇEK) SL MESAFESİ: Kullanıcının çarpanla (örn: 1.5x) belirlediği SL.
+   // Bu fiyatları doğrudan göstergeden alıp EA'nın fiyatıyla birleştireceğiz (eski sağlam sisteme dönüş).
    double live_ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
    double live_bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
 
    if (dir == "BUY") {
-       double sl_price = live_ask - distance_in_price;
-       double tp_price = live_ask + (tp_points * pnt);
+       // Kendi Ask fiyatımızdan, göstergeden gelen SL mesafesini çıkar
+       double raw_sl_dist = entry_p - sl_p;
+       double raw_tp_dist = tp_p - entry_p;
+       double local_sl = live_ask - raw_sl_dist;
+       double local_tp = live_ask + raw_tp_dist;
 
-       if (trade.Buy(final_lot, Symbol(), live_ask, sl_price, tp_price, "VOL100 Auto-Trade")) {
-           Print("✅ [VOL100 RECEIVER] BUY İşlemi Açıldı (", Symbol(), ")! Lot: ", final_lot, " SL: ", sl_price, " TP: ", tp_price, " (Risk: $", InpRiskUSD, ")");
+       if (trade.Buy(final_lot, Symbol(), live_ask, local_sl, local_tp, "VOL100 Auto-Trade")) {
+           Print("✅ [VOL100 RECEIVER] BUY İşlemi Açıldı! Lot: ", final_lot, " SL: ", local_sl, " TP: ", local_tp, " (Baz Risk: $", InpRiskUSD, ")");
        } else {
-           Print("❌ [VOL100 RECEIVER] BUY İşlemi BAŞARISIZ! Sembol: ", Symbol(), " Hata Kodu: ", trade.ResultRetcode());
+           Print("❌ [VOL100 RECEIVER] BUY İşlemi BAŞARISIZ! Hata Kodu: ", trade.ResultRetcode());
        }
    }
    else if (dir == "SELL") {
-       double sl_price = live_bid + distance_in_price;
-       double tp_price = live_bid - (tp_points * pnt);
+       // Kendi Bid fiyatımıza, göstergeden gelen SL mesafesini ekle
+       double raw_sl_dist = sl_p - entry_p;
+       double raw_tp_dist = entry_p - tp_p;
+       double local_sl = live_bid + raw_sl_dist;
+       double local_tp = live_bid - raw_tp_dist;
 
-       if (trade.Sell(final_lot, Symbol(), live_bid, sl_price, tp_price, "VOL100 Auto-Trade")) {
-           Print("✅ [VOL100 RECEIVER] SELL İşlemi Açıldı (", Symbol(), ")! Lot: ", final_lot, " SL: ", sl_price, " TP: ", tp_price, " (Risk: $", InpRiskUSD, ")");
+       if (trade.Sell(final_lot, Symbol(), live_bid, local_sl, local_tp, "VOL100 Auto-Trade")) {
+           Print("✅ [VOL100 RECEIVER] SELL İşlemi Açıldı! Lot: ", final_lot, " SL: ", local_sl, " TP: ", local_tp, " (Baz Risk: $", InpRiskUSD, ")");
        } else {
-           Print("❌ [VOL100 RECEIVER] SELL İşlemi BAŞARISIZ! Sembol: ", Symbol(), " Hata Kodu: ", trade.ResultRetcode());
+           Print("❌ [VOL100 RECEIVER] SELL İşlemi BAŞARISIZ! Hata Kodu: ", trade.ResultRetcode());
        }
    }
   }

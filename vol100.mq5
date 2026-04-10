@@ -526,7 +526,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    } else { // İvme Yok (Sakin/Konsolide)
        if (is_h1_aligned) {
            if (h1_is_premium) { h1_points = 30; h1_text = "H1: " + stats_h1 + "%50 Premium Bölgesinde ve Yön Uyumlu -> [+30 Puan]\n"; }
-           else               { h1_points = 30; h1_text = "H1: " + stats_h1 + "Şişkin Piyasa (<%50) AMA Yön Uyumlu (Trend Devamı) -> [+30 Puan]\n"; }
+           else               { h1_points = 10; h1_text = "H1: " + stats_h1 + "Şişkin Piyasa (<%50) AMA Yön Uyumlu (Zayıf Düzeltme Filtresi) -> [+10 Puan]\n"; }
        } else {
            if (h1_is_premium) { h1_points = 20; h1_text = "H1: " + stats_h1 + "%50 Premium'da, Bize Ters AMA Momentum Yok (Biraz Daha İnebilir) -> [+20 Puan]\n"; }
            else               { h1_points = 30; h1_text = "H1: " + stats_h1 + "Şişkin Piyasa, Bize Ters (Düzeltme Henüz Yeni Başlıyor) -> [+30 Puan]\n"; }
@@ -558,8 +558,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            } else if (m30_mom_15) {
                m30_points = 20; m30_text = "M30: " + stats_m30 + "Yön Uyumlu, SERT (%15) Momentum -> [+20 Puan]\n";
            } else { // Momentum Yok
-               if (!m30_is_premium) { m30_points = 15; m30_text = "M30: " + stats_m30 + "Yön Uyumlu, %50 Altında, İvme Yok -> [+15 Puan]\n"; }
-               else                 { m30_points = 15; m30_text = "M30: " + stats_m30 + "Yön Uyumlu, %50 Premium, İvme Yok -> [+15 Puan]\n"; } // Varsayılan: Eğer uyumlu & Premium ama ivme yoksa +15 veriyoruz tabloya sadık kalarak.
+               if (!m30_is_premium) { m30_points = 5;  m30_text = "M30: " + stats_m30 + "Yön Uyumlu, %50 Altında, İvme Yok (Zayıf Düzeltme Filtresi) -> [+5 Puan]\n"; }
+               else                 { m30_points = 15; m30_text = "M30: " + stats_m30 + "Yön Uyumlu, %50 Premium, İvme Yok -> [+15 Puan]\n"; }
            }
        }
    }
@@ -587,7 +587,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            else if (m15_mom_15) { m15_points = 15; m15_text = "M15: " + stats_m15 + "Yön Uyumlu, SERT (%15) Momentum -> [+15 Puan]\n"; }
            else {
                if (m15_is_premium) { m15_points = 15; m15_text = "M15: " + stats_m15 + "Yön Uyumlu, Premium Bölgede, İvme Yok -> [+15 Puan]\n"; }
-               else                { m15_points = 10; m15_text = "M15: " + stats_m15 + "Yön Uyumlu, %50 Altı, İvme Yok -> [+10 Puan]\n"; }
+               else                { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Yön Uyumlu, %50 Altı, İvme Yok (Zayıf Düzeltme Filtresi) -> [+5 Puan]\n"; }
            }
        }
    }
@@ -615,7 +615,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            else if (m5_mom_15) { m5_points = 10; m5_text = "M5 (Mikro): " + stats_m5 + "Yön Uyumlu, SERT (%15) Momentum -> [+10 Puan]\n"; }
            else {
                if (m5_is_premium) { m5_points = 10; m5_text = "M5 (Mikro): " + stats_m5 + "Yön Uyumlu, Premium Bölgede, İvme Yok -> [+10 Puan]\n"; }
-               else               { m5_points = 5;  m5_text = "M5 (Mikro): " + stats_m5 + "Yön Uyumlu, %50 Altı, İvme Yok -> [+5 Puan]\n"; }
+               else               { m5_points = 5;  m5_text = "M5 (Mikro): " + stats_m5 + "Yön Uyumlu, %50 Altı, İvme Yok (Zayıf Düzeltme Filtresi) -> [+5 Puan]\n"; }
            }
        }
    }
@@ -727,15 +727,15 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            }
 
            // Dosyayı Common klasörüne yaz (Her iki MT5 terminalinin okuyabilmesi için)
-           // YENİ MİMARİ: Artık SL ve TP Fiyatları yerine, Aradaki Puan (Point) Mesafesi Gönderiliyor.
+           // ESKİ MİMARİ: Artık Mutlak SL/TP Fiyatları + 1.0x Base Extreme Gönderiliyor.
            string filename = "vol100_signal_" + Symbol() + ".txt";
            int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
            if (file_handle != INVALID_HANDLE) {
-               // Format: SYMBOL, DIR, SL_POINTS, TP_POINTS
-               string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(sl_distance_points, 0) + "," + DoubleToString(tp_distance_points, 0);
+               // Format: SYMBOL, DIR, ENTRY, SL, TP, BASE_EXTREME
+               string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl, 5) + "," + DoubleToString(tp, 5) + "," + DoubleToString(ext_pt, 5);
                FileWrite(file_handle, trade_cmd);
                FileClose(file_handle);
-               Print("✅ [AUTO-TRADE] Sinyal Gönderildi (Puan Mesafeli): ", trade_cmd);
+               Print("✅ [AUTO-TRADE] Sinyal Gönderildi (Fiyat + Baz SL Noktalı): ", trade_cmd);
                current_swing_trades++; // Aynı dalgadaki işlem sayısını artır
 
                // Sanal İşlemi Başlat
