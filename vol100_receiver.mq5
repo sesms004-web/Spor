@@ -93,24 +93,22 @@ void OnTimer()
        return; // Silinemezse isleme girmeyelim, yoksa sonsuz islem acar
    }
 
-   // Format: SYMBOL,DIR,ENTRY,SL,TP
-   // Örn: EURUSD,BUY,1.08500,1.08400,1.08800
+   // Yeni Format: SYMBOL, DIR, SL_POINTS, TP_POINTS
+   // Örn: EURUSD,BUY,150,450
    string parts[];
    int count = StringSplit(signal_data, ',', parts);
 
-   if (count != 5) {
-       Print("❌ [VOL100 RECEIVER] Sinyal formatı hatalı: ", signal_data);
+   if (count != 4) {
+       Print("❌ [VOL100 RECEIVER] Sinyal formatı hatalı (4 Parça bekleniyor): ", signal_data);
        return;
    }
 
    string sym = parts[0];
    string dir = parts[1];
-   double entry_p = StringToDouble(parts[2]);
-   double sl_p = StringToDouble(parts[3]);
-   double tp_p = StringToDouble(parts[4]);
+   double sl_points = StringToDouble(parts[2]);
+   double tp_points = StringToDouble(parts[3]);
 
    // Sinyalin ait olduğu sembol kontrolü
-   // Eğer özel bir sinyal sembolü tanımladıysak, dosyanın o isme ait olduğunu doğrula.
    if (sym != listen_sym) {
        Print("⚠️ [VOL100 RECEIVER] Yanlış Sembol! Gelen Sinyal: ", sym, " Beklenen Sinyal: ", listen_sym);
        return;
@@ -123,17 +121,17 @@ void OnTimer()
    }
 
    // --- RİSK & LOT HESAPLAMASI (20$ SABİT RİSK) ---
-   // İşlemi HER ZAMAN grafiğin kendi orijinal sembolü üzerinden açacağız (Örn: XAUUSDr)
    double tick_value = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_VALUE); // 1 lot için 1 tick/puan değeri ($)
    double tick_size = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_SIZE);
+   double pnt = Point();
 
    if (tick_value <= 0 || tick_size <= 0) {
        Print("❌ [VOL100 RECEIVER] Sembol tick değeri okunamadı: ", Symbol());
        return;
    }
 
-   // SL mesafesini puan (point/tick) cinsinden bul
-   double distance_in_price = MathAbs(entry_p - sl_p);
+   // SL_POINTS değerini brokerin tick formatına çevir (Çoğu brokerda point ve tick size aynıdır, ama emin olalım)
+   double distance_in_price = sl_points * pnt;
    double ticks_to_sl = distance_in_price / tick_size;
 
    if (ticks_to_sl <= 0) {
@@ -157,19 +155,26 @@ void OnTimer()
    if (final_lot < min_lot) final_lot = min_lot;
    if (final_lot > max_lot) final_lot = max_lot;
 
-   // --- İŞLEME GİR ---
+   // --- FİYAT HESAPLAMALARI VE İŞLEME GİRİŞ ---
+   double live_ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
+   double live_bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+
    if (dir == "BUY") {
-       double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
-       if (trade.Buy(final_lot, Symbol(), ask, sl_p, tp_p, "VOL100 Auto-Trade")) {
-           Print("✅ [VOL100 RECEIVER] BUY İşlemi Açıldı (", Symbol(), ")! Lot: ", final_lot, " SL: ", sl_p, " TP: ", tp_p, " (Risk: $", InpRiskUSD, ")");
+       double sl_price = live_ask - distance_in_price;
+       double tp_price = live_ask + (tp_points * pnt);
+
+       if (trade.Buy(final_lot, Symbol(), live_ask, sl_price, tp_price, "VOL100 Auto-Trade")) {
+           Print("✅ [VOL100 RECEIVER] BUY İşlemi Açıldı (", Symbol(), ")! Lot: ", final_lot, " SL: ", sl_price, " TP: ", tp_price, " (Risk: $", InpRiskUSD, ")");
        } else {
            Print("❌ [VOL100 RECEIVER] BUY İşlemi BAŞARISIZ! Sembol: ", Symbol(), " Hata Kodu: ", trade.ResultRetcode());
        }
    }
    else if (dir == "SELL") {
-       double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-       if (trade.Sell(final_lot, Symbol(), bid, sl_p, tp_p, "VOL100 Auto-Trade")) {
-           Print("✅ [VOL100 RECEIVER] SELL İşlemi Açıldı (", Symbol(), ")! Lot: ", final_lot, " SL: ", sl_p, " TP: ", tp_p, " (Risk: $", InpRiskUSD, ")");
+       double sl_price = live_bid + distance_in_price;
+       double tp_price = live_bid - (tp_points * pnt);
+
+       if (trade.Sell(final_lot, Symbol(), live_bid, sl_price, tp_price, "VOL100 Auto-Trade")) {
+           Print("✅ [VOL100 RECEIVER] SELL İşlemi Açıldı (", Symbol(), ")! Lot: ", final_lot, " SL: ", sl_price, " TP: ", tp_price, " (Risk: $", InpRiskUSD, ")");
        } else {
            Print("❌ [VOL100 RECEIVER] SELL İşlemi BAŞARISIZ! Sembol: ", Symbol(), " Hata Kodu: ", trade.ResultRetcode());
        }
