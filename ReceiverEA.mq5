@@ -4,15 +4,18 @@
 //+------------------------------------------------------------------+
 #property copyright "Jules"
 #property link      ""
-#property version   "1.00"
+#property version   "1.01"
 
 #include <Trade\Trade.mqh>
 
 //--- Input Parameters ---
-input string   InpListenSymbol = "XAUUSD";   // Sinyali Gönderen Sembol (Örn: XAUUSD)
-input double   InpLotSize      = 0.01;       // İşlem Hacmi (Lot)
+input string   InpListenSymbol = "XAUUSD";   // Sinyali Dinlenen Sembol (Örn: XAUUSD)
 input ulong    InpMagicNumber  = 454545;     // EA Magic Number
 input ulong    InpSlippage     = 10;         // Maksimum Kayma (Slippage)
+
+input double   InpRiskUSD      = 20.0;       // İşlem Başına Risk (USD)
+input double   InpMinLot       = 0.01;       // Minimum Lot Sınırı
+input double   InpMaxLot       = 5.0;        // Maksimum Lot Sınırı (Patlamayı Önler)
 
 CTrade trade;
 
@@ -23,13 +26,11 @@ int OnInit()
   {
    trade.SetExpertMagicNumber(InpMagicNumber);
    trade.SetDeviationInPoints(InpSlippage);
-   trade.SetTypeFilling(ORDER_FILLING_FOK); // veya brokerinize göre ORDER_FILLING_IOC
+   trade.SetTypeFilling(ORDER_FILLING_FOK);
 
-   // 1 saniyede bir ortak klasörü kontrol et
    EventSetTimer(1);
 
-   Print("🟢 [RECEIVER EA] Başlatıldı. Dinlenen Sinyal: ", InpListenSymbol, " -> İşlem Açılacak Sembol: ", Symbol());
-
+   Print("🟢 [RECEIVER EA] Başlatıldı. Dinlenen: ", InpListenSymbol, " -> İşlem Sembolü: ", Symbol(), " Risk: $", InpRiskUSD);
    return(INIT_SUCCEEDED);
   }
 
@@ -43,53 +44,57 @@ void OnDeinit(const int reason)
   }
 
 //+------------------------------------------------------------------+
-//| Helper: Extract String from JSON                                 |
+//| Helpers for JSON                                                 |
 //+------------------------------------------------------------------+
 string GetJsonString(string json_data, string key)
   {
    string search = "\"" + key + "\": \"";
    int start = StringFind(json_data, search);
    if(start < 0) return "";
-
    start += StringLen(search);
    int end = StringFind(json_data, "\"", start);
    if(end < 0) return "";
-
    return StringSubstr(json_data, start, end - start);
   }
 
-//+------------------------------------------------------------------+
-//| Helper: Extract Double from JSON                                 |
-//+------------------------------------------------------------------+
 double GetJsonDouble(string json_data, string key)
   {
    string search = "\"" + key + "\": ";
    int start = StringFind(json_data, search);
    if(start < 0) return 0.0;
-
    start += StringLen(search);
    int end = StringFind(json_data, ",", start);
    if(end < 0) end = StringFind(json_data, "\n", start);
    if(end < 0) end = StringFind(json_data, "}", start);
-
    string val = StringSubstr(json_data, start, end - start);
    StringReplace(val, " ", "");
    StringReplace(val, "\r", "");
-
    return StringToDouble(val);
   }
 
+bool GetJsonBool(string json_data, string key)
+  {
+   string search = "\"" + key + "\": ";
+   int start = StringFind(json_data, search);
+   if(start < 0) return false;
+   start += StringLen(search);
+   int end = StringFind(json_data, ",", start);
+   if(end < 0) end = StringFind(json_data, "\n", start);
+   if(end < 0) end = StringFind(json_data, "}", start);
+   string val = StringSubstr(json_data, start, end - start);
+   if(StringFind(val, "true") >= 0) return true;
+   return false;
+  }
+
 //+------------------------------------------------------------------+
-//| Timer function: Poll for signal file                             |
+//| Timer function                                                   |
 //+------------------------------------------------------------------+
 void OnTimer()
   {
    string filename = "signal_" + InpListenSymbol + ".json";
 
-   // Dosya Common klasöründe var mı kontrol et
    if(FileIsExist(filename, FILE_COMMON))
      {
-      // Dosyayı okumak için aç
       int handle = FileOpen(filename, FILE_READ | FILE_TXT | FILE_COMMON);
       if(handle != INVALID_HANDLE)
         {
@@ -100,65 +105,77 @@ void OnTimer()
            }
          FileClose(handle);
 
-         // Okuduktan hemen sonra dosyayı sil ki aynı işleme tekrar girmesin!
          FileDelete(filename, FILE_COMMON);
+         Print("📩 [RECEIVER EA] Sinyal Alındı ve Silindi:\n", json_content);
 
-         Print("📩 [RECEIVER EA] Sinyal Yakalandı ve Silindi:\n", json_content);
-
-         // JSON'u Parse Et
          string direction = GetJsonString(json_content, "direction");
-         double sl = GetJsonDouble(json_content, "sl");
-         double tp = GetJsonDouble(json_content, "tp");
+         double entry     = GetJsonDouble(json_content, "entry");
+         double sl        = GetJsonDouble(json_content, "sl");
+         double tp        = GetJsonDouble(json_content, "tp");
+         bool is_test     = GetJsonBool(json_content, "is_test");
 
-         if(direction == "") {
-             Print("❌ [RECEIVER EA] JSON parse hatası, direction bulunamadı!");
-             return;
-         }
+         if(direction == "") return;
 
-         ExecuteSignal(direction, sl, tp);
+         ExecuteSignal(direction, entry, sl, tp, is_test);
         }
      }
   }
 
 //+------------------------------------------------------------------+
-//| Execute the Trade Safely (ECN/STP Support)                       |
+//| Execute Signal (Lot Calculation & Execution)                     |
 //+------------------------------------------------------------------+
-void ExecuteSignal(string direction, double sl, double tp)
+void ExecuteSignal(string direction, double entry, double sl, double tp, bool is_test)
   {
    double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
    double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+   double point = SymbolInfoDouble(Symbol(), SYMBOL_POINT);
+   double tick_val = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_VALUE);
+   double tick_size = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_SIZE);
 
-   // Market order execution without SL/TP first (ECN/STP broker compatibility)
+   double lot_size = InpMinLot;
+
+   if (is_test) {
+       // TEST İŞLEMİ: Kesinlikle 0.01 Lot
+       lot_size = 0.01;
+       Print("🧪 [RECEIVER EA] TEST SİNYALİ algılandı. Lot boyutu 0.01 olarak sabitlendi.");
+   } else {
+       // NORMAL İŞLEM: $ Risk Hesaplaması
+       double sl_distance_points = MathAbs(entry - sl) / point;
+       if (sl_distance_points > 0 && tick_size > 0) {
+           double loss_per_lot = (sl_distance_points * point / tick_size) * tick_val;
+           if (loss_per_lot > 0) {
+               lot_size = InpRiskUSD / loss_per_lot;
+               // Küsurat düzeltme (örn 0.01 hassasiyetine)
+               double step = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_STEP);
+               lot_size = MathFloor(lot_size / step) * step;
+
+               // Min ve Max lot sınırları
+               if(lot_size < InpMinLot) lot_size = InpMinLot;
+               if(lot_size > InpMaxLot) lot_size = InpMaxLot;
+
+               Print("🧮 [RECEIVER EA] SL Mesafe: ", sl_distance_points, " Point | Risk: $", InpRiskUSD, " -> Hesaplan Lot: ", lot_size);
+           }
+       }
+   }
+
    bool success = false;
    ulong ticket = 0;
 
+   // Doğrudan SL/TP ile aç (PositionModify kullanılmıyor)
    if(direction == "BUY")
      {
-      success = trade.Buy(InpLotSize, Symbol(), ask, 0, 0, "JSON Signal BUY");
+      success = trade.Buy(lot_size, Symbol(), ask, sl, tp, is_test ? "TEST BUY" : "JSON BUY");
      }
    else if(direction == "SELL")
      {
-      success = trade.Sell(InpLotSize, Symbol(), bid, 0, 0, "JSON Signal SELL");
+      success = trade.Sell(lot_size, Symbol(), bid, sl, tp, is_test ? "TEST SELL" : "JSON SELL");
      }
 
    if(success)
      {
       ticket = trade.ResultOrder();
-      Print("✅ [RECEIVER EA] ", direction, " İşlemi Başarıyla Açıldı. Bilet: ", ticket);
-
-      // Stop Loss ve Take Profit'i sonradan modifiye et (Sıfır Stop Hatasını Önler)
-      if(sl > 0 || tp > 0)
-        {
-         // ECN brokerlarda pozisyonu güncelle
-         if(trade.PositionModify(Symbol(), sl, tp))
-           {
-            Print("✅ [RECEIVER EA] SL/TP Başarıyla Ayarlandı. SL: ", sl, " TP: ", tp);
-           }
-         else
-           {
-            Print("⚠️ [RECEIVER EA] SL/TP ayarlanamadı! Hata: ", GetLastError());
-           }
-        }
+      if(ticket == 0) ticket = trade.ResultDeal();
+      Print("✅ [RECEIVER EA] ", direction, " İşlemi BAŞARILI! Bilet: ", ticket, " Lot: ", lot_size, " SL: ", sl, " TP: ", tp);
      }
    else
      {

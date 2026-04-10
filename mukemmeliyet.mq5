@@ -9,6 +9,11 @@
 #property indicator_chart_window
 #property indicator_plots 0
 
+
+//--- MTF Master/Slave Settings ---
+input bool   InpUseMasterSlave = true;               // 🚀 Master/Slave MTF Kullan (Kasmayı Önler)
+input int    InpMaxDataAge     = 300;                // Slave Verisi Max Yaşı (Saniye)
+
 //--- MTF Analiz Geçmişi (Gün Sayısı) ---
 input int    InpDaysM1   = 2;            // M1 Analiz Geçmişi (Gün)
 
@@ -311,10 +316,78 @@ double FindTrueLow(const double &low[], int start_idx, int end_idx)
    return min_val;
   }
 
+
+//+------------------------------------------------------------------+
+//| MTF Slave: Kendi Zaman Dilimi Verilerini Global Değişkenlere Yaz |
+//+------------------------------------------------------------------+
+void UpdateGlobalVariables()
+  {
+   if(!InpUseMasterSlave) return;
+
+   int live_tr = g_state_curr.maj_tr;
+   double live_pct = 0.0;
+   double max_pct = 0.0;
+
+   double h_m = g_state_curr.maj_h;
+   double l_m = g_state_curr.maj_l;
+   double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+
+   if (g_state_curr.maj_st == 0) {
+       if (live_tr == 1) { h_m = g_state_curr.tmp_h; }
+       else              { l_m = g_state_curr.tmp_l; }
+   }
+
+   if (h_m != EMPTY_VALUE && l_m != EMPTY_VALUE && h_m != l_m) {
+       double range = h_m - l_m;
+       if (live_tr == 1) {
+           live_pct = ((h_m - bid) / range) * 100.0;
+           double tmp_lowest = g_state_curr.tmp_l; // Aslında o dalgadaki en düşük
+           max_pct = ((h_m - tmp_lowest) / range) * 100.0;
+           if (bid >= h_m) { live_pct = 0; max_pct = 0; }
+       } else {
+           live_pct = ((bid - l_m) / range) * 100.0;
+           double tmp_highest = g_state_curr.tmp_h;
+           max_pct = ((tmp_highest - l_m) / range) * 100.0;
+           if (bid <= l_m) { live_pct = 0; max_pct = 0; }
+       }
+       if (live_pct < 0) live_pct = 0;
+       if (max_pct < live_pct) max_pct = live_pct;
+   }
+
+   string base_name = "ST_" + Symbol() + "_" + EnumToString(Period()) + "_";
+   GlobalVariableSet(base_name + "TR", live_tr);
+   GlobalVariableSet(base_name + "PCT", live_pct);
+   GlobalVariableSet(base_name + "MAXPCT", max_pct);
+   GlobalVariableSet(base_name + "H", h_m);
+   GlobalVariableSet(base_name + "L", l_m);
+   GlobalVariableSet(base_name + "TIME", TimeCurrent());
+  }
+
+
 bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct, datetime current_time,
                     double live_price, double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l)
   {
-      int days = GetDaysForTF(tf);
+
+   if (InpUseMasterSlave && tf != Period()) {
+       string base_name = "ST_" + Symbol() + "_" + EnumToString(tf) + "_";
+       if (GlobalVariableCheck(base_name + "TIME")) {
+           datetime last_upd = (datetime)GlobalVariableGet(base_name + "TIME");
+           if (TimeCurrent() - last_upd <= InpMaxDataAge) {
+               trend   = (int)GlobalVariableGet(base_name + "TR");
+               pct     = GlobalVariableGet(base_name + "PCT");
+               max_pct = GlobalVariableGet(base_name + "MAXPCT");
+               ref_h   = GlobalVariableGet(base_name + "H");
+               ref_l   = GlobalVariableGet(base_name + "L");
+               ref_t_h = 0;
+               ref_t_l = 0;
+               return true;
+           }
+       }
+       // Sessizce logla ve eski sisteme (CopyRates) düş
+       // Print("⚠️ [" + EnumToString(tf) + "] Grafiği Açık Değil veya Veri Eski! Master/Slave okunamadı, arka planda hesaplanacak...");
+   }
+
+   int days = GetDaysForTF(tf);
    if (days < 1) days = 1;
 
    datetime start_time = current_time - (days * 86400); // Geriye dönük gün hesaplama
@@ -1634,5 +1707,10 @@ int OnCalculate(const int rates_total,
        if(!InpTestTradeExecution) is_test_run = true; // prevent infinite false state if both are off
    }
 
+   // --- SLAVE GÜNCELLEMESİ (SADECE ONAYLANAN BARLAR) ---
+   if (last_idx >= 0) {
+       UpdateGlobalVariables();
+   }
+
    return(rates_total);
-  }
+}
