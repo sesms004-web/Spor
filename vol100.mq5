@@ -1007,16 +1007,20 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
+          bool is_line_drawn = false;
           if (InpShowChoch && draw_ui) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
               DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
 
+              if(ObjectFind(0, choch_name) >= 0) is_line_drawn = true;
+
               ChartRedraw(); // Force UI update before MTF scan
           }
 
-          if (!is_history) {
+          // İşlem Koruması: Sadece ve sadece grafikte fiziksel kırılım çizgisi (CHoCH_Signal) çizildiyse işlemi/bildirimi fırlat!
+          if (!is_history && (!InpShowChoch || is_line_drawn)) {
               string msg = "🔴 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
               msg += "Yön: ⬇️ AŞAĞI\n";
               if (is_strong) {
@@ -1066,16 +1070,20 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
+          bool is_line_drawn = false;
           if (InpShowChoch && draw_ui) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
               DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
 
+              if(ObjectFind(0, choch_name) >= 0) is_line_drawn = true;
+
               ChartRedraw(); // Force UI update before MTF scan
           }
 
-          if (!is_history) {
+          // İşlem Koruması: Sadece ve sadece grafikte fiziksel kırılım çizgisi (CHoCH_Signal) çizildiyse işlemi/bildirimi fırlat!
+          if (!is_history && (!InpShowChoch || is_line_drawn)) {
               string msg = "🟢 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
               msg += "Yön: ⬆️ YUKARI\n";
               if (is_strong) {
