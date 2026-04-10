@@ -28,35 +28,27 @@ input bool   InpShowChoch      = true;           // CHoCH Çizgilerini Göster
 //--- Visual Options ---
 input bool   InpShowMin = true;
 input bool   InpShowMaj = true;
-input bool   InpShowDashboard = true;
 input color  InpColorMin = clrRed;
 input color  InpColorBull = clrGreen;
 input color  InpColorBear = clrRed;
 
-//--- Algoritma Ayarları (Puanlama) ---
-input int    InpMinTradeScoreLimit     = 40;         // 🎯 İşleme Giriş İçin Gerekli Minimum Puan Barajı
-input int    InpMaxTradesPerSwing      = 2;          // 🔄 Aynı Majör Dalgada Maksimum Sinyal Sayısı
-
-//--- Trade Execution (Gerçek İşlem Açma) ---
-input bool   InpEnableAutoTradeWriter  = false;      // ⚠️ DİKKAT: Ortak Klasöre İşlem (Sinyal Dosyası) Gönder
-
-//--- Manuel Test İşlemi (EA Testi) ---
-input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] EA'ya 0.01 Lotluk Test İşlemi Gönder (Tıklandığında)
-input double InpTestTargetSL           = 0.0;        // 🧪 [TEST] Hedef SL Fiyatı (Örn: XAUUSD için 2350.00)
-input double InpTestTargetTP           = 0.0;        // 🧪 [TEST] Hedef TP Fiyatı (Örn: XAUUSD için 2360.00)
-
-//--- Bildirim Ayarları ---
-input bool   InpAlertPopup             = true;       // Ekrana Popup (Uyarı) Penceresi Çıkar
-input bool   InpAlertPush              = true;       // Telefona MT5 Push Bildirimi Gönder
-input bool   InpAlertRejectedTrades    = true;       // ⚠️ Düşük Puanlı/İptal Edilen Sinyalleri de Bildir (Sorun Tespiti)
+//--- Alert Settings ---
+input bool   InpEnableAlertTrendChange = true;       // Ana Trend (Kapanış) Dönüş Bildirimini Aç
+input bool   InpEnableAlertCHoCHBase   = true;       // Temel CHoCH (Kırılım) Bildirimini Aç
+input bool   InpEnableTradeExecution   = true;       // Özel Skorluk 'İşleme Gir' Analiz Sistemini Aç
+input int    InpMinTradeScore          = 30;         // Minimum İşleme Giriş Skoru (Varsayılan 30)
+input bool   InpEnableAutoTradeWriter  = true;       // MT5 Ortak Klasöre Sinyal Dosyası Gönder (Auto-Trade EA için)
+input int    InpMaxTradesPerSwing      = 2;          // Aynı Majör Dalga İçinde Maksimum Sinyal Sayısı
+input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Skorları Hesapla ve Bildir
+input bool   InpForceTestSignal        = false;      // ⚠️ [TEST] Ayarı 'True' Yapıp Kapatınca Ortak Klasöre Deneme Sinyali Atar!
+input bool   InpAlertPopup       = true;
+input bool   InpAlertPush        = false;
 
 //--- Globals ---
 int g_counter = 0;
 datetime g_last_alert_time = 0;
 int g_alert_bar_index = -1;
 datetime g_anchor_time = 0;
-uint g_last_dash_tick = 0;
-bool g_prev_test_state = false; // Test butonunu takip etmek için
 
 //--- Virtual Trade Tracking ---
 bool g_virtual_trade_active = false;
@@ -65,7 +57,6 @@ double g_virtual_sl = 0.0;
 double g_virtual_tp = 0.0;
 int g_virtual_last_outcome = 0; // 0 = Yok, -1 = SL Oldu, 1 = TP Oldu
 double g_virtual_last_sl_price = 0.0; // SL olunan fiyat seviyesini hafızada tutar
-double g_virtual_last_entry_price = 0.0; // İlk işlemin giriş (kırılım) seviyesi
 
 double g_last_alert_maj_h = 0;
 double g_last_alert_maj_l = 0;
@@ -309,64 +300,161 @@ double FindTrueLow(const double &low[], int start_idx, int end_idx)
    return min_val;
   }
 
-
-//+------------------------------------------------------------------+
-//| Read MTF Global Variable Data                                    |
-//+------------------------------------------------------------------+
-bool ReadGlobalVariableMTF(string s, string tf, int &tr, double &p, double &mp, double &h, double &l, int max_age = 300)
+bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct, datetime current_time,
+                    double live_price, double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l)
   {
-   string base = "5parite_" + s + "_" + tf + "_";
-   if(GlobalVariableCheck(base + "Trend") && GlobalVariableCheck(base + "Pct") &&
-      GlobalVariableCheck(base + "MaxPct") && GlobalVariableCheck(base + "High") &&
-      GlobalVariableCheck(base + "Low") && GlobalVariableCheck(base + "Time"))
+      int days = GetDaysForTF(tf);
+   if (days < 1) days = 1;
+
+   datetime start_time = current_time - (days * 86400); // Geriye dönük gün hesaplama
+
+   MqlRates rates[];
+   ArraySetAsSeries(rates, false); // Eski bar 0, yeni bar en sonda (Simülasyon sırası)
+
+   // Anlık zamandan (current_time), hesaplanan start_time'a kadar kopyala
+   int copied = CopyRates(Symbol(), tf, start_time, current_time, rates);
+   if(copied < 10) return false;
+
+   // Arka planda çalışacak geçici State objesi (Çizim YAPMAYACAK)
+   SState sim_state;
+
+   // Başlangıç değerlerini ilk barlara göre ayarla
+   sim_state.min_h   = rates[0].high;
+   sim_state.min_h_i = 0;
+   sim_state.min_l   = rates[0].low;
+   sim_state.min_l_i = 0;
+   sim_state.trig_h  = rates[0].high;
+   sim_state.trig_l  = rates[0].low;
+   sim_state.tmp_h   = rates[0].high;
+   sim_state.tmp_h_i = 0;
+   sim_state.tmp_l   = rates[0].low;
+   sim_state.tmp_l_i = 0;
+   sim_state.min_tr  = (rates[0].close > rates[0].open) ? 1 : -1;
+   sim_state.anc_i   = 0;
+   sim_state.anc_v   = rates[0].close;
+   sim_state.lp_i    = 0;
+   sim_state.lp_p    = rates[0].close;
+
+   sim_state.mb_h = rates[0].high;
+   sim_state.mb_l = rates[0].low;
+   sim_state.mb_i = 0;
+
+   sim_state.t1_h = 0; sim_state.t1_l = 0; sim_state.t1_i = 0;
+   sim_state.d1_h = 0; sim_state.d1_l = 0; sim_state.d1_i = 0;
+   sim_state.t2_h = 0; sim_state.t2_l = 0; sim_state.t2_i = 0;
+   sim_state.choch_dir = 0;
+
+   double initial_atr = (rates[0].high - rates[0].low);
+   if(initial_atr == 0) initial_atr = Point() * 10;
+   double tiny_gap = initial_atr * 0.1;
+
+   sim_state.maj_h = rates[0].high + tiny_gap;
+   sim_state.maj_l = rates[0].low - tiny_gap;
+   sim_state.maj_tr = sim_state.min_tr;
+   sim_state.maj_st = 1;
+   sim_state.bos_i = 0;
+
+   sim_state.maj_h_i = 0;
+   sim_state.maj_l_i = 0;
+
+   // ProcessBar fonksiyonunun imzasını karşılamak için geçici diziler
+   double open_arr[], high_arr[], low_arr[], close_arr[];
+   datetime time_arr[];
+   ArrayResize(open_arr, copied);
+   ArrayResize(high_arr, copied);
+   ArrayResize(low_arr, copied);
+   ArrayResize(close_arr, copied);
+   ArrayResize(time_arr, copied);
+
+   for(int i = 0; i < copied; i++) {
+       open_arr[i]  = rates[i].open;
+       high_arr[i]  = rates[i].high;
+       low_arr[i]   = rates[i].low;
+       close_arr[i] = rates[i].close;
+       time_arr[i]  = rates[i].time;
+   }
+
+   // Barları baştan sona simüle et (Sadece Array'ler ve State üzerinden, grafik sıfır!)
+   for(int i = 1; i < copied; i++)
      {
-      datetime ref_time = (datetime)GlobalVariableGet(base + "Time");
-      if (TimeCurrent() - ref_time > max_age) return false;
-
-      tr = (int)GlobalVariableGet(base + "Trend");
-      p = GlobalVariableGet(base + "Pct");
-      mp = GlobalVariableGet(base + "MaxPct");
-      h = GlobalVariableGet(base + "High");
-      l = GlobalVariableGet(base + "Low");
-      return true;
+      bool inside = (high_arr[i] <= sim_state.mb_h) && (low_arr[i] >= sim_state.mb_l);
+      if(!inside)
+        {
+         if (high_arr[i] > sim_state.mb_h || low_arr[i] < sim_state.mb_l) {
+            sim_state.mb_h = high_arr[i];
+            sim_state.mb_l = low_arr[i];
+            sim_state.mb_i = i;
+         }
+         // draw_ui = false parametresi ile ProcessBar'ı çağırıyoruz. Hızlıdır ve obje çizmez.
+         ProcessBar(i, open_arr, high_arr, low_arr, close_arr, time_arr, sim_state, true, false);
+        }
      }
-   return false;
-  }
 
-//+------------------------------------------------------------------+
-//| Helper for Localized Trend Text                                  |
-//+------------------------------------------------------------------+
-string FormatTrendStr(int t)
-  {
-   if (t == 1) return "🟢 YÜKSELİŞ (Boğa)";
-   if (t == -1) return "🔴 DÜŞÜŞ (Ayı)";
-   return "⚪ YATAY (Range)";
-  }
+   // Simülasyon bitti, son durumu dışarı aktar
+   trend = sim_state.maj_tr;
 
-//+------------------------------------------------------------------+
-//| Safe Push Notification Helper (255 char limit bypass)            |
-//+------------------------------------------------------------------+
-void SendPushSafe(string text)
-  {
-   if(StringLen(text) <= 250) {
-      SendNotification(text);
-      return;
+   // Eğer son dalga henüz onaylanmamışsa (maj_st == 0) yani fiyat kırılım yapmış ama
+   // geri çekilip yeni bir minör tepe/dip oluşturarak zirveyi kilitlememişse,
+   // hesaplamayı eski ve geride kalmış maj_h/maj_l yerine, o anki en uç noktalar (tmp_h/tmp_l) üzerinden yap!
+   int m_h_i = sim_state.maj_h_i;
+   int m_l_i = sim_state.maj_l_i;
+
+   ref_h = sim_state.maj_h;
+   ref_l = sim_state.maj_l;
+
+   if (sim_state.maj_st == 0) {
+       if (trend == 1) { // Up Trend: Yükselen trend devam ediyorsa, en uç nokta tmp_h'tir.
+           ref_h = sim_state.tmp_h;
+           m_h_i = sim_state.tmp_h_i;
+       } else { // Down Trend: Düşen trend devam ediyorsa, en uç nokta tmp_l'dir.
+           ref_l = sim_state.tmp_l;
+           m_l_i = sim_state.tmp_l_i;
+       }
    }
 
-   string lines[];
-   StringSplit(text, '\n', lines);
-   string chunk = "";
+   // Zaman dizilerinde sınır aşımı kontrolü
+   int maj_h_idx = m_h_i < copied ? m_h_i : copied - 1;
+   int maj_l_idx = m_l_i < copied ? m_l_i : copied - 1;
 
-   for(int i = 0; i < ArraySize(lines); i++) {
-      if(StringLen(chunk) + StringLen(lines[i]) + 1 > 250) {
-         if(StringLen(chunk) > 0) SendNotification(chunk);
-         chunk = lines[i] + "\n";
-      } else {
-         chunk += lines[i] + "\n";
-      }
+   ref_t_h = time_arr[maj_h_idx];
+   ref_t_l = time_arr[maj_l_idx];
+
+   pct = 0.0;
+   max_pct = 0.0;
+
+   if (ref_h != EMPTY_VALUE && ref_l != EMPTY_VALUE && ref_h != ref_l) {
+       double range = ref_h - ref_l;
+       if (trend == 1) { // BUY Trend
+           pct = ((ref_h - live_price) / range) * 100.0;
+           double local_lowest = rates[copied-1].low;
+           for(int i = maj_h_idx; i < copied; i++) {
+               if(low_arr[i] < local_lowest) local_lowest = low_arr[i];
+           }
+           max_pct = ((ref_h - local_lowest) / range) * 100.0;
+
+           // Kırılım (Breakout) Durumu SIFIRLAMA
+           // Eğer canlı fiyat, güncel onaylı tepemizi (maj_h) çoktan aştıysa (kırdıysa),
+           // ortada bir "çekilme" kalmamıştır, yeni bir dalga yapıyordur. Yüzdeleri tamamen SIFIRLA.
+           if (live_price >= ref_h) { pct = 0; max_pct = 0; }
+       } else { // SELL Trend
+           pct = ((live_price - ref_l) / range) * 100.0;
+           double local_highest = rates[copied-1].high;
+           for(int i = maj_l_idx; i < copied; i++) {
+               if(high_arr[i] > local_highest) local_highest = high_arr[i];
+           }
+           max_pct = ((local_highest - ref_l) / range) * 100.0;
+
+           // Kırılım (Breakout) Durumu SIFIRLAMA
+           if (live_price <= ref_l) { pct = 0; max_pct = 0; }
+       }
    }
-   if(StringLen(chunk) > 0) SendNotification(chunk);
+
+   if(pct < 0) pct = 0;
+   if(max_pct < pct) max_pct = pct;
+
+   return true;
   }
+
 
 //+------------------------------------------------------------------+
 //| 50-Point Execution Analysis Engine                               |
@@ -376,33 +464,16 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
    double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
    double mp_m1=0, mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
-   double h_m5=0, l_m5=0, h_m15=0, l_m15=0, h_m30=0, l_m30=0, h_h1=0, l_h1=0;
-   double temp_h_val=0, temp_l_val=0;
+   double h_m5, l_m5, h_m15, l_m15, h_m30, l_m30, h_h1, l_h1;
+   double temp_h_val, temp_l_val; datetime temp_th_val, temp_tl_val, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
 
-   // Use Global Variables for higher timeframes instead of GetMTFPullback
-   t_m1 = g_state_curr.maj_tr;
-   p_m1 = p_pct; // M1 pullback is passed directly via choch_pct/p_pct
-   mp_m1 = 0; // will be calculated below
-
-   double m1_h = g_state_curr.maj_h;
-   double m1_l = g_state_curr.maj_l;
-   if (m1_h != EMPTY_VALUE && m1_l != EMPTY_VALUE && m1_h != m1_l) {
-      double range = m1_h - m1_l;
-      if (t_m1 == 1) mp_m1 = ((m1_h - g_state_curr.tmp_l) / range) * 100.0;
-      else mp_m1 = ((g_state_curr.tmp_h - m1_l) / range) * 100.0;
-   }
-
-   string sym = Symbol();
-
-   bool hm3 = ReadGlobalVariableMTF(sym, "PERIOD_M3", t_m3, p_m3, mp_m3, temp_h_val, temp_l_val);
-   bool hm5 = ReadGlobalVariableMTF(sym, "PERIOD_M5", t_m5, p_m5, mp_m5, h_m5, l_m5);
-   bool hm15 = ReadGlobalVariableMTF(sym, "PERIOD_M15", t_m15, p_m15, mp_m15, h_m15, l_m15);
-   bool hm30 = ReadGlobalVariableMTF(sym, "PERIOD_M30", t_m30, p_m30, mp_m30, h_m30, l_m30);
-   bool hh1 = ReadGlobalVariableMTF(sym, "PERIOD_H1", t_h1, p_h1, mp_h1, h_h1, l_h1);
-
-   if(!hm3 || !hm5 || !hm15 || !hm30 || !hh1) {
-       Print("⚠️ MTF Verileri eksik veya eski. Lütfen tüm zaman aralıklarına(M3-H1) indikatörü ekleyin. Ancak değerlendirme devam ediyor...");
-   }
+   // We need MTF data to evaluate the matrix
+   GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, live_price, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
+   GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, live_price, temp_h_val, temp_l_val, temp_th_val, temp_tl_val);
+   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, live_price, h_m5, l_m5, th_m5, tl_m5);
+   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, live_price, h_m15, l_m15, th_m15, tl_m15);
+   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, live_price, h_m30, l_m30, th_m30, tl_m30);
+   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, live_price, h_h1, l_h1, th_h1, tl_h1);
 
    double true_live_m1 = p_m1; // M1'in gerçek anlık çekilmesini (kırılım anındaki esnemeyi) koru
 
@@ -427,67 +498,54 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // --- M1 BASE SETUP ---
    int m1_points = is_strong ? 5 : 0;
    total_points += m1_points;
-
-   string stats_m1 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m1, 2) + " | Anlık: %" + DoubleToString(p_m1, 2) + "]\n";
-
-   if(is_strong) m1_text = stats_m1 + "   └ Durum: 🔥 GÜÇLÜ (Ana likiditeyi süpürerek kırdı) -> [+5 Skor]\n";
-   else          m1_text = stats_m1 + "   └ Durum: ⚠️ ZAYIF (Süpürme yapmadan kırılım geldi) -> [+0 Skor]\n";
+   if(is_strong) m1_text = "Durum: 🔥 GÜÇLÜ (Likidite Alındı) -> [+5 Skor]\n";
+   else          m1_text = "Durum: ⚠️ ZAYIF (Likidite Alınamadı) -> [+0 Skor]\n";
 
    // --- H1 MACRO LOGIC ---
    int h1_points = 0;
-   bool h1_momentum = ((mp_h1 - p_h1) >= 15.0);
-   bool h1_momentum_bonus = ((mp_h1 - p_h1) >= 20.0);
+   bool h1_momentum = ((mp_h1 - p_h1) >= 20.0);
    bool is_h1_aligned = (t_h1 == trigger_dir);
 
-   string stats_h1 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_h1, 2) + " | Anlık: %" + DoubleToString(p_h1, 2) + "]\n";
-   string trend_h1 = "   └ Yön -> " + FormatTrendStr(t_h1) + "\n";
+   string stats_h1 = "[Maks Çekilme: %" + DoubleToString(mp_h1, 2) + " | Anlık: %" + DoubleToString(p_h1, 2) + "] ";
 
    if (h1_momentum) {
-       if (is_h1_aligned) {
-           if (h1_momentum_bonus) { h1_points = 35; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 🚀 Zirveden/Dipten %20'den fazla sert ivme bonusu var ve yön uyumlu! Harika momentum. -> [+35 Skor]\n\n"; }
-           else                   { h1_points = 30; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 🚀 Zirveden/Dipten %15'ten fazla sert ivmeli bir dönüş var ve yön uyumlu! -> [+30 Skor]\n\n"; }
-       }
-       else { h1_points = 0; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 🛑 Sert bir dönüş ivmesi (Momentum %15+) var ANCAK açacağımız işleme ters! Tuzak olabilir. -> [+0 Skor]\n\n"; }
+       if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Ana Yön İle Uyumlu Sert İvme (Momentum) -> [+30 Skor]\n"; }
+       else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Ana Yöne Ters Sert İvme Var (Riskli) -> [0 Skor]\n"; }
    } else {
        if (p_h1 >= 50.0) { // Premium
-           if (is_h1_aligned) { h1_points = 30; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 💎 Fiyat %50'nin üstünde mükemmel bir indirim/pahalı (Premium) bölgesine girdi ve yönümüzle aynı. Çok güvenli. -> [+30 Skor]\n\n"; }
-           else               { h1_points = 20; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 📈 Yönümüz TERS ve fiyat %50 Premium bölgesinde, ANCAK momentumlu çekilme yok, gidecek yolu var! -> [+20 Skor]\n\n"; }
-       } else { // %50 Altında Kalan Tüm Çekilmeler (Aşırı Şişkin Piyasa Fırsatları)
-           if (is_h1_aligned) { h1_points = 30; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 🔥 H1 Trendi güçlü, henüz %50 Premium'a gelmedi. Şişkin piyasada trende katılıyoruz! -> [+30 Skor]\n\n"; }
-           else               { h1_points = 30; h1_text = "🧭 [H1 Makro Zaman Aralığı]\n" + trend_h1 + stats_h1 + "   └ Açıklama: 🎯 H1 Trendi henüz %50 indirim bölgesine ulaşmadı (Aşırı Şişkin). Karşı trend yönünde (Düzeltme) yepyeni ve kârlı bir dalga fırsatı! -> [+30 Skor]\n\n"; }
+           if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Ana Yöne Uyumlu %50+ Mükemmel İndirim/Premium Bölgesi -> [+30 Skor]\n"; }
+           else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "%50+ İndirim Bölgesinde Ancak Ana Yöne Ters! (Riskli) -> [0 Skor]\n"; }
+       } else if (p_h1 >= 10.0) { // 10% Pullback Trade Opportunity (Live Pullback)
+           if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "Ana Yöne Uyumlu ve Anlık Çekilme Yeterli (Min %10 Şartı Sağlandı) -> [+30 Skor]\n"; }
+           else               { h1_points = 0;  h1_text = "H1: " + stats_h1 + "Ana Yöne Ters! Fiyat Çoktan Düzeltmeye Başlamış, Her An Ana Trende Dönebilir! (Riskli) -> [0 Skor]\n"; }
+       } else { // Shallow (p_h1 < 10.0)
+           if (is_h1_aligned) { h1_points = 30; h1_text = "H1: " + stats_h1 + "H1 Trendi Çok Güçlü (Çekilme <%10), Ana Yöne Uyumlu Kırılım Geldi (Trende Katıl) -> [+30 Skor]\n"; }
+           else               { h1_points = 30; h1_text = "H1: " + stats_h1 + "H1 Trendi Çok Uzadı (Çekilme <%10), Ana Yöne Ters Yeni Karşıt Düzeltme Fırsatı Başladı (Önü Açık!) -> [+30 Skor]\n"; }
        }
    }
    total_points += h1_points;
 
    // --- M30 MODIFIER LOGIC (De-duplication) ---
    int m30_points = 0;
-   bool m30_momentum = ((mp_m30 - p_m30) >= 15.0);
-   bool m30_momentum_bonus = ((mp_m30 - p_m30) >= 20.0);
+   bool m30_momentum = ((mp_m30 - p_m30) >= 20.0);
    bool is_m30_aligned = (t_m30 == trigger_dir);
    bool is_m30_duplicate = (MathAbs(h_m30 - h_h1) < Point() * 5 && MathAbs(l_m30 - l_h1) < Point() * 5);
 
-   string stats_m30 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m30, 2) + " | Anlık: %" + DoubleToString(p_m30, 2) + "]\n";
-   string trend_m30 = "   └ Yön -> " + FormatTrendStr(t_m30) + "\n";
+   string stats_m30 = "[Maks Çekilme: %" + DoubleToString(mp_m30, 2) + " | Anlık: %" + DoubleToString(p_m30, 2) + "] ";
 
    if (is_m30_duplicate) {
-       m30_points = 0; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 🔄 Fiyat yapısı ve dalgası bir üst grafik olan H1 ile tamamen aynı görünüyor. Çift puan eklememek için SIFIRLANDI. -> [+0 Skor]\n\n";
+       m30_points = 0; m30_text = "M30: " + stats_m30 + "Fiyat Yapısı Üst Zaman Dilimi (H1) İle Birebir Aynı, Çift Puan Önleme -> [0 Skor]\n";
    } else {
-       if (!is_m30_aligned) { // YÖN TERS
+       if (m30_momentum) {
+           if (is_m30_aligned) { m30_points = 15; m30_text = "M30: " + stats_m30 + "Ana Yöne Uyumlu Sert İvme (Zirveden/Dipten %20+ Dönüş) -> [+15 Skor]\n"; }
+           else                { m30_points = 0;  m30_text = "M30: " + stats_m30 + "Ana Yöne Ters! Zirveden/Dipten Sert %20 İvme İle Dönmüş (Tuzak Riski!) -> [0 Skor]\n"; }
+       } else {
            if (p_m30 >= 50.0) {
-               if (m30_momentum) { m30_points = 0;  m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 🛑 Premium bölgede TERS yönlü %15 momentum var. Düzeltme bitiyor olabilir, riskli! -> [+0 Skor]\n\n"; }
-               else              { m30_points = 10; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 📈 Premium bölgede TERS yönlü işlem, henüz dönüş momentumu yok, gidecek yolu var. -> [+10 Skor]\n\n"; }
-           } else { // Shallow (< 50%)
-               if (m30_momentum) { m30_points = 0;  m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 🛑 Şişkin bölgede TERS yönlü %15 momentum var. Tehlikeli! -> [+0 Skor]\n\n"; }
-               else              { m30_points = 10; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 📉 M30 henüz şişkin bölgede, YÖN TERS ama ivme yok. Düzeltme potansiyeli! -> [+10 Skor]\n\n"; }
-           }
-       } else { // YÖN UYUMLU
-           if (p_m30 < 50.0) {
-               if (m30_momentum_bonus) { m30_points = 25; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 🚀 Yön uyumlu, %50 altı ve %20+ Momentum ivmesi var! (Bonus Puan) -> [+25 Skor]\n\n"; }
-               else if (m30_momentum)  { m30_points = 20; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 🚀 Yön uyumlu, %50 altı ve %15 Momentum ivmesi var! Harika giriş fırsatı. -> [+20 Skor]\n\n"; }
-               else                    { m30_points = 15; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: ✅ Yön uyumlu ve %50 altında. Yolu daha var ama henüz momentum oluşmamış. -> [+15 Skor]\n\n"; }
-           } else { // Premium
-               if (m30_momentum_bonus) { m30_points = 25; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 💎 Premium bölgede YÖN UYUMLU işlem + %20 İvme Bonusu! -> [+25 Skor]\n\n"; }
-               else                    { m30_points = 20; m30_text = "🗺️ [M30 Zaman Aralığı]\n" + trend_m30 + stats_m30 + "   └ Açıklama: 💎 Premium bölgede YÖN UYUMLU işlem! En mükemmel makro kurulum. -> [+20 Skor]\n\n"; }
+               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Fiyat %50+ Şişkin Bölgede Ama Ana Yöne Uyumlu -> [+10 Skor]\n"; }
+               else                { m30_points = 0;   m30_text = "M30: " + stats_m30 + "Fiyat %50+ Şişkin Bölgede Ve Ana Yöne Ters (Tuzak Riski!) -> [0 Skor]\n"; }
+           } else { // Shallow (p_m30 < 50.0)
+               if (is_m30_aligned) { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Düzeltme Henüz %50'ye Ulaşmadı, Ana Yönde Fırsat Var -> [+10 Skor]\n"; }
+               else                { m30_points = 10;  m30_text = "M30: " + stats_m30 + "Ufak (%50 Altı) Karşıt Düzeltme Fırsatı, Önü Açık! -> [+10 Skor]\n"; }
            }
        }
    }
@@ -495,33 +553,25 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    // --- M15 MODIFIER LOGIC (De-duplication) ---
    int m15_points = 0;
-   bool m15_momentum = ((mp_m15 - p_m15) >= 15.0);
-   bool m15_momentum_bonus = ((mp_m15 - p_m15) >= 20.0);
+   bool m15_momentum = ((mp_m15 - p_m15) >= 20.0);
    bool is_m15_aligned = (t_m15 == trigger_dir);
    bool is_m15_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
 
-   string stats_m15 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m15, 2) + " | Anlık: %" + DoubleToString(p_m15, 2) + "]\n";
-   string trend_m15 = "   └ Yön -> " + FormatTrendStr(t_m15) + "\n";
+   string stats_m15 = "[Maks Çekilme: %" + DoubleToString(mp_m15, 2) + " | Anlık: %" + DoubleToString(p_m15, 2) + "] ";
 
    if (is_m15_duplicate) {
-       m15_points = 0; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 🔄 Dalga boyu M30 grafiği ile birebir örtüşüyor. Haksız çift puanı önlemek için eklendi. -> [+0 Skor]\n\n";
+       m15_points = 0; m15_text = "M15: " + stats_m15 + "Fiyat Yapısı Üst Zaman Dilimi (M30) İle Birebir Aynı, Çift Puan Önleme -> [0 Skor]\n";
    } else {
-       if (!is_m15_aligned) { // YÖN TERS
+       if (m15_momentum) {
+           if (is_m15_aligned) { m15_points = 10; m15_text = "M15: " + stats_m15 + "Ana Yöne Uyumlu Sert İvme (Zirveden/Dipten %20+ Dönüş) -> [+10 Skor]\n"; }
+           else                { m15_points = 0;  m15_text = "M15: " + stats_m15 + "Ana Yöne Ters! Zirveden/Dipten Sert %20 İvme İle Dönmüş (Tuzak Riski!) -> [0 Skor]\n"; }
+       } else {
            if (p_m15 >= 50.0) {
-               if (m15_momentum) { m15_points = 0;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 🛑 Premium bölgede TERS yönlü %15 momentum var. Düzeltme bitiyor olabilir, riskli! -> [+0 Skor]\n\n"; }
-               else              { m15_points = 5;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 📈 Premium bölgede TERS yönlü işlem, henüz dönüş momentumu yok, gidecek yolu var. -> [+5 Skor]\n\n"; }
-           } else { // Shallow (< 50%)
-               if (m15_momentum) { m15_points = 0;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 🛑 Şişkin bölgede TERS yönlü %15 momentum var. Tehlikeli! -> [+0 Skor]\n\n"; }
-               else              { m15_points = 5;  m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 📉 M15 henüz şişkin bölgede, YÖN TERS ama ivme yok. Düzeltme potansiyeli! -> [+5 Skor]\n\n"; }
-           }
-       } else { // YÖN UYUMLU
-           if (p_m15 < 50.0) {
-               if (m15_momentum_bonus) { m15_points = 20; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 🚀 Yön uyumlu, %50 altı ve %20+ Momentum ivmesi var! (Bonus Puan) -> [+20 Skor]\n\n"; }
-               else if (m15_momentum)  { m15_points = 15; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 🚀 Yön uyumlu, %50 altı ve %15 Momentum ivmesi var! Harika giriş fırsatı. -> [+15 Skor]\n\n"; }
-               else                    { m15_points = 10; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: ✅ Yön uyumlu ve %50 altında. Yolu daha var ama henüz momentum oluşmamış. -> [+10 Skor]\n\n"; }
-           } else { // Premium
-               if (m15_momentum_bonus) { m15_points = 20; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 💎 Premium bölgede YÖN UYUMLU işlem + %20 İvme Bonusu! -> [+20 Skor]\n\n"; }
-               else                    { m15_points = 15; m15_text = "📏 [M15 Zaman Aralığı]\n" + trend_m15 + stats_m15 + "   └ Açıklama: 💎 Premium bölgede YÖN UYUMLU işlem! En mükemmel makro kurulum. -> [+15 Skor]\n\n"; }
+               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "%50+ Dinlenmiş Uyumlu Bölge -> [+5 Skor]\n"; }
+               else                { m15_points = 0;  m15_text = "M15: " + stats_m15 + "%50+ Şişkin ve Ana Yöne Ters (Tuzak Riski) -> [0 Skor]\n"; }
+           } else { // Shallow (p_m15 < 50.0)
+               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Düzeltme Yolu Açık, Uyumlu Yön -> [+5 Skor]\n"; }
+               else                { m15_points = 5;  m15_text = "M15: " + stats_m15 + "Ufak (%50 Altı) Karşıt Düzeltme İşlemi Mümkün -> [+5 Skor]\n"; }
            }
        }
    }
@@ -529,128 +579,72 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    // --- M5 MODIFIER LOGIC (De-duplication) ---
    int m5_points = 0;
-   bool m5_momentum = ((mp_m5 - p_m5) >= 15.0);
-   bool m5_momentum_bonus = ((mp_m5 - p_m5) >= 20.0);
+   bool m5_momentum = ((mp_m5 - p_m5) >= 20.0);
    bool is_m5_aligned = (t_m5 == trigger_dir);
+   bool is_m5_deep = (mp_m5 >= InpPullbackM5);
    bool is_m5_duplicate = (MathAbs(h_m5 - h_m15) < Point() * 5 && MathAbs(l_m5 - l_m15) < Point() * 5);
 
-   string stats_m5 = "   └ Çekilme -> [Maksimum: %" + DoubleToString(mp_m5, 2) + " | Anlık: %" + DoubleToString(p_m5, 2) + "]\n";
-   string trend_m5 = "   └ Yön -> " + FormatTrendStr(t_m5) + "\n";
+   string stats_m5 = "[Maks Çekilme: %" + DoubleToString(mp_m5, 2) + " | Anlık: %" + DoubleToString(p_m5, 2) + "] ";
 
    if (is_m5_duplicate) {
-       m5_points = 0; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 🔄 Dalga M15 ile birebir aynı sınırlar içerisinde (Klon). Çift puan engellendi. -> [+0 Skor]\n\n";
+       m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Fiyat Yapısı Üst Zaman Dilimi (M15) İle Birebir Aynı, Çift Puan Önleme -> [0 Skor]\n";
    } else {
-       if (!is_m5_aligned) { // YÖN TERS
-           if (p_m5 >= 50.0) {
-               if (m5_momentum) { m5_points = 0; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 🛑 Premium bölgede TERS yönlü %15 momentum var. Riskli! -> [+0 Skor]\n\n"; }
-               else             { m5_points = 5; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 📈 Premium bölgede TERS yönlü işlem, gidecek yolu var. -> [+5 Skor]\n\n"; }
-           } else { // Shallow (< 50%)
-               if (m5_momentum) { m5_points = 0; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 🛑 Şişkin bölgede TERS yönlü %15 momentum var. Tehlikeli! -> [+0 Skor]\n\n"; }
-               else             { m5_points = 5; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 📉 M5 henüz şişkin bölgede, YÖN TERS ama ivme yok. Düzeltme potansiyeli! -> [+5 Skor]\n\n"; }
+       if (m5_momentum) {
+           if (is_m5_aligned) {
+               if (is_m5_deep) {
+                   m5_points = 15; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Ve Sert İvme Var -> [+15 Skor]\n";
+               } else {
+                   m5_points = 10; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Derin Çekilme Yok, Sadece Ana Yöne Sert İvme Var -> [+10 Skor]\n";
+               }
            }
-       } else { // YÖN UYUMLU
-           if (p_m5 < 50.0) {
-               if (m5_momentum_bonus) { m5_points = 15; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 🚀 Yön uyumlu, %50 altı ve %20+ Momentum ivmesi var! (Bonus Puan) -> [+15 Skor]\n\n"; }
-               else if (m5_momentum)  { m5_points = 10; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 🚀 Yön uyumlu, %50 altı ve %15 Momentum ivmesi var! -> [+10 Skor]\n\n"; }
-               else                   { m5_points = 5;  m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: ✅ Yön uyumlu ve %50 altında. Yolu daha var. -> [+5 Skor]\n\n"; }
-           } else { // Premium
-               if (m5_momentum_bonus) { m5_points = 15; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 💎 Premium bölgede YÖN UYUMLU işlem + %20 İvme Bonusu! -> [+15 Skor]\n\n"; }
-               else                   { m5_points = 10; m5_text = "🔬 [M5 Mikro Filtre]\n" + trend_m5 + stats_m5 + "   └ Açıklama: 💎 Premium bölgede YÖN UYUMLU işlem! -> [+10 Skor]\n\n"; }
+           else {
+               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Ana Yöne Ters! Zirveden/Dipten Sert %20 İvme İle Dönmüş (Tuzak Riski!) -> [0 Skor]\n";
+           }
+       } else {
+           if (is_m5_aligned && is_m5_deep) {
+               m5_points = 5; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Geçmişte İstenen Derin Çekilme (%" + DoubleToString(InpPullbackM5, 1) + "+) Başarılı, Yön Uyumlu -> [+5 Skor]\n";
+           } else {
+               m5_points = 0; m5_text = "M5 (Mikro Filtre): " + stats_m5 + "Maksimum Çekilme Yetersiz (Fiyat Yeterince Dinlenmedi) -> [0 Skor]\n";
            }
        }
    }
    total_points += m5_points;
 
    // --- M1 vs M3 RANGE EXPECTATION ---
-   string range_text = (t_m1 == t_m3) ? "🚀 BEKLENTİ: UZUN MENZİL (Trend Takibi - Karlı ve Güvenli)" : "⚠️ BEKLENTİ: KISA SÜRECEK (Scalp/Tepki - Karlı ama Hızlı Kapanmalı)";
+   string range_text = (t_m1 == t_m3) ? "🚀 BEKLENTİ: UZUN MENZİL (Trend Takibi)" : "⚠️ BEKLENTİ: KISA SÜRECEK (Scalp/Tepki)";
 
    // --- BREAKOUT LEVEL PHASING ---
    string lvl_text = "BİLİNMİYOR";
-   if (p_pct >= 40.0 && p_pct < 60.0) lvl_text = "KIRILIM 1 (Erken/Sığ Seviye)";
-   if (p_pct >= 60.0) lvl_text = "KIRILIM 2 (Ana/Derin Seviye)";
+   if (p_pct >= 40.0 && p_pct < 60.0) lvl_text = "KIRILIM 1 (Erken Seviye)";
+   if (p_pct >= 60.0) lvl_text = "KIRILIM 2 (Ana Seviye)";
 
    // --- FINAL VERDICT ---
    string verdict = "";
-   if (total_points >= InpMinTradeScoreLimit) verdict = "✅ İŞLEME GİRİLEBİLİR (Skor Algoritmayı Geçti)";
-   else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Skor " + IntegerToString(InpMinTradeScoreLimit) + " Puanlık Barajın Altında Kaldı)";
+   if (total_points >= InpMinTradeScore) verdict = "✅ İŞLEME GİRİLEBİLİR (Skor Yeterli)";
+   else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Skor Yetersiz)";
 
    string dir_str = (trigger_dir == 1) ? "BUY" : "SELL";
-   string dir_emoji = (trigger_dir == 1) ? "🟢 YUKARI (BUY Alımı)" : "🔴 AŞAĞI (SELL Satışı)";
+   string dir_emoji = (trigger_dir == 1) ? "⬆️ YUKARI (BUY)" : "⬇️ AŞAĞI (SELL)";
 
-   // ============================================
-   // 📌 MESAJLARI 2 PARÇAYA BÖLÜYORUZ (PUSH BİLDİRİMİ KESİLMESİN DİYE)
-   // ============================================
+   string msg = "";
+   if (is_test) msg = "🧪 [" + Symbol() + "] TEST ANALİZ RAPORU (Şu Anki Durum)\n";
+   else msg = "🚨 [" + Symbol() + "] YENİ İŞLEM FIRSATI [" + lvl_text + "] 🚨\n";
+   msg += "Yön: " + dir_emoji + "\n\n";
+   msg += "🔍 M1 KIRILIM KALİTESİ:\n" + m1_text + "\n";
+   msg += "📊 ZAMAN DİLİMİ ANALİZİ (Ana Yön H1: " + (t_h1==1?"⬆️":"⬇️") + "):\n";
+   msg += "* " + h1_text;
+   msg += "* " + m30_text;
+   msg += "* " + m15_text;
+   msg += "* " + m5_text + "\n";
+   msg += "🎯 İŞLEM MENZİLİ (M1 ve M3 Uyumu):\n" + range_text + "\n\n";
+   msg += "📈 TOPLAM İŞLEM SKORU:\n";
+   msg += "Hesaplanan: " + IntegerToString(total_points) + " Skor (Gerekli Baraj: " + IntegerToString(InpMinTradeScore) + " Skor)\n";
+   msg += "KARAR: " + verdict;
 
-   string msg1 = "";
-   if (is_test) msg1 = "🧪 [" + Symbol() + "] TEST (BÖLÜM 1/2)\n";
-   else msg1 = "🚨 [" + Symbol() + "] YENİ İŞLEM [" + lvl_text + "] (BÖLÜM 1/2)\n";
+   if(InpAlertPopup) Alert(msg);
+   if(InpAlertPush) SendNotification(msg);
 
-   msg1 += "🎯 Yön: " + dir_emoji + "\n\n";
-   msg1 += "🔍 M1 (Tetik) Kırılımı:\n" + m1_text + "\n";
-   msg1 += "📊 MTF DETAYLI ANALİZ:\n";
-   msg1 += "------------------\n";
-   msg1 += h1_text;
-   msg1 += m30_text;
-
-   string msg2 = "";
-   if (is_test) msg2 = "🧪 [" + Symbol() + "] TEST (BÖLÜM 2/2)\n";
-   else msg2 = "🚨 [" + Symbol() + "] İŞLEM DEVAMI (BÖLÜM 2/2)\n";
-
-   msg2 += m15_text;
-   msg2 += m5_text;
-   msg2 += "🎯 MENZİL: " + range_text + "\n\n";
-   msg2 += "📈 TOPLAM SKOR: " + IntegerToString(total_points) + " / " + IntegerToString(InpMinTradeScoreLimit) + "\n";
-   msg2 += "KARAR: " + verdict + "\n";
-
-   // SL ve TP hesaplamalarını önceden yapalım ki bildirime ekleyebilelim
-   double sl = 0.0;
-   double tp = 0.0;
-   double entry = live_price;
-
-   if (trigger_dir == 1) { // BUY
-       if (is_strong) { // Likidite alındı (Güçlü)
-           sl = ext_pt; // SL direkt en dibe konur
-           double dist = entry - sl;
-           tp = entry + (dist * 3.0); // 1:3 RR
-       } else { // Likidite alınmadı (Zayıf)
-           double raw_sl = ext_pt;
-           double dist = entry - raw_sl;
-           sl = raw_sl - (dist * 0.5); // Zayıf dibin 0.5 boy daha altına (toplam 1.5 boy SL mesafesi)
-           double new_dist = entry - sl;
-           tp = entry + (new_dist * 3.0); // 1:3 RR
-       }
-   } else { // SELL
-       if (is_strong) {
-           sl = ext_pt; // SL direkt en tepeye konur
-           double dist = sl - entry;
-           tp = entry - (dist * 3.0); // 1:3 RR
-       } else {
-           double raw_sl = ext_pt;
-           double dist = raw_sl - entry;
-           sl = raw_sl + (dist * 0.5); // Zayıf tepenin 0.5 boy daha üstüne (toplam 1.5 boy SL mesafesi)
-           double new_dist = sl - entry;
-           tp = entry - (new_dist * 3.0); // 1:3 RR
-       }
-   }
-
-   double sl_dist_raw = MathAbs(entry - sl);
-   double tp_dist_raw = MathAbs(entry - tp);
-
-   string trade_msg2 = msg2; // Bölüm 2'nin sonuna işlem sınırlarını ekle
-   trade_msg2 += "💰 İŞLEM SEVİYELERİ:\n";
-   trade_msg2 += "   └ Entry (Giriş): " + DoubleToString(entry, 5) + "\n";
-   trade_msg2 += "   └ Stop Loss: " + DoubleToString(sl, 5) + " (Mesafe: " + DoubleToString(sl_dist_raw, 2) + ")\n";
-   trade_msg2 += "   └ Take Profit: " + DoubleToString(tp, 5) + " (Mesafe: " + DoubleToString(tp_dist_raw, 2) + ")\n";
-   trade_msg2 += "===================\n";
-
-   // --- BİLDİRİM GÖNDERİMİ (Her CHoCH'ta tetiklenir, reddedilenleri de içerir) ---
-   if (is_test || total_points >= InpMinTradeScoreLimit || InpAlertRejectedTrades) {
-       if(InpAlertPopup) { Alert(msg1); Alert(trade_msg2); }
-       if(InpAlertPush) { SendPushSafe(msg1); SendPushSafe(trade_msg2); }
-       Print(msg1); Print(trade_msg2);
-   }
-
-   // --- AUTO-TRADE / SIGNAL WRITER LOGIC ---
+   // --- AUTO-TRADE FILE WRITER LOGIC ---
    static int last_maj_i = -1;
    static int current_swing_trades = 0;
 
@@ -659,14 +653,13 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        current_swing_trades = 0;
        g_virtual_last_outcome = 0; // Yeni dalgada eski SL hafızasını sıfırla
        g_virtual_last_sl_price = 0.0;
-       g_virtual_last_entry_price = 0.0;
        last_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
    }
 
-   if (total_points >= InpMinTradeScoreLimit || is_test) {
+   if (total_points >= InpMinTradeScore && InpEnableAutoTradeWriter) {
 
        // Eğer halihazırda takip ettiğimiz sanal bir işlem varsa, yeni sinyali çöpe at!
-       if (g_virtual_trade_active && !is_test) {
+       if (g_virtual_trade_active) {
            Print("⚠️ [VIRTUAL TRADE] İçeride aktif bir sanal işlem var (SL/TP bekleniyor). Yeni sinyal reddedildi.");
            return;
        }
@@ -675,204 +668,75 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        bool is_deep_elastic = (mp_m1 >= 40.0);
        int allowed_trades = is_deep_elastic ? InpMaxTradesPerSwing : 1;
 
-       if (is_test || current_swing_trades < allowed_trades) {
+       if (current_swing_trades < allowed_trades) {
 
            // --- Testere/Aynı Bölge Koruması (Sadece 1. işlem SL olduysa geçerli) ---
-           if (!is_test && current_swing_trades > 0 && g_virtual_last_outcome == -1) {
-               // Kullanıcının Mantığı: 2. Sinyalin "live_price" (kırılım) seviyesi, 1. işlemin SL seviyesi ile Entry seviyesi arasında olmalı.
-               // Eğer fiyat SL seviyesini tamamen aşağı kırmışsa (live_price <= SL) veya eski Entry'yi geçmişse (live_price >= Entry) işlem alınmaz.
-               if (trigger_dir == 1) { // BUY
-                   if (live_price <= g_virtual_last_sl_price || live_price >= g_virtual_last_entry_price) {
-                       Print("⚠️ [TRADE REJECTED] 2. BUY Reddedildi: Kırılım seviyesi (", live_price, "), SL (", g_virtual_last_sl_price, ") ile Kırılım Kutusu (", g_virtual_last_entry_price, ") arasında değil!");
-                       return;
-                   }
+           if (current_swing_trades > 0 && g_virtual_last_outcome == -1) {
+               if (trigger_dir == 1 && live_price > g_virtual_last_sl_price) {
+                   Print("⚠️ [AUTO-TRADE] BUY İşlemi Reddedildi: Fiyat eski Stop Loss seviyesinin (", g_virtual_last_sl_price, ") altında değil! Aynı bölgeden işleme girilmeyecek.");
+                   return;
                }
-               if (trigger_dir == -1) { // SELL
-                   if (live_price >= g_virtual_last_sl_price || live_price <= g_virtual_last_entry_price) {
-                       Print("⚠️ [TRADE REJECTED] 2. SELL Reddedildi: Kırılım seviyesi (", live_price, "), SL (", g_virtual_last_sl_price, ") ile Kırılım Kutusu (", g_virtual_last_entry_price, ") arasında değil!");
-                       return;
-                   }
+               if (trigger_dir == -1 && live_price < g_virtual_last_sl_price) {
+                   Print("⚠️ [AUTO-TRADE] SELL İşlemi Reddedildi: Fiyat eski Stop Loss seviyesinin (", g_virtual_last_sl_price, ") üstünde değil! Aynı bölgeden işleme girilmeyecek.");
+                   return;
                }
            }
 
-           // --- TP SINIRLANDIRMASI (SWING + %10 KURALI) & DİNAMİK DARALTMA ---
-           if (!is_test) {
-               double maj_h = g_state_curr.maj_h;
-               double maj_l = g_state_curr.maj_l;
-               if (maj_h != EMPTY_VALUE && maj_l != EMPTY_VALUE && maj_h > maj_l) {
-                   double swing_range = maj_h - maj_l;
-                   double buffer_10pct = swing_range * 0.10;
+           double sl = 0.0;
+           double tp = 0.0;
+           double entry = live_price;
 
-                   bool is_tp_overflow = false;
-                   double max_allowed_tp = maj_h + buffer_10pct;
-                   double min_allowed_tp = maj_l - buffer_10pct;
-
-                   if (trigger_dir == 1 && tp > max_allowed_tp) is_tp_overflow = true;
-                   if (trigger_dir == -1 && tp < min_allowed_tp) is_tp_overflow = true;
-
-                   if (is_tp_overflow) {
-                       Print("⚠️ TP Hedefi %10 sınırını aştı! İşlemi kurtarmak için SL daraltılıp RR (1:2) seviyesine düşürülüyor...");
-
-                       // DİNAMİK DARALTMA (COMPRESSION)
-                       if (trigger_dir == 1) { // BUY Daraltma
-                           if (is_strong) {
-                               sl = ext_pt + ((entry - ext_pt) * 0.1); // 1.0 yerine 0.9'a denk gelir (dipten %10 daha yukarıda, girişin altına doğru)
-                           } else {
-                               double raw_sl = ext_pt;
-                               double dist = entry - raw_sl;
-                               sl = raw_sl - (dist * 0.2); // Zayıf dip için 1.5x uzağa atmak yerine 1.2x uzağa atarız
-                           }
-                           double new_dist = entry - sl;
-                           tp = entry + (new_dist * 2.0); // RR'ı 3'ten 2'ye düşürdük
-
-                           if (tp > max_allowed_tp) {
-                               Print("❌ [TRADE REJECTED] BUY İptal: Daraltılmış (2RR) TP noktası bile (", tp, "), Swing sınırını aşıyor. İşlem reddedildi.");
-                               return;
-                           }
-                       } else { // SELL Daraltma
-                           if (is_strong) {
-                               sl = ext_pt - ((ext_pt - entry) * 0.1); // 1.0 yerine 0.9'a denk gelir (tepeden %10 daha aşağıda)
-                           } else {
-                               double raw_sl = ext_pt;
-                               double dist = raw_sl - entry;
-                               sl = raw_sl + (dist * 0.2); // Zayıf tepe için 1.5x yerine 1.2x uzağa atar
-                           }
-                           double new_dist = sl - entry;
-                           tp = entry - (new_dist * 2.0); // RR'ı 3'ten 2'ye düşürdük
-
-                           if (tp < min_allowed_tp) {
-                               Print("❌ [TRADE REJECTED] SELL İptal: Daraltılmış (2RR) TP noktası bile (", tp, "), Swing sınırını aşıyor. İşlem reddedildi.");
-                               return;
-                           }
-                       }
-                       Print("✅ İşlem başarıyla daraltıldı! Yeni RR: 1:2");
-                   }
+           if (trigger_dir == 1) { // BUY
+               if (is_strong) { // Likidite alındı (Güçlü)
+                   sl = ext_pt; // SL direkt en dibe konur
+                   double dist = entry - sl;
+                   tp = entry + (dist * 3.0); // 1:3 RR
+               } else { // Likidite alınmadı (Zayıf)
+                   double raw_sl = ext_pt;
+                   double dist = entry - raw_sl;
+                   sl = raw_sl - (dist * 0.5); // Zayıf dibin 0.5 boy daha altına (toplam 1.5 boy SL mesafesi)
+                   double new_dist = entry - sl;
+                   tp = entry + (new_dist * 3.0); // 1:3 RR
                }
-           }
-
-           // Daraltma yapılmış olma ihtimaline karşı EA için net mesafeleri baştan hesaplıyoruz
-           sl_dist_raw = MathAbs(entry - sl);
-           tp_dist_raw = MathAbs(entry - tp);
-
-           // --- DOSYAYA YAZMA (EA İÇİN) ---
-           if (InpEnableAutoTradeWriter) {
-               string filename = "denemevol23_signal_" + Symbol() + ".txt";
-               int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
-               if (file_handle != INVALID_HANDLE) {
-                   // EA'ya direkt fiyat göndermek yerine Entry ve Net Fiyat Mesafesi gönderiyoruz
-                   // Format: Sembol, Yön, Giriş Fiyatı, SL Mesafesi (Net), TP Mesafesi (Net)
-                   string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl_dist_raw, 5) + "," + DoubleToString(tp_dist_raw, 5);
-                   FileWrite(file_handle, trade_cmd);
-                   FileClose(file_handle);
-                   Print("✅ [AUTO-TRADE] EA İçin Sinyal Dosyası Gönderildi: ", trade_cmd, " (SL Mesafe: ", DoubleToString(sl_dist_raw,5), ", TP Mesafe: ", DoubleToString(tp_dist_raw,5), ")");
+           } else { // SELL
+               if (is_strong) {
+                   sl = ext_pt; // SL direkt en tepeye konur
+                   double dist = sl - entry;
+                   tp = entry - (dist * 3.0); // 1:3 RR
                } else {
-                   Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
+                   double raw_sl = ext_pt;
+                   double dist = raw_sl - entry;
+                   sl = raw_sl + (dist * 0.5); // Zayıf tepenin 0.5 boy daha üstüne (toplam 1.5 boy SL mesafesi)
+                   double new_dist = sl - entry;
+                   tp = entry - (new_dist * 3.0); // 1:3 RR
                }
-           } else if (is_test) {
-               Alert("⚠️ Test sinyali oluştu ama 'Sinyal Dosyası Gönder' (InpEnableAutoTradeWriter) ayarı kapalı! Sinyal EA'ya ulaşmayacak.");
            }
 
-           // Sanal İşlemi Başlat (Dosyaya yazılmasa bile arka planda takip eder)
-           if(!is_test) {
-               current_swing_trades++; // Aynı dalgadaki işlem sayısını artır (Sadece gerçek işlemlerde)
+           // Dosyayı Common klasörüne yaz (Her iki MT5 terminalinin okuyabilmesi için)
+           string filename = "vol100_signal_" + Symbol() + ".txt";
+           int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
+           if (file_handle != INVALID_HANDLE) {
+               string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl, 5) + "," + DoubleToString(tp, 5);
+               FileWrite(file_handle, trade_cmd);
+               FileClose(file_handle);
+               Print("✅ [AUTO-TRADE] Sinyal Gönderildi: ", trade_cmd);
+               current_swing_trades++; // Aynı dalgadaki işlem sayısını artır
+
+               // Sanal İşlemi Başlat
                g_virtual_trade_active = true;
                g_virtual_trade_dir = trigger_dir;
                g_virtual_sl = sl;
                g_virtual_tp = tp;
-               if (current_swing_trades == 1) {
-                   g_virtual_last_entry_price = entry; // 1. işlemin giriş (kırılım) fiyatını kaydet
-               }
                Print("🟢 [VIRTUAL TRADE] Sanal İşlem Takipli Başladı! Yön: ", dir_str, " SL: ", sl, " TP: ", tp);
-           } else {
-               Print("🟢 [TEST VIRTUAL TRADE] Test olduğu için sanal işlem takibi başlatılmadı.");
-           }
 
+           } else {
+               Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
+           }
        } else {
            string reason = (!is_deep_elastic) ? " (M1 Çekilmesi %40 seviyesine ulaşmadığı için sadece 1 işleme izin verildi)" : "";
-           Print("⚠️ [TRADE LIMIT] Bu majör dalga için maksimum işlem limitine (" + IntegerToString(allowed_trades) + ") ulaşıldı" + reason + ".");
+           Print("⚠️ [AUTO-TRADE] Bu majör dalga için maksimum işlem limitine (" + IntegerToString(allowed_trades) + ") ulaşıldı" + reason + ". Yeni sinyal gönderilmedi.");
        }
    }
-  }
-
-string BuildDashboardText(double live_price)
-  {
-   string dash = "\n";
-   dash += "=========================================================\n";
-   dash += "   " + Symbol() + " | Canlı Fiyat: " + DoubleToString(live_price, _Digits) + "\n";
-   dash += "=========================================================\n";
-   dash += "Zaman\tYön\tÇekilme\tMax Çek.\tHigh\t\tLow\n";
-   dash += "---------------------------------------------------------\n";
-
-   ENUM_TIMEFRAMES tfs[6] = {PERIOD_H1, PERIOD_M30, PERIOD_M15, PERIOD_M5, PERIOD_M3, PERIOD_M1};
-   string tfs_str[6] = {"H1 ", "M30", "M15", "M5 ", "M3 ", "M1 "};
-
-   for(int i = 0; i < 6; i++)
-     {
-      int trend = 0;
-      double pct = 0;
-      double max_pct = 0;
-      double ref_h = 0, ref_l = 0;
-      datetime ref_time = 0;
-
-      if(tfs[i] == PERIOD_M1)
-        {
-         // M1 verilerini g_state_curr içinden doğrudan çek
-         trend = g_state_curr.maj_tr;
-         ref_h = g_state_curr.maj_h;
-         ref_l = g_state_curr.maj_l;
-         if (ref_h != EMPTY_VALUE && ref_l != EMPTY_VALUE && ref_h != ref_l) {
-             double range = ref_h - ref_l;
-             if (trend == 1) {
-                 pct = ((ref_h - live_price) / range) * 100.0;
-                 max_pct = ((ref_h - g_state_curr.tmp_l) / range) * 100.0;
-                 if (live_price >= ref_h) pct = 0;
-             } else {
-                 pct = ((live_price - ref_l) / range) * 100.0;
-                 max_pct = ((g_state_curr.tmp_h - ref_l) / range) * 100.0;
-                 if (live_price <= ref_l) pct = 0;
-             }
-             if (pct < 0) pct = 0;
-             if (max_pct < 0) max_pct = 0;
-             if (max_pct < pct) max_pct = pct;
-         }
-         string dir_str = (trend == 1) ? "YUKARI" : ((trend == -1) ? "AŞAĞI " : "YATAY ");
-         dash += tfs_str[i] + "\t" + dir_str + "\t%" + DoubleToString(pct, 2) + "\t%" + DoubleToString(max_pct, 2) + "\t" + DoubleToString(ref_h, _Digits) + "\t" + DoubleToString(ref_l, _Digits) + "\n";
-        }
-      else
-        {
-         // Diğer zaman aralıklarını Global Variables'dan oku
-         string base_name = "5parite_" + Symbol() + "_" + EnumToString(tfs[i]) + "_";
-         if(GlobalVariableCheck(base_name + "Trend") &&
-            GlobalVariableCheck(base_name + "Pct") &&
-            GlobalVariableCheck(base_name + "MaxPct") &&
-            GlobalVariableCheck(base_name + "High") &&
-            GlobalVariableCheck(base_name + "Low") &&
-            GlobalVariableCheck(base_name + "Time"))
-           {
-            trend = (int)GlobalVariableGet(base_name + "Trend");
-            pct = GlobalVariableGet(base_name + "Pct");
-            max_pct = GlobalVariableGet(base_name + "MaxPct");
-            ref_h = GlobalVariableGet(base_name + "High");
-            ref_l = GlobalVariableGet(base_name + "Low");
-            ref_time = (datetime)GlobalVariableGet(base_name + "Time");
-
-            // Eğer veri 5 dakikadan eskiyse güncel değil olarak işaretle
-            if (TimeCurrent() - ref_time > 300) {
-                 dash += tfs_str[i] + "\t[ESKİ]\t-\t-\t-\t-\n";
-            } else {
-                 string dir_str = (trend == 1) ? "YUKARI" : ((trend == -1) ? "AŞAĞI " : "YATAY ");
-                 dash += tfs_str[i] + "\t" + dir_str + "\t%" + DoubleToString(pct, 2) + "\t%" + DoubleToString(max_pct, 2) + "\t" + DoubleToString(ref_h, _Digits) + "\t" + DoubleToString(ref_l, _Digits) + "\n";
-            }
-           }
-         else
-           {
-            dash += tfs_str[i] + "\t[YOK]\t-\t-\t-\t-\n";
-           }
-        }
-     }
-
-   dash += "=========================================================\n";
-   return dash;
   }
 
 //+------------------------------------------------------------------+
@@ -885,6 +749,29 @@ string BuildDashboardText(double live_price)
 int OnInit()
   {
    IndicatorSetString(INDICATOR_SHORTNAME, "Structure");
+
+   // --- 🧪 MANUEL TEST SİNYALİ FIRLATICI ---
+   if (InpForceTestSignal) {
+       Print("🧪 [TEST SİNYALİ] Gönderiliyor...");
+       string filename = "vol100_signal_" + Symbol() + ".txt";
+       int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
+       if (file_handle != INVALID_HANDLE) {
+           double entry = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
+           double point_size = Point();
+
+           // Sahte bir BUY işlemi simüle edelim: 100 Point (10 Pip) SL, 300 Point (30 Pip) TP
+           double sl = entry - (100 * point_size);
+           double tp = entry + (300 * point_size);
+
+           string trade_cmd = Symbol() + ",BUY," + DoubleToString(entry, 5) + "," + DoubleToString(sl, 5) + "," + DoubleToString(tp, 5);
+           FileWrite(file_handle, trade_cmd);
+           FileClose(file_handle);
+           Print("✅ [TEST BAŞARILI] Ortak Klasöre (Common) Sahte Sinyal Bırakıldı: ", trade_cmd);
+           Print("⚠️ Lütfen bir sonraki gerçek işlem için gösterge ayarlarından 'InpForceTestSignal' ayarını tekrar FALSE yapmayı unutmayın!");
+       } else {
+           Print("❌ [TEST HATASI] Ortak klasöre dosya yazılamadı! Kod: ", GetLastError());
+       }
+   }
    return(INIT_SUCCEEDED);
   }
 
@@ -1114,9 +1001,24 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           }
 
           if (!is_history) {
+              string msg = "🔴 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
+              msg += "Yön: ⬇️ AŞAĞI\n";
+              if (is_strong) {
+                  msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.\n";
+              } else {
+                  msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.\n";
+              }
+
+              msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
+
+              // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bear = 0;
               if (state.d1_i != last_alert_d1_i_bear) {
-                  if (draw_ui && Period() == PERIOD_M1) {
+                  if (InpEnableAlertCHoCHBase && draw_ui) {
+                      if(InpAlertPopup) Alert(msg);
+                      if(InpAlertPush) SendNotification(msg);
+                  }
+                  if (InpEnableTradeExecution && draw_ui) {
                       EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong, trade_sl_anchor);
                   }
                   last_alert_d1_i_bear = state.d1_i;
@@ -1158,9 +1060,24 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           }
 
           if (!is_history) {
+              string msg = "🟢 [" + Symbol() + "] " + EnumToString(Period()) + " Trend Döndü! (CHoCH)\n";
+              msg += "Yön: ⬆️ YUKARI\n";
+              if (is_strong) {
+                  msg += "Durum: 🔥 GÜÇLÜ! Dip likiditesi alındı.\n";
+              } else {
+                  msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.\n";
+              }
+
+              msg += "Çekilme: %" + DoubleToString(ext_pct, 2) + " (Kırılım: %" + DoubleToString(break_pct, 2) + ")\n";
+
+              // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bull = 0;
               if (state.d1_i != last_alert_d1_i_bull) {
-                  if (draw_ui && Period() == PERIOD_M1) {
+                  if (InpEnableAlertCHoCHBase && draw_ui) {
+                      if(InpAlertPopup) Alert(msg);
+                      if(InpAlertPush) SendNotification(msg);
+                  }
+                  if (InpEnableTradeExecution && draw_ui) {
                       EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong, trade_sl_anchor);
                   }
                   last_alert_d1_i_bull = state.d1_i;
@@ -1471,46 +1388,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
   }
 
 //+------------------------------------------------------------------+
-//| Global Variables Updater                                         |
-//+------------------------------------------------------------------+
-void UpdateGlobalVariables(int last_idx, const double &close[], const datetime &time[])
-  {
-   string sym = Symbol();
-   string tf_str = EnumToString(Period());
-   string base_name = "5parite_" + sym + "_" + tf_str + "_";
-
-   int live_tr = g_state_curr.maj_tr;
-   double live_pct = 0.0;
-   double max_pct = 0.0;
-   double h = g_state_curr.maj_h;
-   double l = g_state_curr.maj_l;
-   double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-
-   if (h != EMPTY_VALUE && l != EMPTY_VALUE && h != l) {
-       double range = h - l;
-       if (live_tr == 1) {
-           live_pct = ((h - bid) / range) * 100.0;
-           max_pct = ((h - g_state_curr.tmp_l) / range) * 100.0;
-           if (bid >= h) live_pct = 0;
-       } else {
-           live_pct = ((bid - l) / range) * 100.0;
-           max_pct = ((g_state_curr.tmp_h - l) / range) * 100.0;
-           if (bid <= l) live_pct = 0;
-       }
-       if (live_pct < 0) live_pct = 0;
-       if (max_pct < 0) max_pct = 0;
-       if (max_pct < live_pct) max_pct = live_pct;
-   }
-
-   GlobalVariableSet(base_name + "Trend", (double)live_tr);
-   GlobalVariableSet(base_name + "Pct", live_pct);
-   GlobalVariableSet(base_name + "MaxPct", max_pct);
-   GlobalVariableSet(base_name + "High", h);
-   GlobalVariableSet(base_name + "Low", l);
-   GlobalVariableSet(base_name + "Time", (double)TimeCurrent());
-  }
-
-//+------------------------------------------------------------------+
 //| Custom indicator iteration function                              |
 //+------------------------------------------------------------------+
 int OnCalculate(const int rates_total,
@@ -1650,34 +1527,6 @@ int OnCalculate(const int rates_total,
       ProcessBar(last_idx, open, high, low, close, time, g_state_curr, false, true);
      }
 
-   if(last_idx >= 0)
-     {
-      // Force Global Variable update so Master on M1 instantly sees fresh data
-      UpdateGlobalVariables(last_idx, close, time);
-     }
-
-   if(InpShowDashboard)
-     {
-      uint current_tick = GetTickCount();
-      if(current_tick - g_last_dash_tick > 1000)
-        {
-         g_last_dash_tick = current_tick;
-         if(Period() == PERIOD_M1)
-           {
-            string dash_text = BuildDashboardText(SymbolInfoDouble(Symbol(), SYMBOL_BID));
-            Comment(dash_text);
-           }
-         else
-           {
-            Comment(">>> 5parite MTF Sender Aktif (Zaman: ", EnumToString(Period()), ") <<<");
-           }
-        }
-     }
-   else
-     {
-      Comment("");
-     }
-
    if(InpShowMin)
      {
       int leg_i;
@@ -1731,68 +1580,54 @@ int OnCalculate(const int rates_total,
              g_state_hist.maj_l != g_last_alert_maj_l ||
              g_state_hist.maj_tr != g_last_alert_trend)
            {
+            // g_state_hist kapanışta işlendiği için burada kırılım onaylıdır. Oyalanma anındaki iğneler tetiklemez.
+            if (g_last_alert_trend != 0 && g_state_hist.maj_tr != g_last_alert_trend)
+              {
+               if (InpEnableAlertTrendChange) {
+                   string new_dir = (g_state_hist.maj_tr == 1) ? "YUKARI" : "AŞAĞI";
+                   string trend_msg = "🚨 [" + Symbol() + "] M1 Trend Döndü! Yeni Yön: " + new_dir;
+                   if(InpAlertPopup) Alert(trend_msg);
+                   if(InpAlertPush)  SendNotification(trend_msg);
+               }
+              }
             g_last_alert_maj_h = g_state_hist.maj_h;
             g_last_alert_maj_l = g_state_hist.maj_l;
             g_last_alert_trend = g_state_hist.maj_tr;
            }
      }
+   // 🧪 TEST TRIGGER EXECUTION (Yalnızca bir kez ve en güncel veriler işlendikten sonra çalıştırılır)
+   static bool is_test_run = false;
+   if (prev_calculated == 0) is_test_run = false; // Reset on re-compile/re-attach
 
-   // 🧪 TEST TRIGGER EXECUTION (Toggled by User)
-   if (last_idx > 0 && Period() == PERIOD_M1) {
-       // Sadece InpTestTradeExecution durumu FALSE'tan TRUE'ya geçtiğinde (Tetiklendiğinde) 1 kez çalışır
-       if (InpTestTradeExecution && !g_prev_test_state) {
+   if (!is_test_run && last_idx > 0) {
+       // TEST TRIGGER FOR TRADE EXECUTION
+       if (InpTestTradeExecution) {
+           int live_tr = g_state_curr.maj_tr;
+           double live_pct = 0.0;
+
+           double h_m1 = g_state_curr.maj_h;
+           double l_m1 = g_state_curr.maj_l;
            double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-           double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
-
-           if (InpTestTargetSL > 0 && InpTestTargetTP > 0) {
-               // MANUEL TEST: Gerçek analizi atla ve EA'ya doğrudan manuel hedefleri (0.01 lot test olarak) gönder
-               int dir = (InpTestTargetSL < bid) ? 1 : -1; // SL fiyattan düşükse BUY, yüksekse SELL
-               string dir_str = (dir == 1) ? "TEST_BUY" : "TEST_SELL";
-               double entry_price = (dir == 1) ? ask : bid;
-
-               double sl_dist_raw = MathAbs(entry_price - InpTestTargetSL);
-               double tp_dist_raw = MathAbs(entry_price - InpTestTargetTP);
-
-               if (InpEnableAutoTradeWriter) {
-                   string filename = "denemevol23_signal_" + Symbol() + ".txt";
-                   int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
-                   if (file_handle != INVALID_HANDLE) {
-                       string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry_price, 5) + "," + DoubleToString(sl_dist_raw, 5) + "," + DoubleToString(tp_dist_raw, 5);
-                       FileWrite(file_handle, trade_cmd);
-                       FileClose(file_handle);
-                       Print("✅ [TEST AUTO-TRADE] EA İçin Özel (0.01 Lot) Test Sinyali Gönderildi: ", trade_cmd);
-                       Alert("🧪 TEST İŞLEMİ GÖNDERİLDİ! Yön: ", dir_str, " | Entry: ", DoubleToString(entry_price, 5), " | SL Mesafe: ", DoubleToString(sl_dist_raw, 5), " | TP Mesafe: ", DoubleToString(tp_dist_raw, 5));
-                   } else {
-                       Print("❌ [TEST AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
-                   }
+           if (h_m1 != EMPTY_VALUE && l_m1 != EMPTY_VALUE && h_m1 != l_m1) {
+               double range = h_m1 - l_m1;
+               if (live_tr == 1) {
+                   live_pct = ((h_m1 - bid) / range) * 100.0;
+                   if (bid >= h_m1) live_pct = 0;
                } else {
-                   Alert("⚠️ Test butonuna bastın ama 'Sinyal Dosyası Gönder' (InpEnableAutoTradeWriter) ayarı kapalı! Sinyal EA'ya ulaşmayacak.");
+                   live_pct = ((bid - l_m1) / range) * 100.0;
+                   if (bid <= l_m1) live_pct = 0;
                }
-           } else {
-               // Eski standart TEST (Sadece analizi görmek için, manuel SL/TP girilmemişse)
-               int test_choch_dir = g_state_curr.maj_tr;
-               if (test_choch_dir == 0) test_choch_dir = 1; // Güvenlik, eğer henüz 0 ise test için varsayılan 1 yap
-
-               double live_pct = 0.0;
-               double ext_pt = bid; // Default
-               if (g_state_curr.maj_h != EMPTY_VALUE && g_state_curr.maj_l != EMPTY_VALUE && g_state_curr.maj_h != g_state_curr.maj_l) {
-                   double range = g_state_curr.maj_h - g_state_curr.maj_l;
-                   if (test_choch_dir == 1) {
-                       ext_pt = g_state_curr.maj_l;
-                       live_pct = ((g_state_curr.maj_h - bid) / range) * 100.0;
-                       if (bid >= g_state_curr.maj_h) live_pct = 0;
-                   } else if (test_choch_dir == -1) {
-                       ext_pt = g_state_curr.maj_h;
-                       live_pct = ((bid - g_state_curr.maj_l) / range) * 100.0;
-                       if (bid <= g_state_curr.maj_l) live_pct = 0;
-                   }
-                   if (live_pct < 0) live_pct = 0;
-               }
-               EvaluateTradeSignal(last_idx, TimeCurrent(), bid, test_choch_dir, live_pct, true, ext_pt, true);
+               if (live_pct < 0) live_pct = 0;
            }
+
+           // Test Analizi, kullanıcının "Pullback sonrası ana trend devamı (BOS/Continuation CHoCH)" mantığına göre simüle edilir.
+           int test_choch_dir = live_tr; // Trend Yönü ile aynı olmalı
+
+           EvaluateTradeSignal(last_idx, TimeCurrent(), bid, test_choch_dir, live_pct, true, bid, true);
+           is_test_run = true;
        }
-       // Mevcut durumu kaydet (Bir sonraki tick'te tekrar atmasını engeller, kapatıp açılmayı bekler)
-       g_prev_test_state = InpTestTradeExecution;
+
+       if(!InpTestTradeExecution) is_test_run = true; // prevent infinite false state if both are off
    }
 
    return(rates_total);
