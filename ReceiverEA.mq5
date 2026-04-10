@@ -146,20 +146,77 @@ void OnTimer()
 
    if(sig_dir == "BUY" || sig_dir == "TEST_BUY")
      {
-      // Direkt olarak fiyat bazında çıkarma ve toplama yapıyoruz, broker'ın "Point" tuzağına düşmüyoruz
       sl_price = ask - sl_dist_raw;
       tp_price = ask + tp_dist_raw;
 
-      Print("🚀 BUY İşlemi Açılıyor... Lot: ", DoubleToString(lot, 2), " SL: ", DoubleToString(sl_price, 5), " TP: ", DoubleToString(tp_price, 5));
-      trade.Buy(lot, Symbol(), ask, sl_price, tp_price, "5parite Receiver");
+      Print("🚀 BUY İşlemi Açılıyor... Lot: ", DoubleToString(lot, 2), " (ECN Modu: Önce işlemsiz açıp sonra SL/TP eklenecek)");
+
+      if(trade.Buy(lot, Symbol(), ask, 0.0, 0.0, "5parite Receiver"))
+        {
+         // ECN hesaplarında işlemin anında Position'a dönüşmesi beklenir.
+         // Position Modify fonksiyonuna mutlaka yeni açılan Ticket numarasını vermeliyiz!
+         // Eğer Symbol() verirsek, grafikte çalışan DİĞER botların eski işlemlerini (Hedging) hedefleyip kendi SL'mizi bozabilir.
+         ulong ticket = trade.ResultOrder();
+         if (ticket == 0) ticket = trade.ResultDeal();
+
+         // Eğer trade sınıfı ticketi doğrudan veremiyorsa, son açılan Magic Number uyumlu pozisyonu bulalım
+         if (ticket == 0) {
+             for(int i = PositionsTotal() - 1; i >= 0; i--) {
+                 if(PositionGetSymbol(i) == Symbol() && PositionGetInteger(POSITION_MAGIC) == 454545) {
+                     ticket = PositionGetInteger(POSITION_TICKET);
+                     break;
+                 }
+             }
+         }
+
+         if (ticket > 0 && trade.PositionModify(ticket, sl_price, tp_price))
+           {
+            Print("✅ BUY İşlemine (Ticket: ", ticket, ") SL: ", DoubleToString(sl_price, 5), " ve TP: ", DoubleToString(tp_price, 5), " başarıyla eklendi.");
+           }
+         else
+           {
+            Print("❌ BUY İşlemi açıldı ANCAK SL/TP Eklenemedi! Ticket: ", ticket, " Hata: ", trade.ResultRetcodeDescription());
+           }
+        }
+      else
+        {
+         Print("❌ BUY İşlemi AÇILAMADI! Hata: ", trade.ResultRetcodeDescription());
+        }
      }
    else if(sig_dir == "SELL" || sig_dir == "TEST_SELL")
      {
       sl_price = bid + sl_dist_raw;
       tp_price = bid - tp_dist_raw;
 
-      Print("🚀 SELL İşlemi Açılıyor... Lot: ", DoubleToString(lot, 2), " SL: ", DoubleToString(sl_price, 5), " TP: ", DoubleToString(tp_price, 5));
-      trade.Sell(lot, Symbol(), bid, sl_price, tp_price, "5parite Receiver");
+      Print("🚀 SELL İşlemi Açılıyor... Lot: ", DoubleToString(lot, 2), " (ECN Modu: Önce işlemsiz açıp sonra SL/TP eklenecek)");
+
+      if(trade.Sell(lot, Symbol(), bid, 0.0, 0.0, "5parite Receiver"))
+        {
+         ulong ticket = trade.ResultOrder();
+         if (ticket == 0) ticket = trade.ResultDeal();
+
+         if (ticket == 0) {
+             for(int i = PositionsTotal() - 1; i >= 0; i--) {
+                 if(PositionGetSymbol(i) == Symbol() && PositionGetInteger(POSITION_MAGIC) == 454545) {
+                     ticket = PositionGetInteger(POSITION_TICKET);
+                     break;
+                 }
+             }
+         }
+
+         if (ticket > 0 && trade.PositionModify(ticket, sl_price, tp_price))
+           {
+            Print("✅ SELL İşlemine (Ticket: ", ticket, ") SL: ", DoubleToString(sl_price, 5), " ve TP: ", DoubleToString(tp_price, 5), " başarıyla eklendi.");
+           }
+         else
+           {
+            Print("❌ SELL İşlemi açıldı ANCAK SL/TP Eklenemedi! Ticket: ", ticket, " Hata: ", trade.ResultRetcodeDescription());
+           }
+        }
+      else
+        {
+         Print("❌ SELL İşlemi AÇILAMADI! Hata: ", trade.ResultRetcodeDescription());
+        }
      }
   }
 //+------------------------------------------------------------------+
