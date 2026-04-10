@@ -344,6 +344,31 @@ string FormatTrendStr(int t)
   }
 
 //+------------------------------------------------------------------+
+//| Safe Push Notification Helper (255 char limit bypass)            |
+//+------------------------------------------------------------------+
+void SendPushSafe(string text)
+  {
+   if(StringLen(text) <= 250) {
+      SendNotification(text);
+      return;
+   }
+
+   string lines[];
+   StringSplit(text, '\n', lines);
+   string chunk = "";
+
+   for(int i = 0; i < ArraySize(lines); i++) {
+      if(StringLen(chunk) + StringLen(lines[i]) + 1 > 250) {
+         if(StringLen(chunk) > 0) SendNotification(chunk);
+         chunk = lines[i] + "\n";
+      } else {
+         chunk += lines[i] + "\n";
+      }
+   }
+   if(StringLen(chunk) > 0) SendNotification(chunk);
+  }
+
+//+------------------------------------------------------------------+
 //| 50-Point Execution Analysis Engine                               |
 //+------------------------------------------------------------------+
 void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double ext_pt, bool is_test = false)
@@ -621,7 +646,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // --- BİLDİRİM GÖNDERİMİ (Her CHoCH'ta tetiklenir, reddedilenleri de içerir) ---
    if (is_test || total_points >= InpMinTradeScoreLimit || InpAlertRejectedTrades) {
        if(InpAlertPopup) { Alert(msg1); Alert(trade_msg2); }
-       if(InpAlertPush) { SendNotification(msg1); SendNotification(trade_msg2); }
+       if(InpAlertPush) { SendPushSafe(msg1); SendPushSafe(trade_msg2); }
        Print(msg1); Print(trade_msg2);
    }
 
@@ -650,7 +675,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        bool is_deep_elastic = (mp_m1 >= 40.0);
        int allowed_trades = is_deep_elastic ? InpMaxTradesPerSwing : 1;
 
-       if (current_swing_trades < allowed_trades) {
+       if (is_test || current_swing_trades < allowed_trades) {
 
            // --- Testere/Aynı Bölge Koruması (Sadece 1. işlem SL olduysa geçerli) ---
            if (current_swing_trades > 0 && g_virtual_last_outcome == -1) {
@@ -741,11 +766,13 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                } else {
                    Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
                }
+           } else if (is_test) {
+               Alert("⚠️ Test sinyali oluştu ama 'Sinyal Dosyası Gönder' (InpEnableAutoTradeWriter) ayarı kapalı! Sinyal EA'ya ulaşmayacak.");
            }
 
            // Sanal İşlemi Başlat (Dosyaya yazılmasa bile arka planda takip eder)
-           current_swing_trades++; // Aynı dalgadaki işlem sayısını artır
            if(!is_test) {
+               current_swing_trades++; // Aynı dalgadaki işlem sayısını artır (Sadece gerçek işlemlerde)
                g_virtual_trade_active = true;
                g_virtual_trade_dir = trigger_dir;
                g_virtual_sl = sl;
