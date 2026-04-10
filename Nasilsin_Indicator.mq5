@@ -376,12 +376,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool hh1 = ReadGlobalVariableMTF(sym, "PERIOD_H1", t_h1, p_h1, mp_h1, h_h1, l_h1);
 
    if(!hm3 || !hm5 || !hm15 || !hm30 || !hh1) {
-       if(!is_test) {
-           Print("MTF Verileri eksik veya eski. Lütfen tüm zaman aralıklarına(M3-H1) indikatörü ekleyin. İşlem iptal.");
-           return;
-       }
-       // Eğer test ediyorsak geri dönme, sadece uyarı ver ki algoritmanın o kısımlarının neden sıfır puan verdiğini anlasın
-       Print("TEST MODU: Bazı MTF verileri eksik ancak test devam ediyor...");
+       Print("MTF Verileri eksik veya eski. Lütfen tüm zaman aralıklarına(M3-H1) indikatörü ekleyin. Ancak değerlendirme devam ediyor...");
    }
 
    double true_live_m1 = p_m1; // M1'in gerçek anlık çekilmesini (kırılım anındaki esnemeyi) koru
@@ -630,8 +625,6 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        Print(msg1); Print(trade_msg2);
    }
 
-   if (is_test) return; // Test runs do not execute trades or track virtual setups.
-
    // --- AUTO-TRADE / SIGNAL WRITER LOGIC ---
    static int last_maj_i = -1;
    static int current_swing_trades = 0;
@@ -645,10 +638,10 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        last_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
    }
 
-   if (total_points >= InpMinTradeScoreLimit) {
+   if (total_points >= InpMinTradeScoreLimit || is_test) {
 
        // Eğer halihazırda takip ettiğimiz sanal bir işlem varsa, yeni sinyali çöpe at!
-       if (g_virtual_trade_active) {
+       if (g_virtual_trade_active && !is_test) {
            Print("⚠️ [VIRTUAL TRADE] İçeride aktif bir sanal işlem var (SL/TP bekleniyor). Yeni sinyal reddedildi.");
            return;
        }
@@ -752,14 +745,18 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
            // Sanal İşlemi Başlat (Dosyaya yazılmasa bile arka planda takip eder)
            current_swing_trades++; // Aynı dalgadaki işlem sayısını artır
-           g_virtual_trade_active = true;
-           g_virtual_trade_dir = trigger_dir;
-           g_virtual_sl = sl;
-           g_virtual_tp = tp;
-       if (current_swing_trades == 1) {
-           g_virtual_last_entry_price = entry; // 1. işlemin giriş (kırılım) fiyatını kaydet
-       }
-           Print("🟢 [VIRTUAL TRADE] Sanal İşlem Takipli Başladı! Yön: ", dir_str, " SL: ", sl, " TP: ", tp);
+           if(!is_test) {
+               g_virtual_trade_active = true;
+               g_virtual_trade_dir = trigger_dir;
+               g_virtual_sl = sl;
+               g_virtual_tp = tp;
+               if (current_swing_trades == 1) {
+                   g_virtual_last_entry_price = entry; // 1. işlemin giriş (kırılım) fiyatını kaydet
+               }
+               Print("🟢 [VIRTUAL TRADE] Sanal İşlem Takipli Başladı! Yön: ", dir_str, " SL: ", sl, " TP: ", tp);
+           } else {
+               Print("🟢 [TEST VIRTUAL TRADE] Test olduğu için sanal işlem takibi başlatılmadı.");
+           }
 
        } else {
            string reason = (!is_deep_elastic) ? " (M1 Çekilmesi %40 seviyesine ulaşmadığı için sadece 1 işleme izin verildi)" : "";
