@@ -1100,8 +1100,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           }
 
           // İşlem Koruması: Sadece ve sadece grafikte fiziksel kırılım çizgisi (CHoCH_Signal) çizildiyse işlemi/bildirimi fırlat!
+          static int last_alert_d1_i_bear = 0;
           if (!is_history && (!InpShowChoch || is_line_drawn)) {
-
+              if (state.d1_i != last_alert_d1_i_bear) {
                   if (InpEnableTradeExecution && draw_ui) {
                       EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong, trade_sl_anchor);
                   }
@@ -1147,8 +1148,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           }
 
           // İşlem Koruması: Sadece ve sadece grafikte fiziksel kırılım çizgisi (CHoCH_Signal) çizildiyse işlemi/bildirimi fırlat!
+          static int last_alert_d1_i_bull = 0;
           if (!is_history && (!InpShowChoch || is_line_drawn)) {
-
+              if (state.d1_i != last_alert_d1_i_bull) {
                   if (InpEnableTradeExecution && draw_ui) {
                       EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong, trade_sl_anchor);
                   }
@@ -1628,7 +1630,6 @@ int OnCalculate(const int rates_total,
               {
                if (InpEnableAlertTrendChange) {
                    string new_dir = (g_state_hist.maj_tr == 1) ? "YUKARI" : "AŞAĞI";
-
                }
               }
             g_last_alert_maj_h = g_state_hist.maj_h;
