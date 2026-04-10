@@ -558,214 +558,168 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string dir_emoji = (trigger_dir == 1) ? "🟢 YUKARI (BUY Alımı)" : "🔴 AŞAĞI (SELL Satışı)";
 
    // ============================================
-   // 📌 MESAJLARI 2 PARÇAYA BÖLÜYORUZ (PUSH BİLDİRİMİ KESİLMESİN DİYE)
+   // 📌 ÖN KONTROLLER (Virtual Trade ve Swing İptalleri)
    // ============================================
 
-   string msg1 = "";
-   if (is_test) msg1 = "🧪 [" + Symbol() + "] TEST (BÖLÜM 1/2)\n";
-   else msg1 = "🚨 [" + Symbol() + "] YENİ İŞLEM [" + lvl_text + "] (BÖLÜM 1/2)\n";
+   static int last_maj_i = -1;
+   static int current_swing_trades = 0;
 
-   msg1 += "🎯 Yön: " + dir_emoji + "\n\n";
-   msg1 += "🔍 M1 (Tetik) Kırılımı:\n" + m1_text + "\n";
-   msg1 += "📊 MTF DETAYLI ANALİZ:\n";
-   msg1 += "------------------\n";
-   msg1 += h1_text;
-   msg1 += m30_text;
+   if (g_state_curr.maj_h_i != last_maj_i && g_state_curr.maj_l_i != last_maj_i) {
+       current_swing_trades = 0;
+       g_virtual_last_outcome = 0;
+       g_virtual_last_sl_price = 0.0;
+       g_virtual_last_entry_price = 0.0;
+       last_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
+   }
 
-   string msg2 = "";
-   if (is_test) msg2 = "🧪 [" + Symbol() + "] TEST (BÖLÜM 2/2)\n";
-   else msg2 = "🚨 [" + Symbol() + "] İŞLEM DEVAMI (BÖLÜM 2/2)\n";
+   string execution_reject_reason = "";
+   bool execute_trade = true;
 
-   msg2 += m15_text;
-   msg2 += m5_text;
-   msg2 += "🎯 MENZİL: " + range_text + "\n\n";
-   msg2 += "📈 TOPLAM SKOR: " + IntegerToString(total_points) + " / " + IntegerToString(InpMinTradeScoreLimit) + "\n";
-   msg2 += "KARAR: " + verdict + "\n";
+   if (total_points < InpMinTradeScoreLimit) {
+       execute_trade = false;
+       execution_reject_reason = "❌ SKOR YETERSİZ (Baraj: " + IntegerToString(InpMinTradeScoreLimit) + ")";
+   } else if (g_virtual_trade_active) {
+       execute_trade = false;
+       execution_reject_reason = "⚠️ İÇERİDE AKTİF İŞLEM VAR (Sanal SL/TP Bekleniyor)";
+   } else {
+       bool is_deep_elastic = (mp_m1 >= 40.0);
+       int allowed_trades = is_deep_elastic ? InpMaxTradesPerSwing : 1;
 
-   // SL ve TP hesaplamalarını önceden yapalım ki bildirime ekleyebilelim
+       if (current_swing_trades >= allowed_trades) {
+           execute_trade = false;
+           execution_reject_reason = "⚠️ MAKS İŞLEM LİMİTİ (" + IntegerToString(allowed_trades) + ")";
+       } else if (current_swing_trades > 0 && g_virtual_last_outcome == -1) {
+           if (trigger_dir == 1 && (live_price <= g_virtual_last_sl_price || live_price >= g_virtual_last_entry_price)) {
+               execute_trade = false;
+               execution_reject_reason = "⚠️ TESTERE KORUMASI (2. BUY Kutunun Dışında)";
+           } else if (trigger_dir == -1 && (live_price >= g_virtual_last_sl_price || live_price <= g_virtual_last_entry_price)) {
+               execute_trade = false;
+               execution_reject_reason = "⚠️ TESTERE KORUMASI (2. SELL Kutunun Dışında)";
+           }
+       }
+   }
+
+   // ============================================
+   // 📌 SL/TP HESAPLAMA VE DİNAMİK DARALTMA
+   // ============================================
+
    double sl = 0.0;
    double tp = 0.0;
    double entry = live_price;
 
    if (trigger_dir == 1) { // BUY
-       if (is_strong) { // Likidite alındı (Güçlü)
-           sl = ext_pt; // SL direkt en dibe konur
+       if (is_strong) {
+           sl = ext_pt;
            double dist = entry - sl;
-           tp = entry + (dist * 3.0); // 1:3 RR
-       } else { // Likidite alınmadı (Zayıf)
+           tp = entry + (dist * 3.0);
+       } else {
            double raw_sl = ext_pt;
            double dist = entry - raw_sl;
-           sl = raw_sl - (dist * 0.5); // Zayıf dibin 0.5 boy daha altına (toplam 1.5 boy SL mesafesi)
+           sl = raw_sl - (dist * 0.5);
            double new_dist = entry - sl;
-           tp = entry + (new_dist * 3.0); // 1:3 RR
+           tp = entry + (new_dist * 3.0);
        }
    } else { // SELL
        if (is_strong) {
-           sl = ext_pt; // SL direkt en tepeye konur
+           sl = ext_pt;
            double dist = sl - entry;
-           tp = entry - (dist * 3.0); // 1:3 RR
+           tp = entry - (dist * 3.0);
        } else {
            double raw_sl = ext_pt;
            double dist = raw_sl - entry;
-           sl = raw_sl + (dist * 0.5); // Zayıf tepenin 0.5 boy daha üstüne (toplam 1.5 boy SL mesafesi)
+           sl = raw_sl + (dist * 0.5);
            double new_dist = sl - entry;
-           tp = entry - (new_dist * 3.0); // 1:3 RR
+           tp = entry - (new_dist * 3.0);
+       }
+   }
+
+   // TP Sınırlandırması (Swing + %10 Kuralı)
+   if (execute_trade) {
+       double maj_h = g_state_curr.maj_h;
+       double maj_l = g_state_curr.maj_l;
+       if (maj_h != EMPTY_VALUE && maj_l != EMPTY_VALUE && maj_h > maj_l) {
+           double swing_range = maj_h - maj_l;
+           double buffer_10pct = swing_range * 0.10;
+
+           bool is_tp_overflow = false;
+           double max_allowed_tp = maj_h + buffer_10pct;
+           double min_allowed_tp = maj_l - buffer_10pct;
+
+           if (trigger_dir == 1 && tp > max_allowed_tp) is_tp_overflow = true;
+           if (trigger_dir == -1 && tp < min_allowed_tp) is_tp_overflow = true;
+
+           if (is_tp_overflow) {
+               // DİNAMİK DARALTMA (COMPRESSION)
+               if (trigger_dir == 1) { // BUY Daraltma
+                   if (is_strong) { sl = ext_pt + ((entry - ext_pt) * 0.1); }
+                   else           { sl = ext_pt - ((entry - ext_pt) * 0.2); }
+                   tp = entry + ((entry - sl) * 2.0); // 2.0 RR
+                   if (tp > max_allowed_tp) { execute_trade = false; execution_reject_reason = "❌ TP HEDEFİ AŞIRI UZAK (Daraltma İşe Yaramadı)"; }
+               } else { // SELL Daraltma
+                   if (is_strong) { sl = ext_pt - ((ext_pt - entry) * 0.1); }
+                   else           { sl = ext_pt + ((ext_pt - entry) * 0.2); }
+                   tp = entry - ((sl - entry) * 2.0); // 2.0 RR
+                   if (tp < min_allowed_tp) { execute_trade = false; execution_reject_reason = "❌ TP HEDEFİ AŞIRI UZAK (Daraltma İşe Yaramadı)"; }
+               }
+           }
        }
    }
 
    double sl_dist_raw = MathAbs(entry - sl);
    double tp_dist_raw = MathAbs(entry - tp);
 
-   string trade_msg2 = msg2; // Bölüm 2'nin sonuna işlem sınırlarını ekle
-   trade_msg2 += "💰 İŞLEM SEVİYELERİ:\n";
-   trade_msg2 += "   └ Entry (Giriş): " + DoubleToString(entry, 5) + "\n";
-   trade_msg2 += "   └ Stop Loss: " + DoubleToString(sl, 5) + " (Mesafe: " + DoubleToString(sl_dist_raw, 2) + ")\n";
-   trade_msg2 += "   └ Take Profit: " + DoubleToString(tp, 5) + " (Mesafe: " + DoubleToString(tp_dist_raw, 2) + ")\n";
-   trade_msg2 += "===================\n";
-
-   // --- BİLDİRİM GÖNDERİMİ (Her CHoCH'ta tetiklenir, reddedilenleri de içerir) ---
-   if (is_test || total_points >= InpMinTradeScoreLimit || InpAlertRejectedTrades) {
-       if(InpAlertPopup) { Alert(msg1); Alert(trade_msg2); }
-       if(InpAlertPush) { SendNotification(msg1); SendNotification(trade_msg2); }
-       Print(msg1); Print(trade_msg2);
+   if (!execute_trade && execution_reject_reason != "") {
+       verdict = execution_reject_reason; // Bildirime iptal nedenini yansıt
    }
 
-   if (is_test) return; // Test runs do not execute trades or track virtual setups.
+   // ============================================
+   // 📌 BİLDİRİMLERİ (SPAM FİLTRESİNE TAKILMAMASI İÇİN) KISA TUTUYORUZ
+   // ============================================
 
-   // --- AUTO-TRADE / SIGNAL WRITER LOGIC ---
-   static int last_maj_i = -1;
-   static int current_swing_trades = 0;
+   // Bilgisayar ekranı (Alert) limiti aşmaz, tüm detayları birleştirip basabiliriz
+   string popup_msg = (is_test ? "🧪 TEST [" : "🚨 YENİ [" ) + Symbol() + "] Yön: " + dir_emoji + "\n" + m1_text + "\n" + h1_text + "\n" + m30_text + "\n" + m15_text + "\n" + m5_text + "\nKARAR: " + verdict + "\nSKOR: " + IntegerToString(total_points) + "\n💰 Entry: " + DoubleToString(entry, 5) + "\nSL Mesafe: " + DoubleToString(sl_dist_raw, 2) + "\nTP Mesafe: " + DoubleToString(tp_dist_raw, 2);
 
-   // Yeni bir ana dalga (swing) oluştuğunda sayaçları sıfırla
-   if (g_state_curr.maj_h_i != last_maj_i && g_state_curr.maj_l_i != last_maj_i) {
-       current_swing_trades = 0;
-       g_virtual_last_outcome = 0; // Yeni dalgada eski SL hafızasını sıfırla
-       g_virtual_last_sl_price = 0.0;
-       g_virtual_last_entry_price = 0.0;
-       last_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
+   // Telefona gidecek özet (Push) bildirimi (Sadece 2 mesaj, MT5 spam filtresine takılmasın diye)
+   string push_ozet1 = (is_test ? "🧪 TEST [" : "🚨 YENİ [" ) + Symbol() + "]\nYön: " + dir_emoji + "\nSkor: " + IntegerToString(total_points) + "/" + IntegerToString(InpMinTradeScoreLimit) + "\n\n📊 Puan Dağılımı:\nM1 (Güç): " + IntegerToString(m1_points) + "\nH1 (Makro): " + IntegerToString(h1_points) + "\nM30 (Orta): " + IntegerToString(m30_points) + "\nM15 (Kısa): " + IntegerToString(m15_points) + "\nM5 (Mikro): " + IntegerToString(m5_points);
+
+   string push_ozet2 = "KARAR: " + verdict + "\n\n💰 İŞLEM SEVİYELERİ:\nEntry: " + DoubleToString(entry, 5) + "\nSL (Fark): " + DoubleToString(sl_dist_raw, 2) + "\nTP (Fark): " + DoubleToString(tp_dist_raw, 2);
+
+   // --- BİLDİRİM GÖNDERİMİ ---
+   if (is_test || execute_trade || InpAlertRejectedTrades) {
+       if(InpAlertPopup) { Alert(popup_msg); }
+       if(InpAlertPush) {
+           SendNotification(push_ozet1);
+           // Spam korumasını tetiklememek için ufak bir gecikme ekliyoruz
+           Sleep(200);
+           SendNotification(push_ozet2);
+       }
+       Print(popup_msg);
    }
 
-   if (total_points >= InpMinTradeScoreLimit) {
+   if (is_test || !execute_trade) return;
 
-       // Eğer halihazırda takip ettiğimiz sanal bir işlem varsa, yeni sinyali çöpe at!
-       if (g_virtual_trade_active) {
-           Print("⚠️ [VIRTUAL TRADE] İçeride aktif bir sanal işlem var (SL/TP bekleniyor). Yeni sinyal reddedildi.");
-           return;
-       }
-
-       // --- DİNAMİK M1 ÇEKİLME İŞLEM LİMİTİ ---
-       bool is_deep_elastic = (mp_m1 >= 40.0);
-       int allowed_trades = is_deep_elastic ? InpMaxTradesPerSwing : 1;
-
-       if (current_swing_trades < allowed_trades) {
-
-           // --- Testere/Aynı Bölge Koruması (Sadece 1. işlem SL olduysa geçerli) ---
-           if (current_swing_trades > 0 && g_virtual_last_outcome == -1) {
-               // Kullanıcının Mantığı: 2. Sinyalin "live_price" (kırılım) seviyesi, 1. işlemin SL seviyesi ile Entry seviyesi arasında olmalı.
-               // Eğer fiyat SL seviyesini tamamen aşağı kırmışsa (live_price <= SL) veya eski Entry'yi geçmişse (live_price >= Entry) işlem alınmaz.
-               if (trigger_dir == 1) { // BUY
-                   if (live_price <= g_virtual_last_sl_price || live_price >= g_virtual_last_entry_price) {
-                       Print("⚠️ [TRADE REJECTED] 2. BUY Reddedildi: Kırılım seviyesi (", live_price, "), SL (", g_virtual_last_sl_price, ") ile Kırılım Kutusu (", g_virtual_last_entry_price, ") arasında değil!");
-                       return;
-                   }
-               }
-               if (trigger_dir == -1) { // SELL
-                   if (live_price >= g_virtual_last_sl_price || live_price <= g_virtual_last_entry_price) {
-                       Print("⚠️ [TRADE REJECTED] 2. SELL Reddedildi: Kırılım seviyesi (", live_price, "), SL (", g_virtual_last_sl_price, ") ile Kırılım Kutusu (", g_virtual_last_entry_price, ") arasında değil!");
-                       return;
-                   }
-               }
-           }
-
-           // --- TP SINIRLANDIRMASI (SWING + %10 KURALI) & DİNAMİK DARALTMA ---
-           double maj_h = g_state_curr.maj_h;
-           double maj_l = g_state_curr.maj_l;
-           if (maj_h != EMPTY_VALUE && maj_l != EMPTY_VALUE && maj_h > maj_l) {
-               double swing_range = maj_h - maj_l;
-               double buffer_10pct = swing_range * 0.10;
-
-               bool is_tp_overflow = false;
-               double max_allowed_tp = maj_h + buffer_10pct;
-               double min_allowed_tp = maj_l - buffer_10pct;
-
-               if (trigger_dir == 1 && tp > max_allowed_tp) is_tp_overflow = true;
-               if (trigger_dir == -1 && tp < min_allowed_tp) is_tp_overflow = true;
-
-               if (is_tp_overflow) {
-                   Print("⚠️ TP Hedefi %10 sınırını aştı! İşlemi kurtarmak için SL daraltılıp RR (1:2) seviyesine düşürülüyor...");
-
-                   // DİNAMİK DARALTMA (COMPRESSION)
-                   if (trigger_dir == 1) { // BUY Daraltma
-                       if (is_strong) {
-                           sl = ext_pt + ((entry - ext_pt) * 0.1); // 1.0 yerine 0.9'a denk gelir (dipten %10 daha yukarıda, girişin altına doğru)
-                       } else {
-                           double raw_sl = ext_pt;
-                           double dist = entry - raw_sl;
-                           sl = raw_sl - (dist * 0.2); // Zayıf dip için 1.5x yerine 1.2x uzağa atar (0.5 yerine 0.2 uzatma)
-                       }
-                       double new_dist = entry - sl;
-                       tp = entry + (new_dist * 2.0); // RR'ı 3'ten 2'ye düşürdük
-
-                       if (tp > max_allowed_tp) {
-                           Print("❌ [TRADE REJECTED] BUY İptal: Daraltılmış (2RR) TP noktası bile (", tp, "), Swing sınırını aşıyor. İşlem reddedildi.");
-                           return;
-                       }
-                   } else { // SELL Daraltma
-                       if (is_strong) {
-                           sl = ext_pt - ((ext_pt - entry) * 0.1); // 1.0 yerine 0.9'a denk gelir (tepeden %10 daha aşağıda)
-                       } else {
-                           double raw_sl = ext_pt;
-                           double dist = raw_sl - entry;
-                           sl = raw_sl + (dist * 0.2); // Zayıf tepe için 1.5x yerine 1.2x uzağa atar
-                       }
-                       double new_dist = sl - entry;
-                       tp = entry - (new_dist * 2.0); // RR'ı 3'ten 2'ye düşürdük
-
-                       if (tp < min_allowed_tp) {
-                           Print("❌ [TRADE REJECTED] SELL İptal: Daraltılmış (2RR) TP noktası bile (", tp, "), Swing sınırını aşıyor. İşlem reddedildi.");
-                           return;
-                       }
-                   }
-                   Print("✅ İşlem başarıyla daraltıldı! Yeni RR: 1:2");
-               }
-           }
-
-           // Daraltma yapılmış olma ihtimaline karşı EA için net mesafeleri baştan hesaplıyoruz
-           sl_dist_raw = MathAbs(entry - sl);
-           tp_dist_raw = MathAbs(entry - tp);
-
-           // --- DOSYAYA YAZMA (EA İÇİN) ---
-           if (InpEnableAutoTradeWriter) {
-               string filename = "vol100_signal_" + Symbol() + ".txt";
-               int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
-               if (file_handle != INVALID_HANDLE) {
-                   // EA'ya direkt fiyat göndermek yerine Entry ve Net Fiyat Mesafesi gönderiyoruz
-                   // Format: Sembol, Yön, Giriş Fiyatı, SL Mesafesi (Net), TP Mesafesi (Net)
-                   string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl_dist_raw, 5) + "," + DoubleToString(tp_dist_raw, 5);
-                   FileWrite(file_handle, trade_cmd);
-                   FileClose(file_handle);
-                   Print("✅ [AUTO-TRADE] EA İçin Sinyal Dosyası Gönderildi: ", trade_cmd, " (SL Mesafe: ", DoubleToString(sl_dist_raw,5), ", TP Mesafe: ", DoubleToString(tp_dist_raw,5), ")");
-               } else {
-                   Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
-               }
-           }
-
-           // Sanal İşlemi Başlat (Dosyaya yazılmasa bile arka planda takip eder)
-           current_swing_trades++; // Aynı dalgadaki işlem sayısını artır
-           g_virtual_trade_active = true;
-           g_virtual_trade_dir = trigger_dir;
-           g_virtual_sl = sl;
-           g_virtual_tp = tp;
-       if (current_swing_trades == 1) {
-           g_virtual_last_entry_price = entry; // 1. işlemin giriş (kırılım) fiyatını kaydet
-       }
-           Print("🟢 [VIRTUAL TRADE] Sanal İşlem Takipli Başladı! Yön: ", dir_str, " SL: ", sl, " TP: ", tp);
-
+   // --- DOSYAYA YAZMA VE SANAL İŞLEM (EA İÇİN) ---
+   if (InpEnableAutoTradeWriter) {
+       string filename = "vol100_signal_" + Symbol() + ".txt";
+       int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
+       if (file_handle != INVALID_HANDLE) {
+           string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry, 5) + "," + DoubleToString(sl_dist_raw, 5) + "," + DoubleToString(tp_dist_raw, 5);
+           FileWrite(file_handle, trade_cmd);
+           FileClose(file_handle);
+           Print("✅ [AUTO-TRADE] EA İçin Sinyal Dosyası Gönderildi: ", trade_cmd, " (SL Mesafe: ", DoubleToString(sl_dist_raw,5), ", TP Mesafe: ", DoubleToString(tp_dist_raw,5), ")");
        } else {
-           string reason = (!is_deep_elastic) ? " (M1 Çekilmesi %40 seviyesine ulaşmadığı için sadece 1 işleme izin verildi)" : "";
-           Print("⚠️ [TRADE LIMIT] Bu majör dalga için maksimum işlem limitine (" + IntegerToString(allowed_trades) + ") ulaşıldı" + reason + ".");
+           Print("❌ [AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: ", GetLastError());
        }
    }
+
+   current_swing_trades++;
+   g_virtual_trade_active = true;
+   g_virtual_trade_dir = trigger_dir;
+   g_virtual_sl = sl;
+   g_virtual_tp = tp;
+   if (current_swing_trades == 1) g_virtual_last_entry_price = entry;
+
+   Print("🟢 [VIRTUAL TRADE] Sanal İşlem Takipli Başladı! Yön: ", dir_str, " SL: ", sl, " TP: ", tp);
   }
 
 string BuildDashboardText(double live_price)
@@ -859,6 +813,7 @@ string BuildDashboardText(double live_price)
 int OnInit()
   {
    IndicatorSetString(INDICATOR_SHORTNAME, "Structure");
+   if(Period() == PERIOD_M1) EventSetTimer(1);
    return(INIT_SUCCEEDED);
   }
 
@@ -867,6 +822,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
+   if(Period() == PERIOD_M1) EventKillTimer();
    ObjectsDeleteAll(0, "Structure_");
    ObjectsDeleteAll(0, "Minor_");
    ObjectsDeleteAll(0, "Major_");
@@ -1482,6 +1438,67 @@ void UpdateGlobalVariables(int last_idx, const double &close[], const datetime &
    GlobalVariableSet(base_name + "High", h);
    GlobalVariableSet(base_name + "Low", l);
    GlobalVariableSet(base_name + "Time", (double)TimeCurrent());
+  }
+
+//+------------------------------------------------------------------+
+//| Timer function (For Test Button)                                 |
+//+------------------------------------------------------------------+
+void OnTimer()
+  {
+   if (InpTestTradeExecution && !g_prev_test_state) {
+       double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+       double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
+
+       if (InpTestTargetSL > 0 && InpTestTargetTP > 0) {
+           int dir = (InpTestTargetSL < bid) ? 1 : -1;
+           string dir_str = (dir == 1) ? "TEST_BUY" : "TEST_SELL";
+           double entry_price = (dir == 1) ? ask : bid;
+
+           double sl_dist_raw = MathAbs(entry_price - InpTestTargetSL);
+           double tp_dist_raw = MathAbs(entry_price - InpTestTargetTP);
+
+           if (InpEnableAutoTradeWriter) {
+               string filename = "vol100_signal_" + Symbol() + ".txt";
+               int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
+               if (file_handle != INVALID_HANDLE) {
+                   string trade_cmd = Symbol() + "," + dir_str + "," + DoubleToString(entry_price, 5) + "," + DoubleToString(sl_dist_raw, 5) + "," + DoubleToString(tp_dist_raw, 5);
+                   FileWrite(file_handle, trade_cmd);
+                   FileClose(file_handle);
+                   Print("✅ [TEST AUTO-TRADE] EA İçin Özel (0.01 Lot) Test Sinyali Gönderildi: ", trade_cmd);
+                   string test_alert = "🧪 TEST İŞLEMİ GÖNDERİLDİ! Yön: " + dir_str + " | Entry: " + DoubleToString(entry_price, 5) + " | SL Mesafe: " + DoubleToString(sl_dist_raw, 5) + " | TP Mesafe: " + DoubleToString(tp_dist_raw, 5);
+                   if (InpAlertPopup) Alert(test_alert);
+                   if (InpAlertPush) SendNotification(test_alert);
+               } else {
+                   string err_msg = "❌ [TEST AUTO-TRADE] Sinyal Dosyası Oluşturulamadı! Hata Kodu: " + IntegerToString(GetLastError());
+                   Print(err_msg);
+                   if (InpAlertPopup) Alert(err_msg);
+                   if (InpAlertPush) SendNotification(err_msg);
+               }
+           } else {
+               string warn_msg = "⚠️ Test butonuna bastın ama 'Sinyal Dosyası Gönder' (InpEnableAutoTradeWriter) ayarı kapalı! Sinyal EA'ya ulaşmayacak.";
+               Alert(warn_msg);
+               if (InpAlertPush) SendNotification(warn_msg);
+           }
+       } else {
+           int test_choch_dir = g_state_curr.maj_tr;
+           double live_pct = 0.0;
+           if (g_state_curr.maj_h != EMPTY_VALUE && g_state_curr.maj_l != EMPTY_VALUE && g_state_curr.maj_h != g_state_curr.maj_l) {
+               double range = g_state_curr.maj_h - g_state_curr.maj_l;
+               if (test_choch_dir == 1) {
+                   live_pct = ((g_state_curr.maj_h - bid) / range) * 100.0;
+                   if (bid >= g_state_curr.maj_h) live_pct = 0;
+               } else if (test_choch_dir == -1) {
+                   live_pct = ((bid - g_state_curr.maj_l) / range) * 100.0;
+                   if (bid <= g_state_curr.maj_l) live_pct = 0;
+               }
+               if (live_pct < 0) live_pct = 0;
+           }
+           EvaluateTradeSignal(0, TimeCurrent(), bid, test_choch_dir, live_pct, true, bid, true);
+       }
+   }
+   if (InpTestTradeExecution != g_prev_test_state) {
+       g_prev_test_state = InpTestTradeExecution;
+   }
   }
 
 //+------------------------------------------------------------------+
