@@ -32,6 +32,8 @@ input int    InpMaxTradesPerSwing = 2;              // Aynı Majör Dalga İçin
 input bool   InpTestMode              = false;      // 🧪 Test Modu (Manuel Mesafe Testi İçin)
 input double InpTestManualSLDistance  = 100.0;      // 🧪 Test SL Mesafesi (Point Cinsinden, Örn: 100)
 
+input bool   InpForceTestSignal       = false;      // ⚠️ [TEST] Ortak Klasöre Manuel Deneme Sinyali Atar
+
 //--- Trade Range/Testere Kontrol Değişkenleri ---
 static int    g_json_last_maj_i = -1;
 static int    g_json_trades_in_swing = 0;
@@ -662,7 +664,6 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // --- YENİ AKILLI JSON AUTO-TRADE YAZICI ---
    if (total_points >= InpMinTradeScoreLimit && InpEnableAutoTradeWriter) {
 
-       // Yeni bir swing (majör dalga) başladıysa sayaçları sıfırla
        int current_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
        if (current_maj_i != g_json_last_maj_i) {
            g_json_trades_in_swing = 0;
@@ -675,18 +676,14 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
        if (g_json_trades_in_swing < allowed_trades) {
 
-           // RANGE SIKIŞMASI (TESTERE) KORUMASI:
-           // 2. işlem atılacaksa, fiyat eski 1. işlemin SL bölgesinin dışına tamamen çıkmış olmalı!
-           if (g_json_trades_in_swing > 0 && !InpTestMode) { // <-- Test Modunda Testere Koruması Devre Dışı!
-               if (trigger_dir == 1) { // BUY arıyoruz
-                   // Fiyat eğer eski SL'nin altına inemediyse (yani yukarıda testereye devam ediyorsa) girmiyoruz!
+           if (g_json_trades_in_swing > 0 && !InpTestMode) {
+               if (trigger_dir == 1) {
                    if (live_price >= g_json_last_sl) {
                         Print("⚠️ [JSON-TRADE] BUY reddedildi: Fiyat hala testere bölgesinde. (Eski SL: ", g_json_last_sl, " - Anlık: ", live_price, ") Seviyenin altına inip oradan CHoCH vermesi bekleniyor.");
                         return;
                    }
                }
-               if (trigger_dir == -1) { // SELL arıyoruz
-                   // Fiyat eğer eski SL'nin üstüne çıkamadıysa (yani aşağıda testereye devam ediyorsa) girmiyoruz!
+               if (trigger_dir == -1) {
                    if (live_price <= g_json_last_sl) {
                         Print("⚠️ [JSON-TRADE] SELL reddedildi: Fiyat hala testere bölgesinde. (Eski SL: ", g_json_last_sl, " - Anlık: ", live_price, ") Seviyenin üstüne çıkıp oradan CHoCH vermesi bekleniyor.");
                         return;
@@ -698,28 +695,27 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            double tp = 0.0;
            double entry = live_price;
            double base_dist = 0.0;
+           string dir_str = (trigger_dir == 1) ? "BUY" : "SELL";
 
-           // EĞER TEST MODUNDAYSANIZ:
            if (InpTestMode) {
                double point_size = Point();
                base_dist = InpTestManualSLDistance * point_size;
-               if (trigger_dir == 1) { // BUY TEST
+               if (trigger_dir == 1) {
                    sl = entry - base_dist;
                    tp = entry + (base_dist * InpTPRewardRatio);
                    ext_pt = entry - (base_dist / (is_strong ? InpStrongSLMultiplier : InpWeakSLMultiplier));
-               } else { // SELL TEST
+               } else {
                    sl = entry + base_dist;
                    tp = entry - (base_dist * InpTPRewardRatio);
                    ext_pt = entry + (base_dist / (is_strong ? InpStrongSLMultiplier : InpWeakSLMultiplier));
                }
            } else {
-               // NORMAL CANLI İŞLEM:
-               if (trigger_dir == 1) { // BUY
-                   base_dist = entry - ext_pt; // ext_pt = minör destek noktası (T2)
+               if (trigger_dir == 1) {
+                   base_dist = entry - ext_pt;
                    sl = is_strong ? entry - (base_dist * InpStrongSLMultiplier) : entry - (base_dist * InpWeakSLMultiplier);
                    tp = entry + ((entry - sl) * InpTPRewardRatio);
-               } else { // SELL
-                   base_dist = ext_pt - entry; // ext_pt = minör direnç noktası (T2)
+               } else {
+                   base_dist = ext_pt - entry;
                    sl = is_strong ? entry + (base_dist * InpStrongSLMultiplier) : entry + (base_dist * InpWeakSLMultiplier);
                    tp = entry - ((sl - entry) * InpTPRewardRatio);
                }
@@ -728,17 +724,16 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            string filename = "signal_" + Symbol() + ".json";
            int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
            if (file_handle != INVALID_HANDLE) {
-               string json = "{\\n";
-
-           json += "  \"symbol\": \"" + Symbol() + "\",\\n";
-           json += "  \"direction\": \"BUY\",\\n";
-           json += "  \"entry\": " + DoubleToString(entry, 5) + ",\\n";
-           json += "  \"sl\": " + DoubleToString(sl, 5) + ",\\n";
-           json += "  \"tp\": " + DoubleToString(tp, 5) + ",\\n";
-           json += "  \"base_extreme\": " + DoubleToString(ext_pt, 5) + ",\\n";
-           json += "  \"is_strong\": true,\\n";
-           json += "  \"is_test\": true\\n";
-           json += "}";
+               string json = "{\n";
+               json += "  \"symbol\": \"" + Symbol() + "\",\n";
+               json += "  \"direction\": \"" + dir_str + "\",\n";
+               json += "  \"entry\": " + DoubleToString(entry, 5) + ",\n";
+               json += "  \"sl\": " + DoubleToString(sl, 5) + ",\n";
+               json += "  \"tp\": " + DoubleToString(tp, 5) + ",\n";
+               json += "  \"base_extreme\": " + DoubleToString(ext_pt, 5) + ",\n";
+               json += "  \"is_strong\": " + (is_strong ? "true" : "false") + ",\n";
+               json += "  \"is_test\": " + (InpTestMode ? "true" : "false") + "\n";
+               json += "}";
 
                FileWrite(file_handle, json);
                FileClose(file_handle);
@@ -746,7 +741,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                Print("✅ [JSON-TRADE] Sinyal Gönderildi: ", filename, " | Yön: ", dir_str, " | Entry: ", entry, " | SL: ", sl, " | TP: ", tp);
 
                g_json_trades_in_swing++;
-               g_json_last_sl = sl; // RANGE KONTROLÜ İÇİN SL HAFIZAYA ALINIYOR
+               g_json_last_sl = sl;
            } else {
                Print("❌ [JSON-TRADE] Dosya yazılamadı! Hata: ", GetLastError());
            }
@@ -781,19 +776,18 @@ int OnInit()
            // Sahte bir BUY işlemi simüle edelim:
            double sl = entry - (InpTestManualSLDistance * point_size);
            double tp = entry + ((entry - sl) * InpTPRewardRatio);
-           double ext_pt = entry - ((InpTestManualSLDistance * point_size) / InpStrongSLMultiplier); // Tersine mühendislik ile base extreme bulalım
+           double ext_pt = entry - ((InpTestManualSLDistance * point_size) / InpStrongSLMultiplier);
 
-           string json = "{\\n";
-
-               json += "  \"symbol\": \"" + Symbol() + "\",\\n";
-               json += "  \"direction\": \"" + dir_str + "\",\\n";
-               json += "  \"entry\": " + DoubleToString(entry, 5) + ",\\n";
-               json += "  \"sl\": " + DoubleToString(sl, 5) + ",\\n";
-               json += "  \"tp\": " + DoubleToString(tp, 5) + ",\\n";
-               json += "  \"base_extreme\": " + DoubleToString(ext_pt, 5) + ",\\n";
-               json += "  \"is_strong\": " + (is_strong ? "true" : "false") + ",\\n";
-               json += "  \"is_test\": " + (InpTestMode ? "true" : "false") + "\\n";
-               json += "}";
+           string json = "{\n";
+           json += "  \"symbol\": \"" + Symbol() + "\",\n";
+           json += "  \"direction\": \"BUY\",\n";
+           json += "  \"entry\": " + DoubleToString(entry, 5) + ",\n";
+           json += "  \"sl\": " + DoubleToString(sl, 5) + ",\n";
+           json += "  \"tp\": " + DoubleToString(tp, 5) + ",\n";
+           json += "  \"base_extreme\": " + DoubleToString(ext_pt, 5) + ",\n";
+           json += "  \"is_strong\": true,\n";
+           json += "  \"is_test\": true\n";
+           json += "}";
 
            FileWrite(file_handle, json);
            FileClose(file_handle);
