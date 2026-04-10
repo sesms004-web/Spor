@@ -84,8 +84,10 @@ void OnTimer()
 
    Print("📥 [YENİ SİNYAL] Yön: ", sig_dir, " | SL Net Mesafe: ", sl_dist_raw, " | TP Net Mesafe: ", tp_dist_raw);
 
-   // SADECE BİZİM BOTA AİT (Magic Number) açık işlem var mı kontrol et. Diğer botların işlemine karışma!
-   if(PositionsTotal() > 0)
+   // Test işlemi değilse: SADECE BİZİM BOTA AİT (Magic Number) açık işlem var mı kontrol et.
+   bool is_test_signal = (sig_dir == "TEST_BUY" || sig_dir == "TEST_SELL");
+
+   if(PositionsTotal() > 0 && !is_test_signal)
      {
       for(int i = PositionsTotal() - 1; i >= 0; i--)
         {
