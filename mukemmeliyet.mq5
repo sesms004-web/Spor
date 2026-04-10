@@ -1678,23 +1678,15 @@ int OnCalculate(const int rates_total,
        prev_test_state = InpTestTradeExecution;
 
        if (InpTestTradeExecution && last_idx > 0) {
-           int live_tr = g_state_curr.maj_tr;
+           int live_tr = 0;
            double live_pct = 0.0;
+           double dmy_mpct = 0.0;
+           double dmy_h, dmy_l; datetime dmy_th, dmy_tl;
 
-           double h_m1 = g_state_curr.maj_h;
-           double l_m1 = g_state_curr.maj_l;
            double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-           if (h_m1 != EMPTY_VALUE && l_m1 != EMPTY_VALUE && h_m1 != l_m1) {
-               double range = h_m1 - l_m1;
-               if (live_tr == 1) {
-                   live_pct = ((h_m1 - bid) / range) * 100.0;
-                   if (bid >= h_m1) live_pct = 0;
-               } else {
-                   live_pct = ((bid - l_m1) / range) * 100.0;
-                   if (bid <= l_m1) live_pct = 0;
-               }
-               if (live_pct < 0) live_pct = 0;
-           }
+
+           // Milimetrik olarak diğer grafikleri de besleyen ANA fonksiyonu çağır
+           GetMTFPullback(PERIOD_M1, live_tr, live_pct, dmy_mpct, time[last_idx], bid, dmy_h, dmy_l, dmy_th, dmy_tl);
 
            // Test Analizi, kullanıcının "Pullback sonrası ana trend devamı (BOS/Continuation CHoCH)" mantığına göre simüle edilir.
            int test_choch_dir = live_tr; // Trend Yönü ile aynı olmalı
