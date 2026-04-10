@@ -1673,12 +1673,11 @@ int OnCalculate(const int rates_total,
            }
      }
    // 🧪 TEST TRIGGER EXECUTION (Yalnızca bir kez ve en güncel veriler işlendikten sonra çalıştırılır)
-   static bool is_test_run = false;
-   if (prev_calculated == 0) is_test_run = false; // Reset on re-compile/re-attach
+   static bool prev_test_state = false;
+   if (InpTestTradeExecution != prev_test_state) {
+       prev_test_state = InpTestTradeExecution;
 
-   if (!is_test_run && last_idx > 0) {
-       // TEST TRIGGER FOR TRADE EXECUTION
-       if (InpTestTradeExecution) {
+       if (InpTestTradeExecution && last_idx > 0) {
            int live_tr = g_state_curr.maj_tr;
            double live_pct = 0.0;
 
@@ -1699,12 +1698,35 @@ int OnCalculate(const int rates_total,
 
            // Test Analizi, kullanıcının "Pullback sonrası ana trend devamı (BOS/Continuation CHoCH)" mantığına göre simüle edilir.
            int test_choch_dir = live_tr; // Trend Yönü ile aynı olmalı
-
            EvaluateTradeSignal(last_idx, TimeCurrent(), bid, test_choch_dir, live_pct, true, bid, true);
-           is_test_run = true;
        }
+   }
 
-       if(!InpTestTradeExecution) is_test_run = true; // prevent infinite false state if both are off
+   // --- MTF SLAVE DASHBOARD (SADECE M1 İÇİN) ---
+   static uint last_ui_tick = 0;
+   if (InpUseMasterSlave && Period() == PERIOD_M1 && GetTickCount() - last_ui_tick > 1000) {
+       string ui = "\n\n--- 📡 MASTER/SLAVE MTF DURUMU ---\n";
+       ENUM_TIMEFRAMES tfs[] = {PERIOD_M3, PERIOD_M5, PERIOD_M15, PERIOD_M30, PERIOD_H1};
+       string tf_names[] = {"M3", "M5", "M15", "M30", "H1"};
+
+       for(int j=0; j<5; j++) {
+           string base_name = "ST_" + Symbol() + "_" + EnumToString(tfs[j]) + "_";
+           if (GlobalVariableCheck(base_name + "TIME")) {
+               datetime last_upd = (datetime)GlobalVariableGet(base_name + "TIME");
+               int age = (int)(TimeCurrent() - last_upd);
+               if (age <= InpMaxDataAge) {
+                   ui += "✅ " + tf_names[j] + " : Bağlı (Gecikme: " + IntegerToString(age) + "sn)\n";
+               } else {
+                   ui += "❌ " + tf_names[j] + " : KOPUK (Eski Veri: " + IntegerToString(age) + "sn)\n";
+               }
+           } else {
+               ui += "❌ " + tf_names[j] + " : KOPUK (Grafik Açık Değil!)\n";
+           }
+       }
+       Comment(ui);
+       last_ui_tick = GetTickCount();
+   } else if (!InpUseMasterSlave && Period() == PERIOD_M1) {
+       Comment(""); // Master slave kapalıysa ekranı temizle
    }
 
    // --- SLAVE GÜNCELLEMESİ (SADECE ONAYLANAN BARLAR) ---
