@@ -32,11 +32,9 @@ if barstate.isfirst and not initialized
     min_h := high
     min_h_i := bar_index
     trig_l := low
-
     min_l := low
     min_l_i := bar_index
     trig_h := high
-
     lp_i := bar_index
     lp_p := close
     initialized := true
@@ -44,44 +42,37 @@ if barstate.isfirst and not initialized
 if not isInside and initialized
     if min_tr == 1
         // TRACKING UP: Looking for a new high
-        float old_trig = trig_l
+        old_trig_l = trig_l
         if high > min_h
             min_h := high
             min_h_i := bar_index
             trig_l := low  // The low of the candle making the new high becomes the trigger
-
         // If price drops below the trigger low, a valid HIGH PIVOT is formed
-        if low < old_trig
+        if low < old_trig_l
             if showMinor
                 line.new(lp_i, lp_p, min_h_i, min_h, color=minorColor, width=2, style=line.style_solid)
-
             // Switch direction to tracking low
             min_tr := -1
             lp_i := min_h_i
             lp_p := min_h
-
             min_l := low
             min_l_i := bar_index
             trig_h := high
-
     else
         // TRACKING DOWN: Looking for a new low
-        float old_trig = trig_h
+        old_trig_h = trig_h
         if low < min_l
             min_l := low
             min_l_i := bar_index
             trig_h := high // The high of the candle making the new low becomes the trigger
-
         // If price breaks above the trigger high, a valid LOW PIVOT is formed
-        if high > old_trig
+        if high > old_trig_h
             if showMinor
                 line.new(lp_i, lp_p, min_l_i, min_l, color=minorColor, width=2, style=line.style_solid)
-
             // Switch direction to tracking high
             min_tr := 1
             lp_i := min_l_i
             lp_p := min_l
-
             min_h := high
             min_h_i := bar_index
             trig_l := low
