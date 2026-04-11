@@ -152,12 +152,12 @@
         }
 
         function checkSecret() {
-            // Ekranda 31 gördüğü an kilitlenir (herhangi bir şekilde)
+            // Ekranda 31 gördüğü an anında değiştirir ve kilitler
             if (display.value.includes('31')) {
                 isLocked = true;
 
-                // Ekranı değiştir
-                display.value = 'yarrak';
+                // 31'i yarrak ile değiştir ve kilit ekranını ver
+                display.value = display.value.replace(/31/g, 'yarrak');
                 display.classList.add('locked-text');
 
                 // Bütün tuşları kilitle/devre dışı bırak
