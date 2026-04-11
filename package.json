@@ -8,7 +8,7 @@
     "android": "npx cap run android"
   },
   "dependencies": {
-    "@capacitor/core": "latest",
-    "@capacitor/android": "latest"
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/core": "latest"
   }
 }
