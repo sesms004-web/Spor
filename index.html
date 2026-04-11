@@ -573,6 +573,46 @@
                         </div>
                     </div>
 
+
+                    <!-- Cloud Settings Management -->
+                    <div class="bg-slate-900 p-4 md:p-8 rounded-3xl border border-slate-800 shadow-sm col-span-1 lg:col-span-2">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
+                            <div>
+                                <h4 class="text-lg font-bold text-slate-100 flex items-center space-x-2">
+                                    <i data-lucide="cloud" class="w-5 h-5 text-sky-400"></i>
+                                    <span>Bulut Yedekleme (Cloud Sync)</span>
+                                </h4>
+                                <p class="text-xs text-slate-500 mt-1">Uygulamayı silerseniz veya başka telefona geçerseniz, aşağıdaki anahtarı "Giriş Yap" kısmına yazarak tüm resim ve işlemlerinizi geri getirebilirsiniz.</p>
+                            </div>
+                            <div class="flex items-center space-x-2 bg-slate-800 px-4 py-2 rounded-xl border border-slate-700">
+                                <span class="text-xs font-bold text-slate-500 uppercase">Aktif Kasa:</span>
+                                <span id="current-cloud-key" class="text-sm font-mono font-bold text-emerald-400 select-all">Yok (Yerel)</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-4">
+                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Buluta Elle Yedekle (Sync)</label>
+                                <p class="text-xs text-slate-400 leading-relaxed">Ekran görüntüleri ve işlemleriniz her 1 dakikada bir otomatik yedeklenir. Ancak uygulamayı kapatmadan önce işinizi garantiye almak için anında senkronize edebilirsiniz.</p>
+                                <button onclick="forceCloudSync()" id="btn-force-sync" class="w-full bg-sky-600 text-white px-6 py-3.5 rounded-xl font-bold hover:bg-sky-700 transition-all flex items-center justify-center space-x-2 shadow-lg shadow-sky-900/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                                    <span>Şimdi Yedekle</span>
+                                </button>
+                                <div id="sync-status-text" class="text-center text-xs font-semibold text-slate-500 h-4"></div>
+                            </div>
+
+                            <div class="space-y-4">
+                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Anahtarı Değiştir / Çıkış Yap</label>
+                                <p class="text-xs text-slate-400 leading-relaxed">Mevcut kasadan çıkış yaparak farklı bir hesaba/kasaya giriş yapmak istiyorsanız veya yeni bir boş kasa açmak istiyorsanız buradan çıkış yapın.</p>
+                                <button onclick="logoutCloud()" class="w-full bg-rose-600/20 text-rose-400 border border-rose-500/30 px-6 py-3.5 rounded-xl font-bold hover:bg-rose-600/30 transition-all flex items-center justify-center space-x-2">
+                                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                                    <span>Çıkış Yap (Başlangıca Dön)</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+
                     <!-- Balance Management -->
                     <div class="bg-slate-900 p-4 md:p-8 rounded-3xl border border-slate-800 shadow-sm">
                         <h4 class="text-lg font-bold text-slate-100 mb-6">Bakiye Yönetimi</h4>
@@ -935,12 +975,196 @@
         let entryTypes = JSON.parse(localStorage.getItem('ALL_entryTypes')) || ['Asia Range Sweep', 'iFVG', 'FVG', 'Breaker', 'Mitigation'];
         let editingNoteIndex = null;
 
+
+        // Cloud Sync Logic (using Pantry Cloud API for Free JSON Storage)
+        const PANTRY_ID = '9ba1d8ff-191d-4099-b148-739050d2bbd4'; // A dedicated free Pantry for this app
+        const API_BASE = `https://getpantry.cloud/apiv1/pantry/${PANTRY_ID}/basket/`;
+        let cloudSyncKey = localStorage.getItem('ALL_CloudSyncKey') || null;
+        let syncTimeout = null;
+
+        function initCloud() {
+            if (!cloudSyncKey && trades.length === 0 && accounts.length <= 1) {
+                // First time user, show modal
+                document.getElementById('cloud-welcome-modal').classList.remove('hidden');
+            } else if (cloudSyncKey) {
+                document.getElementById('current-cloud-key').innerText = cloudSyncKey;
+                // Optionally auto-sync on load
+                // fetchFromCloud(cloudSyncKey);
+            }
+        }
+
+        function skipCloud() {
+            document.getElementById('cloud-welcome-modal').classList.add('hidden');
+        }
+
+        function createNewCloud() {
+            const keyInput = document.getElementById('cloud-new-key').value.trim();
+            if (!keyInput || keyInput.length < 4) {
+                showToast('Şifreniz en az 4 karakter olmalıdır.', 'alert-circle', 'rose');
+                return;
+            }
+
+            // Format key to be URL safe
+            const safeKey = keyInput.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+
+            // Test if basket exists
+            fetch(API_BASE + safeKey)
+                .then(res => {
+                    if (res.ok) {
+                        showToast('Bu şifre başkası tarafından kullanılıyor. Başka bir şifre seçin.', 'alert-circle', 'rose');
+                    } else {
+                        // Create it
+                        cloudSyncKey = safeKey;
+                        localStorage.setItem('ALL_CloudSyncKey', cloudSyncKey);
+                        document.getElementById('current-cloud-key').innerText = cloudSyncKey;
+                        document.getElementById('cloud-welcome-modal').classList.add('hidden');
+                        forceCloudSync();
+                        showToast('Bulut kasanız oluşturuldu!', 'cloud-check', 'emerald');
+                    }
+                })
+                .catch(err => {
+                    showToast('Bağlantı hatası.', 'alert-circle', 'rose');
+                });
+        }
+
+        function restoreFromCloud() {
+            const keyInput = document.getElementById('cloud-restore-key').value.trim();
+            if (!keyInput) return;
+
+            const safeKey = keyInput.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+
+            const btn = document.querySelector('#cloud-restore-key + button');
+            const originalText = btn.innerText;
+            btn.innerText = 'Yükleniyor...';
+            btn.disabled = true;
+
+            fetch(API_BASE + safeKey)
+                .then(res => {
+                    if (!res.ok) throw new Error('Kasa bulunamadı');
+                    return res.json();
+                })
+                .then(data => {
+                    if (data && data.accounts) {
+                        // Restore data
+                        accounts = data.accounts;
+                        currentAccountId = data.currentAccountId;
+                        entryTypes = data.entryTypes || entryTypes;
+
+                        localStorage.setItem('ALL_accounts', JSON.stringify(accounts));
+                        localStorage.setItem('ALL_currentAccountId', currentAccountId);
+                        localStorage.setItem('ALL_entryTypes', JSON.stringify(entryTypes));
+
+                        if (data.data) {
+                            Object.keys(data.data).forEach(k => {
+                                const val = data.data[k];
+                                localStorage.setItem(k, typeof val === 'string' ? val : JSON.stringify(val));
+                            });
+                        }
+
+                        cloudSyncKey = safeKey;
+                        localStorage.setItem('ALL_CloudSyncKey', cloudSyncKey);
+
+                        showToast('Verileriniz başarıyla yüklendi!', 'check-circle', 'emerald');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        throw new Error('Geçersiz veri formatı');
+                    }
+                })
+                .catch(err => {
+                    showToast('Hatalı şifre veya kasa bulunamadı.', 'alert-circle', 'rose');
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                });
+        }
+
+        function forceCloudSync() {
+            if (!cloudSyncKey) {
+                showToast('Lütfen önce bir bulut kasası oluşturun veya giriş yapın.', 'alert-circle', 'rose');
+                return;
+            }
+
+            const statusText = document.getElementById('sync-status-text');
+            if (statusText) {
+                statusText.innerText = 'Buluta yedekleniyor...';
+                statusText.className = 'text-center text-xs font-semibold text-sky-500 h-4';
+            }
+
+            const btn = document.getElementById('btn-force-sync');
+            if (btn) btn.disabled = true;
+
+            const backup = {
+                accounts: accounts,
+                currentAccountId: currentAccountId,
+                entryTypes: entryTypes,
+                data: {}
+            };
+
+            accounts.forEach(acc => {
+                backup.data[`trades_${acc.id}`] = JSON.parse(localStorage.getItem(`trades_${acc.id}`) || '[]');
+                backup.data[`notes_${acc.id}`] = JSON.parse(localStorage.getItem(`notes_${acc.id}`) || '[]');
+                backup.data[`balance_${acc.id}`] = localStorage.getItem(`balance_${acc.id}`) || '0';
+                backup.data[`transactions_${acc.id}`] = JSON.parse(localStorage.getItem(`transactions_${acc.id}`) || '[]');
+            });
+
+            fetch(API_BASE + cloudSyncKey, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(backup)
+            })
+            .then(res => {
+                if (statusText) {
+                    statusText.innerText = 'Yedekleme başarılı (' + new Date().toLocaleTimeString('tr-TR') + ')';
+                    statusText.className = 'text-center text-xs font-semibold text-emerald-500 h-4';
+                }
+                if (btn) btn.disabled = false;
+                showToast('Buluta yedeklendi', 'cloud', 'sky');
+            })
+            .catch(err => {
+                if (statusText) {
+                    statusText.innerText = 'Yedekleme başarısız!';
+                    statusText.className = 'text-center text-xs font-semibold text-rose-500 h-4';
+                }
+                if (btn) btn.disabled = false;
+                showToast('Yedekleme başarısız oldu', 'alert-circle', 'rose');
+            });
+        }
+
+        function triggerAutoSync() {
+            if (!cloudSyncKey) return;
+            // Debounce sync so we don't spam the API on every keystroke
+            clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(() => {
+                forceCloudSync();
+            }, 5000); // Wait 5 seconds after last change before syncing
+        }
+
+        function logoutCloud() {
+            showConfirm('Çıkış Yap', 'Bulut hesabınızdan çıkış yapılacak ve uygulama sıfırlanacak. Mevcut şifrenizi bir yere not ettiğinizden emin misiniz?', () => {
+                localStorage.clear();
+                location.reload();
+            });
+        }
+
+
+        function saveCurrentAccountData() {
+            originalSaveCurrentAccountData();
+            triggerAutoSync();
+        }
+
+        function saveAccountsState() {
+            originalSaveAccountsState();
+            triggerAutoSync();
+        }
+
+
+
         // Initialization
         window.onload = () => {
             lucide.createIcons();
             initAccounts();
             updateDateDisplay();
             switchTab('home');
+            initCloud();
         };
 
         function initAccounts() {
@@ -1034,12 +1258,12 @@
             checkBalanceButton();
         }
 
-        function saveAccountsState() {
+        function originalSaveAccountsState() {
             localStorage.setItem('ALL_accounts', JSON.stringify(accounts));
             localStorage.setItem('ALL_currentAccountId', currentAccountId);
         }
 
-        function saveCurrentAccountData() {
+        function originalSaveCurrentAccountData() {
             if (!currentAccountId) return;
             localStorage.setItem(`trades_${currentAccountId}`, JSON.stringify(trades));
             localStorage.setItem(`notes_${currentAccountId}`, JSON.stringify(notes));
@@ -3342,6 +3566,55 @@
         </button>
         <div class="relative max-w-full max-h-full rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center pointer-events-none">
             <img id="full-size-image" src="" alt="Full Size Screenshot" class="max-w-full max-h-[90vh] object-contain pointer-events-auto rounded-xl">
+        </div>
+    </div>
+
+
+    <!-- Cloud Welcome Modal -->
+    <div id="cloud-welcome-modal" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4 md:p-6">
+        <div class="bg-slate-900 w-full max-w-md rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div class="p-8 text-center border-b border-slate-800 bg-slate-900/50 relative overflow-hidden">
+                <div class="absolute inset-0 bg-sky-500/10 opacity-50 blur-2xl rounded-full scale-150 transform translate-y-1/2"></div>
+                <i data-lucide="cloud-upload" class="w-16 h-16 mx-auto text-sky-400 mb-4 relative z-10"></i>
+                <h2 class="text-2xl font-bold text-slate-100 relative z-10">Bulut Senkronizasyonu</h2>
+                <p class="text-sm text-slate-400 mt-2 relative z-10">Verilerinizi cihazlar arası taşımak için bir Kurtarma Anahtarı (Token) belirleyin veya mevcut anahtarınızla giriş yapın.</p>
+            </div>
+
+            <div class="p-8 space-y-6">
+                <!-- Option 1: Restore -->
+                <div class="space-y-3">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Mevcut Hesabı Geri Yükle</label>
+                    <div class="flex space-x-2">
+                        <input type="text" id="cloud-restore-key" placeholder="Kurtarma Anahtarınızı Girin..." class="flex-grow px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 focus:ring-2 focus:ring-sky-500 outline-none transition-all placeholder:text-slate-600 font-mono text-sm">
+                        <button onclick="restoreFromCloud()" class="bg-sky-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-sky-700 transition-all shadow-lg shadow-sky-900/40 whitespace-nowrap">
+                            Giriş Yap
+                        </button>
+                    </div>
+                </div>
+
+                <div class="relative flex items-center py-2">
+                    <div class="flex-grow border-t border-slate-800"></div>
+                    <span class="flex-shrink-0 mx-4 text-xs font-bold text-slate-500 uppercase">VEYA</span>
+                    <div class="flex-grow border-t border-slate-800"></div>
+                </div>
+
+                <!-- Option 2: Create New -->
+                <div class="space-y-3 text-center">
+                    <p class="text-sm text-slate-400 mb-4">İlk defa kullanıyorsanız, kendinize akılda kalıcı bir şifre/kelime belirleyerek yepyeni bir anonim bulut kasası oluşturun.</p>
+                    <div class="flex space-x-2">
+                        <input type="text" id="cloud-new-key" placeholder="Yeni bir şifre/kelime yazın..." class="flex-grow px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 focus:ring-2 focus:ring-emerald-500 outline-none transition-all placeholder:text-slate-600 font-mono text-sm">
+                        <button onclick="createNewCloud()" class="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/40 whitespace-nowrap">
+                            Kayıt Ol
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 bg-slate-900/80 border-t border-slate-800 text-center">
+                <button onclick="skipCloud()" class="text-xs font-bold text-slate-500 hover:text-slate-300 transition-colors uppercase tracking-widest underline underline-offset-4">
+                    Şimdilik Atla (Sadece Bu Cihazda Kal)
+                </button>
+            </div>
         </div>
     </div>
 
