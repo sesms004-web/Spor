@@ -50,7 +50,7 @@
         .overflow-y-auto { -webkit-overflow-scrolling: touch; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex overflow-hidden">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex">
 
     <!-- Sidebar -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 min-w-[256px] shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col h-screen transition-transform duration-300 -translate-x-full md:relative md:translate-x-0">
@@ -117,7 +117,7 @@
     <div id="sidebar-backdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 hidden md:hidden"></div>
 
     <!-- Main Content -->
-    <main class="flex-grow overflow-y-auto h-screen scrollbar-hide relative pb-20 md:pb-0" style="-webkit-overflow-scrolling: touch;">
+    <main class="flex-grow relative pb-20 md:pb-0">
 
         <!-- Header -->
         <header class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 md:px-8 py-4 sticky top-0 z-30 flex justify-between items-center">
@@ -607,7 +607,7 @@
 
     <!-- Account Modal -->
     <div id="account-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 md:p-6">
-        <div class="bg-slate-900 w-full max-w-md max-h-[90vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div class="bg-slate-900 w-full max-w-md rounded-3xl border border-slate-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div class="p-8 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
                 <h3 class="text-xl font-bold text-slate-100">Yeni Hesap Oluştur</h3>
                 <button onclick="closeAccountModal()" class="p-2 hover:bg-slate-800 rounded-lg transition-colors">
@@ -630,14 +630,14 @@
 
     <!-- Trade Modal -->
     <div id="trade-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 md:p-6">
-        <div class="bg-slate-900 w-full max-w-lg max-h-[90vh] md:max-h-[85vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div class="bg-slate-900 w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div class="p-8 border-b border-slate-800 flex justify-between items-center">
                 <h3 id="modal-title" class="text-xl font-bold text-slate-100">Yeni İşlem Ekle</h3>
                 <button onclick="closeTradeModal()" class="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400">
                     <i data-lucide="x" class="w-6 h-6"></i>
                 </button>
             </div>
-            <form id="trade-form" onsubmit="handleTradeSubmit(event)" class="p-4 md:p-8 space-y-4 overflow-y-auto overscroll-contain flex-grow">
+            <form id="trade-form" onsubmit="handleTradeSubmit(event)" class="p-8 space-y-4">
                 <input type="hidden" id="trade-id">
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

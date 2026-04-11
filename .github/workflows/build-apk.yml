@@ -1,0 +1,46 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install && npm run build
+
+      - name: Install Capacitor CLI globally
+        run: npm install -g @capacitor/cli
+
+      - name: Initialize Android
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'zulu'
+
+      - name: Build APK
+        working-directory: ./android
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: trading-journal-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk

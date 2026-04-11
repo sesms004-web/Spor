@@ -1,0 +1,6 @@
+{
+  "appId": "com.trading.journal",
+  "appName": "Trading Journal",
+  "webDir": "build",
+  "bundledWebRuntime": false
+}

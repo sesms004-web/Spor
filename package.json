@@ -1,0 +1,14 @@
+{
+  "name": "trading-journal",
+  "version": "1.0.0",
+  "description": "Trading Journal Mobile App",
+  "scripts": {
+    "build": "mkdir -p build && cp index.html build/",
+    "sync": "npx cap sync",
+    "android": "npx cap run android"
+  },
+  "dependencies": {
+    "@capacitor/core": "latest",
+    "@capacitor/android": "latest"
+  }
+}
