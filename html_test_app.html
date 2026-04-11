@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-width=1.0">
+    <title>Trading Journal - Test Altyapısı</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        .trade-card { border-left: 5px solid #28a745; background: #f9f9f9; padding: 15px; margin-bottom: 10px; border-radius: 4px; }
+        .trade-card.SELL { border-left-color: #dc3545; }
+        .trade-card.CLOSED_SL { border-left-color: #dc3545; opacity: 0.7; }
+        .trade-card.CLOSED_TP { border-left-color: #28a745; opacity: 0.7; }
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; color: white; font-size: 12px; font-weight: bold; }
+        .bg-open { background: #007bff; }
+        .bg-modified { background: #ffc107; color: #333; }
+        .bg-closed { background: #6c757d; }
+        .code-box { background: #2d2d2d; color: #f8f8f2; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Trading Journal - Canlı Test</h1>
+    <p>Bu ekran, MT5 TrackerEA'dan gelen JSON verilerinin nasıl görüneceğini test etmek içindir. Gerçek uygulamada bu veriler sunucudan otomatik çekilecektir.</p>
+
+    <h3>Gelen Örnek Veri (JSON)</h3>
+    <div class="code-box" id="jsonInput">
+{
+  "ticket": 12345678,
+  "symbol": "XAUUSD",
+  "type": "BUY",
+  "volume": 0.05,
+  "open_price": 2300.50,
+  "sl": 2295.00,
+  "tp": 2310.00,
+  "status": "OPEN"
+}
+    </div>
+
+    <button onclick="simulateIncomingTrade()" style="margin-top: 10px; padding: 10px 15px; cursor: pointer;">Simüle Et (Yeni Veri Geldi)</button>
+
+    <h3>Canlı İşlem Panosu</h3>
+    <div id="tradesBoard">
+        <!-- İşlemler buraya JS ile eklenecek -->
+    </div>
+</div>
+
+<script>
+    function createTradeCard(data) {
+        let statusClass = "bg-open";
+        let statusText = "AÇIK";
+        if(data.status.includes("CLOSED")) { statusClass = "bg-closed"; statusText = "KAPANDI (" + data.status.replace("CLOSED_", "") + ")"; }
+        if(data.status === "MODIFIED") { statusClass = "bg-modified"; statusText = "GÜNCELLENDİ (SL/TP)"; }
+
+        return `
+            <div class="trade-card ${data.type} ${data.status}">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <strong>#${data.ticket} | ${data.symbol} - ${data.type} (${data.volume} Lot)</strong>
+                    <span class="status-badge ${statusClass}">${statusText}</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; font-size: 14px;">
+                    <div><strong>Giriş:</strong> ${data.open_price}</div>
+                    <div style="color: #dc3545;"><strong>SL:</strong> ${data.sl > 0 ? data.sl : '-'}</div>
+                    <div style="color: #28a745;"><strong>TP:</strong> ${data.tp > 0 ? data.tp : '-'}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    function simulateIncomingTrade() {
+        // Read JSON string from the code box
+        const rawJson = document.getElementById('jsonInput').innerText;
+        try {
+            const tradeData = JSON.parse(rawJson);
+
+            // Add it to the board
+            const board = document.getElementById('tradesBoard');
+            board.innerHTML = createTradeCard(tradeData) + board.innerHTML;
+
+        } catch (e) {
+            alert("JSON formatı hatalı! Lütfen kontrol edin.");
+        }
+    }
+</script>
+
+</body>
+</html>
