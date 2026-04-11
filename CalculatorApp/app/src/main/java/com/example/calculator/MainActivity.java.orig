@@ -1,0 +1,143 @@
+package com.example.calculator;
+
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+
+    private TextView tvResult;
+    private String currentInput = "";
+    private String operator = "";
+    private double firstOperand = 0;
+    private boolean isNewOp = true;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        tvResult = findViewById(R.id.tvResult);
+
+        // Number listeners
+        int[] numberIds = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4,
+                           R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9};
+
+        View.OnClickListener numberClickListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Button b = (Button) v;
+                if (isNewOp) {
+                    tvResult.setText("");
+                    isNewOp = false;
+                }
+                currentInput = tvResult.getText().toString() + b.getText().toString();
+                tvResult.setText(currentInput);
+            }
+        };
+
+        for (int id : numberIds) {
+            findViewById(id).setOnClickListener(numberClickListener);
+        }
+
+        // Dot
+        findViewById(R.id.btnDot).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (isNewOp) {
+                    tvResult.setText("");
+                    isNewOp = false;
+                }
+                if (!tvResult.getText().toString().contains(".")) {
+                    currentInput = tvResult.getText().toString() + ".";
+                    tvResult.setText(currentInput);
+                }
+            }
+        });
+
+        // Operations
+        int[] opIds = {R.id.btnPlus, R.id.btnMinus, R.id.btnMultiply, R.id.btnDivide};
+        View.OnClickListener opClickListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Button b = (Button) v;
+                if (!tvResult.getText().toString().isEmpty()) {
+                    firstOperand = Double.parseDouble(tvResult.getText().toString());
+                }
+                operator = b.getText().toString();
+                isNewOp = true;
+            }
+        };
+
+        for (int id : opIds) {
+            findViewById(id).setOnClickListener(opClickListener);
+        }
+
+        // Equals
+        findViewById(R.id.btnEquals).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (operator.isEmpty() || isNewOp) return;
+
+                double secondOperand = Double.parseDouble(tvResult.getText().toString());
+                double result = 0;
+
+                switch (operator) {
+                    case "+": result = firstOperand + secondOperand; break;
+                    case "-": result = firstOperand - secondOperand; break;
+                    case "*": result = firstOperand * secondOperand; break;
+                    case "/":
+                        if (secondOperand != 0) {
+                            result = firstOperand / secondOperand;
+                        } else {
+                            tvResult.setText("Error");
+                            isNewOp = true;
+                            operator = "";
+                            return;
+                        }
+                        break;
+                }
+
+                // Format result to remove trailing .0
+                String resultStr = String.valueOf(result);
+                if (resultStr.endsWith(".0")) {
+                    resultStr = resultStr.substring(0, resultStr.length() - 2);
+                }
+
+                tvResult.setText(resultStr);
+                isNewOp = true;
+                operator = "";
+            }
+        });
+
+        // Clear
+        findViewById(R.id.btnC).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                tvResult.setText("0");
+                currentInput = "";
+                firstOperand = 0;
+                operator = "";
+                isNewOp = true;
+            }
+        });
+
+        // Delete
+        findViewById(R.id.btnDelete).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String currentText = tvResult.getText().toString();
+                if (currentText.length() > 0 && !currentText.equals("Error")) {
+                    String newText = currentText.substring(0, currentText.length() - 1);
+                    if (newText.isEmpty() || newText.equals("-")) {
+                        newText = "0";
+                        isNewOp = true;
+                    }
+                    tvResult.setText(newText);
+                }
+            }
+        });
+    }
+}

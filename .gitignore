@@ -1,0 +1,14 @@
+CalculatorApp/app/build/
+CalculatorApp/.gradle/
+CalculatorApp/build/
+*.iml
+.gradle
+local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+HesapMakinesi.apk

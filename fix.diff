@@ -1,0 +1,29 @@
+--- CalculatorApp/app/src/main/java/com/example/calculator/MainActivity.java
++++ CalculatorApp/app/src/main/java/com/example/calculator/MainActivity.java
+@@ -62,7 +62,11 @@
+             public void onClick(View v) {
+                 Button b = (Button) v;
+                 if (!tvResult.getText().toString().isEmpty()) {
+-                    firstOperand = Double.parseDouble(tvResult.getText().toString());
++                    try {
++                        firstOperand = Double.parseDouble(tvResult.getText().toString());
++                    } catch (NumberFormatException e) {
++                        firstOperand = 0;
++                    }
+                 }
+                 operator = b.getText().toString();
+                 isNewOp = true;
+@@ -79,7 +83,12 @@
+             public void onClick(View v) {
+                 if (operator.isEmpty() || isNewOp) return;
+
+-                double secondOperand = Double.parseDouble(tvResult.getText().toString());
++                double secondOperand = 0;
++                try {
++                    secondOperand = Double.parseDouble(tvResult.getText().toString());
++                } catch (NumberFormatException e) {
++                    secondOperand = 0;
++                }
+                 double result = 0;
+
+                 switch (operator) {
