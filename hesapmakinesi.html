@@ -152,8 +152,8 @@
         }
 
         function checkSecret() {
-            // Ekranda 31 gördüğü an kilitlenir
-            if (display.value === '31') {
+            // Ekranda 31 gördüğü an kilitlenir (herhangi bir şekilde)
+            if (display.value.includes('31')) {
                 isLocked = true;
 
                 // Ekranı değiştir
