@@ -222,6 +222,7 @@
                                 <tr class="text-slate-500 text-sm border-b border-slate-800">
                                     <th class="pb-4 font-semibold">Tarih</th>
                                     <th class="pb-4 font-semibold">Parite</th>
+                                    <th class="pb-4 font-semibold text-center"><i data-lucide="image" class="w-4 h-4 inline-block text-slate-500"></i></th>
                                     <th class="pb-4 font-semibold">İşlem (Long/short)</th>
                                     <th class="pb-4 font-semibold">PnL</th>
                                     <th class="pb-4 font-semibold">İşlem</th>
@@ -717,6 +718,26 @@
                 <!-- Entry Type (Setup) - Gizli select -->
                 <select id="trade-entry-type" class="hidden"></select>
 
+
+                <!-- Screenshot Upload -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Ekran Görüntüsü (Opsiyonel)</label>
+                    <div class="flex items-center space-x-4">
+                        <label class="flex-1 cursor-pointer flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 border-dashed text-slate-400 hover:text-sky-400 hover:border-sky-500 transition-all group">
+                            <i data-lucide="image-plus" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
+                            <span id="trade-image-label" class="text-xs md:text-sm font-semibold truncate">Görüntü Seç veya Sürükle</span>
+                            <input type="file" id="trade-image-input" accept="image/*" class="hidden" onchange="handleImageSelection(event)">
+                        </label>
+                        <div id="trade-image-preview-container" class="hidden relative w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden shrink-0">
+                            <img id="trade-image-preview" src="" alt="Preview" class="w-full h-full object-cover cursor-pointer" onclick="openImageModal(document.getElementById('trade-image-preview').src)">
+                            <button type="button" onclick="removeImageSelection()" class="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 opacity-80 hover:opacity-100 transition-opacity">
+                                <i data-lucide="x" class="w-3 h-3"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <input type="hidden" id="trade-image-data">
+                </div>
+
                 <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Notlar</label>
                     <textarea id="trade-notes" rows="3" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 focus:ring-2 focus:ring-sky-500 outline-none resize-none transition-all"></textarea>
@@ -798,6 +819,81 @@
                 backdrop.classList.add('hidden');
                 document.body.classList.remove('overflow-hidden');
             }
+        }
+
+
+        // Image Handling Logic
+        function handleImageSelection(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Check if it's an image
+            if (!file.type.startsWith('image/')) {
+                showToast('Lütfen geçerli bir resim dosyası seçin.', 'alert-circle', 'rose');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // Compress the image before saving
+                compressImage(e.target.result, 1200, 0.7, function(compressedBase64) {
+                    document.getElementById('trade-image-data').value = compressedBase64;
+                    document.getElementById('trade-image-preview').src = compressedBase64;
+                    document.getElementById('trade-image-preview-container').classList.remove('hidden');
+                    document.getElementById('trade-image-label').innerText = 'Değiştir';
+                });
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeImageSelection() {
+            document.getElementById('trade-image-data').value = '';
+            document.getElementById('trade-image-preview').src = '';
+            document.getElementById('trade-image-preview-container').classList.add('hidden');
+            document.getElementById('trade-image-label').innerText = 'Görüntü Seç veya Sürükle';
+            document.getElementById('trade-image-input').value = '';
+        }
+
+        function openImageModal(src) {
+            const modal = document.getElementById('image-modal');
+            const img = document.getElementById('full-size-image');
+            if (modal && img && src) {
+                img.src = src;
+                modal.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            }
+        }
+
+        function closeImageModal() {
+            const modal = document.getElementById('image-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+                document.body.classList.remove('overflow-hidden');
+            }
+        }
+
+        function compressImage(base64, maxWidth, quality, callback) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const compressed = canvas.toDataURL('image/jpeg', quality);
+                callback(compressed);
+            };
+            img.src = base64;
         }
 
         // State Management
@@ -1329,7 +1425,7 @@
             statsContainer.className = `text-sm font-bold ${monthlyPnL >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
 
             if (monthlyTrades.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-400 italic">Bu ay henüz işlem girilmemiş.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-400 italic">Bu ay henüz işlem girilmemiş.</td></tr>';
                 return;
             }
 
@@ -1339,6 +1435,9 @@
                 tr.innerHTML = `
                     <td class="py-4 text-sm text-slate-400">${t.date}${t.time ? '<span class="text-slate-500 text-xs ml-1">' + t.time + '</span>' : ''}</td>
                     <td class="py-4 font-bold text-slate-100">${t.symbol}</td>
+                    <td class="py-4 text-center">
+                        ${t.imageData ? `<button onclick="openImageModal('` + t.imageData + `')" class="p-1 text-sky-400 hover:text-sky-300 transition-colors"><i data-lucide="image" class="w-4 h-4 inline-block"></i></button>` : '<span class="text-slate-700">-</span>'}
+                    </td>
                     <td class="py-4">
                         <span class="px-2 py-1 rounded-md text-[10px] font-bold uppercase ${t.type === 'Long' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400'}">${t.type}</span>
                     </td>
@@ -1406,6 +1505,7 @@
                                     <th class="px-4 md:px-8 py-4">Tarih</th>
                                     <th class="px-4 py-4">Parite</th>
                                     <th class="px-4 py-4">Lot</th>
+                                    <th class="px-4 py-4 text-center"><i data-lucide="image" class="w-4 h-4 inline-block text-slate-500"></i></th>
                                     <th class="px-4 py-4">İşlem</th>
                                     <th class="px-4 py-4">Bias M15</th>
                                     <th class="px-4 py-4">Killzone</th>
@@ -1422,6 +1522,9 @@
                                     <tr class="hover:bg-slate-800/50 transition-colors">
                                         <td class="px-4 md:px-8 py-4 text-xs text-slate-400">${t.date}${t.time ? '<br><span class="text-slate-500">' + t.time + '</span>' : ''}</td>
                                         <td class="px-4 py-4 text-xs font-bold text-slate-100">${t.symbol}</td>
+                                        <td class="px-4 py-4 text-center">
+                                            ${t.imageData ? `<button onclick="openImageModal('` + t.imageData + `')" class="p-1 text-sky-400 hover:text-sky-300 transition-colors"><i data-lucide="image" class="w-4 h-4 inline-block"></i></button>` : '<span class="text-slate-700">-</span>'}
+                                        </td>
                                         <td class="px-4 py-4 text-xs text-slate-400">${t.lot || '-'}</td>
                                         <td class="px-4 py-4">
                                             <span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase ${t.type === 'Long' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400'}">${t.type}</span>
@@ -1492,6 +1595,15 @@
                 document.getElementById('trade-killzone').value = kz;
 
                 document.getElementById('trade-notes').value = trade.notes || '';
+
+                if (trade.imageData) {
+                    document.getElementById('trade-image-data').value = trade.imageData;
+                    document.getElementById('trade-image-preview').src = trade.imageData;
+                    document.getElementById('trade-image-preview-container').classList.remove('hidden');
+                    document.getElementById('trade-image-label').innerText = 'Değiştir';
+                } else {
+                    removeImageSelection();
+                }
                 // Bias M15 — varsa set et, yoksa sıfırla
                 if (trade.bias) {
                     setBias(trade.bias);
@@ -1518,6 +1630,7 @@
                     }
                 });
                 document.getElementById('trade-r-percent').value = 1;
+                removeImageSelection();
                 updateKillzone();
             }
 
@@ -1852,7 +1965,8 @@
                 pnl: pnl,
                 exitReason: document.getElementById('trade-exit-reason').value,
                 bias: document.getElementById('trade-bias').value,
-                notes: document.getElementById('trade-notes').value
+                notes: document.getElementById('trade-notes').value,
+                imageData: document.getElementById('trade-image-data').value
             };
 
             if (id) {
@@ -3220,5 +3334,16 @@
             document.getElementById('current-date-display').innerText = new Date().toLocaleDateString('tr-TR', options);
         }
     </script>
+
+    <!-- Image Modal -->
+    <div id="image-modal" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[80] hidden flex items-center justify-center p-4" onclick="closeImageModal()">
+        <button type="button" onclick="closeImageModal()" class="absolute top-4 right-4 md:top-8 md:right-8 p-3 bg-slate-900/50 hover:bg-rose-600 rounded-full text-slate-300 hover:text-white transition-all shadow-xl">
+            <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+        <div class="relative max-w-full max-h-full rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center pointer-events-none">
+            <img id="full-size-image" src="" alt="Full Size Screenshot" class="max-w-full max-h-[90vh] object-contain pointer-events-auto rounded-xl">
+        </div>
+    </div>
+
 </body>
 </html>
