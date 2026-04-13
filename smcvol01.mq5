@@ -20,6 +20,13 @@ input double InpDaysH4   = 500.0;
 input double InpDaysD1   = 1500.0;
 
 //--- CHoCH Settings ---
+input group "--- TRADE EXECUTION & RISK ---"
+input bool   InpEnableTradeExecution   = true;        // Master->Slave Sinyal Köprüsü Aktif
+input double InpRiskUSD                = 50.0;        // İşlem Başına Dolar Riski
+input double InpMaxLotSize             = 0.50;        // Kasa Koruyucu: Maks Lot Sınırı
+input double InpStrongSLMultiplier     = 1.0;         // Güçlü Kırılım SL Genişletme Çarpanı
+input double InpWeakSLMultiplier       = 1.5;         // Zayıf Kırılım SL Genişletme Çarpanı
+
 input int    InpMinTradeScoreLimit = 40;       // İşlem İçin Min. Puan (100 Üzerinden)
 input double InpMinPullbackPct = 40.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
 input double InpMaxPullbackPct = 100.0;          // CHoCH Max Çekilme % (İşlem Yüzdeliği)
@@ -599,7 +606,41 @@ string GenerateMTFString(string tf_name, int trend, double h, double l, double p
     return res;
 }
 
-void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, bool is_test = false)
+
+void BroadcastTradeSignal(string symbol, int direction, double entry, double sl, double tp, bool is_strong, int score, bool is_test) {
+    if (!InpEnableTradeExecution) return;
+
+    string filename = "SMC_SIGNAL_" + symbol + ".json";
+    int handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
+    if(handle == INVALID_HANDLE) {
+        Print("Sinyal JSON dosyası oluşturulamadı! Hata: ", GetLastError());
+        return;
+    }
+
+    string dir_str = (direction == 1) ? "BUY" : "SELL";
+    string is_strong_str = is_strong ? "true" : "false";
+    string is_test_str = is_test ? "true" : "false";
+
+    string json = "{\n";
+    json += "  \"symbol\": \"" + symbol + "\",\n";
+    json += "  \"direction\": \"" + dir_str + "\",\n";
+    json += "  \"entry\": " + DoubleToString(entry, _Digits) + ",\n";
+    json += "  \"sl\": " + DoubleToString(sl, _Digits) + ",\n";
+    json += "  \"tp\": " + DoubleToString(tp, _Digits) + ",\n";
+    json += "  \"base_extreme\": " + DoubleToString(sl, _Digits) + ",\n"; // Keeping legacy format compatibility
+    json += "  \"is_strong\": " + is_strong_str + ",\n";
+    json += "  \"score\": " + IntegerToString(score) + ",\n";
+    json += "  \"is_test\": " + is_test_str + ",\n";
+    json += "  \"risk_usd\": " + DoubleToString(InpRiskUSD, 2) + ",\n";
+    json += "  \"max_lot\": " + DoubleToString(InpMaxLotSize, 2) + "\n";
+    json += "}";
+
+    FileWrite(handle, json);
+    FileClose(handle);
+    Print("✅ Sinyal Master EA (smcvol01) tarafından Terminal Ortak Klasörüne Yazıldı -> ", filename);
+}
+
+void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, bool is_test = false)
   {
    int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
    double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
@@ -721,6 +762,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    m5_text = GenerateMTFString("M5 ", t_m5, h_m5, l_m5, p_m5, mp_m5) + m5_text;
    total_points += m5_points;
 
+   string order_details = "";
    // --- M1 vs M3 RANGE EXPECTATION ---
    string range_text = (t_m1 == t_m3) ? "🚀 BEKLENTİ: UZUN MENZİL (Trend Takibi)" : "⚠️ BEKLENTİ: KISA SÜRECEK (Scalp/Tepki)";
 
@@ -731,8 +773,34 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    // --- FINAL VERDICT ---
    string verdict = "";
-   if (total_points >= InpMinTradeScoreLimit) verdict = "✅ İŞLEME GİRİLEBİLİR (Yüksek Olasılıklı Kurulum)";
+
+   if (total_points >= InpMinTradeScoreLimit) {
+       verdict = "✅ İŞLEME GİRİLEBİLİR (Yüksek Olasılıklı Kurulum)";
+
+       double sl_price = minor_extreme_sl;
+       double entry_price = live_price;
+       double sl_dist = MathAbs(entry_price - minor_extreme_sl);
+
+       // Apply Weak/Strong SL multipliers
+       if (is_strong) sl_dist *= InpStrongSLMultiplier;
+       else           sl_dist *= InpWeakSLMultiplier;
+
+       if (trigger_dir == 1) sl_price = entry_price - sl_dist;
+       else                  sl_price = entry_price + sl_dist;
+
+       // TP at 3R
+       double tp_dist = sl_dist * 3.0;
+       double tp_price = (trigger_dir == 1) ? (entry_price + tp_dist) : (entry_price - tp_dist);
+
+       BroadcastTradeSignal(Symbol(), trigger_dir, entry_price, sl_price, tp_price, is_strong, total_points, is_test);
+
+       order_details = "\n📊 HESAPLANAN HEDEFLER (Sinyal Köprüsüne Gönderildi):\n";
+       order_details += "Giriş: " + DoubleToString(entry_price, _Digits) + "\n";
+       order_details += "Zarar Durdur (SL): " + DoubleToString(sl_price, _Digits) + " (" + DoubleToString(sl_dist/_Point, 0) + " points)\n";
+       order_details += "Kâr Al (TP 3R): " + DoubleToString(tp_price, _Digits) + " (" + DoubleToString(tp_dist/_Point, 0) + " points)\n";
+   }
    else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Puan Yetersiz)";
+
 
    string dir_str = (trigger_dir == 1) ? "⬆️ YUKARI (BUY)" : "⬇️ AŞAĞI (SELL)";
 
@@ -750,6 +818,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    msg += "📈 TOPLAM İŞLEM SKORU:\n";
    msg += "Hesaplanan: " + IntegerToString(total_points) + " Puan (Gerekli Baraj: " + IntegerToString(InpMinTradeScoreLimit) + " Puan)\n";
    msg += "KARAR: " + verdict;
+   msg += order_details;
 
    if(InpAlertPopup) Alert(msg);
    if(InpAlertPush) SendNotification(msg);
@@ -1122,15 +1191,17 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bear = 0;
-              if (state.d1_i != last_alert_d1_i_bear) {
+              static int last_alert_maj_i_bear = 0;
+              if (state.d1_i != last_alert_d1_i_bear && state.maj_h_i != last_alert_maj_i_bear) {
                   if (InpEnableAlertCHoCHBase) {
                       if(InpAlertPopup) Alert(msg);
                       if(InpAlertPush) SendNotification(msg);
                   }
                   if (InpEnableTradeExecution) {
-                      EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong);
+                      EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, is_strong ? state.t2_h : state.t1_h);
                   }
                   last_alert_d1_i_bear = state.d1_i;
+                  last_alert_maj_i_bear = state.maj_h_i;
               }
           }
 
@@ -1169,15 +1240,17 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bull = 0;
-              if (state.d1_i != last_alert_d1_i_bull) {
+              static int last_alert_maj_i_bull = 0;
+              if (state.d1_i != last_alert_d1_i_bull && state.maj_l_i != last_alert_maj_i_bull) {
                   if (InpEnableAlertCHoCHBase) {
                       if(InpAlertPopup) Alert(msg);
                       if(InpAlertPush) SendNotification(msg);
                   }
                   if (InpEnableTradeExecution) {
-                      EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong);
+                      EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, is_strong ? state.t2_l : state.t1_l);
                   }
                   last_alert_d1_i_bull = state.d1_i;
+                  last_alert_maj_i_bull = state.maj_l_i;
               }
           }
 
@@ -1643,7 +1716,8 @@ int OnCalculate(const int rates_total,
 
 
           // EvaluateTradeSignal param format: current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, bool is_test
-          EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, true);
+          double dummy_ext = (test_dir == 1) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) - 50*Point() : SymbolInfoDouble(Symbol(), SYMBOL_BID) + 50*Point();
+          EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, dummy_ext, true);
       }
      }
    else
