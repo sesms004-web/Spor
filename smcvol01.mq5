@@ -486,24 +486,14 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
       double precise_tmp_h = st.tmp_h; // Fallback
 
       if(m1_copied > 0) {
-          int best_i = 0;
-          double best_v = (trend == 1) ? 0.0 : 9999999.0;
+          precise_tmp_l = rates[0].low;
+          precise_tmp_h = rates[0].high;
 
-          // 1. O periyottaki en uç noktayı (Gerçek Tepeyi/Dibi) bul
+          // Uç noktayı veya "sonrasını" beklemeden, direkt o periyottaki tüm iğneleri (maksimum sarkmaları) baz alıyoruz
           for(int k=0; k<m1_copied; k++) {
-              if(trend == 1 && rates[k].high > best_v) { best_v = rates[k].high; best_i = k; }
-              if(trend == -1 && rates[k].low < best_v) { best_v = rates[k].low; best_i = k; }
+              if(rates[k].low < precise_tmp_l) precise_tmp_l = rates[k].low;
+              if(rates[k].high > precise_tmp_h) precise_tmp_h = rates[k].high;
           }
-
-          // 2. O uç noktadan sonrasındaki en büyük sarkmayı bul
-          double ext_val = live_p;
-          for(int k=best_i; k<m1_copied; k++) {
-              if(trend == 1 && rates[k].low < ext_val) ext_val = rates[k].low;
-              if(trend == -1 && rates[k].high > ext_val) ext_val = rates[k].high;
-          }
-
-          if(trend == 1) precise_tmp_l = ext_val;
-          if(trend == -1) precise_tmp_h = ext_val;
       }
 
       if(trend == 1)
