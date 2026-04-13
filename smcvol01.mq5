@@ -628,8 +628,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    int m1_points = is_strong ? 5 : 0;
    total_points += m1_points;
    m1_text = GenerateMTFString("M1", t_m1, h_m1, l_m1, p_m1, mp_m1);
-   if(is_strong) m1_text += "Durum: 🔥 GÜÇLÜ (Likidite Temizlendi) -> [+5 Puan] \n";
-   else          m1_text += "Durum: ⚠️ ZAYIF (Likidite Alınmadan Kırılım) -> [+0 Puan] \n";
+   if(is_strong) m1_text += "🔥 Likidite Temizlendi -> [+5 Puan]\n";
+   else          m1_text += "⚠️ Likidite Alınmadı -> [+0 Puan]\n";
 
    // --- H1 (Makro Trend) - Maks 35 Puan ---
    int h1_points = 0;
@@ -638,18 +638,18 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    if (h1_mom >= 15.0) {
        if (is_h1_aligned) {
-           if (h1_mom >= 20.0) { h1_points = 35; h1_text = "H1 (Makro): Yön Uyumlu, ÇOK Sert Momentum (>= %20) -> [+35 Puan] \n"; }
-           else                { h1_points = 30; h1_text = "H1 (Makro): Yön Uyumlu, Sert Momentum (>= %15) -> [+30 Puan] \n"; }
+           if (h1_mom >= 20.0) { h1_points = 35; h1_text = "🚀 Uyumlu, Çok Sert Momentum -> [+35 Puan]\n"; }
+           else                { h1_points = 30; h1_text = "⚡ Uyumlu, Sert Momentum -> [+30 Puan]\n"; }
        } else {
-           h1_points = 0; h1_text = "H1 (Makro): Ters Yönlü Sert Momentum (Büyük Tehlike!) -> [0 Puan] \n";
+           h1_points = 0; h1_text = "🛑 Ters Yönlü Sert Momentum -> [0 Puan]\n";
        }
    } else {
        if (is_h1_aligned) {
-           if (p_h1 >= 50.0) { h1_points = 30; h1_text = "H1 (Makro): Momentum Yok ama %50 İdeal Düzeltme Bölgesinde -> [+30 Puan] \n"; }
-           else              { h1_points = 10; h1_text = "H1 (Makro): Momentum Yok ve %50 Altı Şişkin Bölge -> [+10 Puan] \n"; }
+           if (p_h1 >= 50.0) { h1_points = 30; h1_text = "🎯 Uyumlu, Momentum Yok Ama %50 İdeal -> [+30 Puan]\n"; }
+           else              { h1_points = 10; h1_text = "📉 Uyumlu, Momentum Yok Ve Şişkin -> [+10 Puan]\n"; }
        } else {
-           if (p_h1 >= 50.0) { h1_points = 20; h1_text = "H1 (Makro): Ters Yönlü ama İdeal %50 Bölgesinde (Dönüş İhtimali) -> [+20 Puan] \n"; }
-           else              { h1_points = 30; h1_text = "H1 (Makro): Ters Yönlü ve %50 Altı Şişkin (Düzeltme Fırsatı) -> [+30 Puan] \n"; }
+           if (p_h1 >= 50.0) { h1_points = 20; h1_text = "🔄 Ters Yönlü Ama %50 İdeal -> [+20 Puan]\n"; }
+           else              { h1_points = 30; h1_text = "⏳ Ters Yönlü Ve Şişkin -> [+30 Puan]\n"; }
        }
    }
    h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + h1_text;
@@ -662,16 +662,16 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool clone_m30_h1 = (MathAbs(h_m30 - h_h1) < Point() * 5 && MathAbs(l_m30 - l_h1) < Point() * 5);
 
    if (clone_m30_h1) {
-       m30_points = 0; m30_text = "M30 (Makro 2): H1 ile Tamamen Aynı Yapı (Klon), Es Geçildi -> [0 Puan] \n";
+       m30_points = 0; m30_text = "👯 H1 İle Aynı Yapı Es Geçildi -> [0 Puan]\n";
    } else {
        if (!is_m30_aligned) {
-           if (m30_mom >= 15.0) { m30_points = 0;  m30_text = "M30 (Makro 2): Bize Karşı Sert Tepki (Tehlike) -> [0 Puan] \n"; }
-           else                 { m30_points = 10; m30_text = "M30 (Makro 2): Ters Yönlü Ama Tepkisiz (Sakin) -> [+10 Puan] \n"; }
+           if (m30_mom >= 15.0) { m30_points = 0;  m30_text = "🛑 Bize Karşı Sert Tepki -> [0 Puan]\n"; }
+           else                 { m30_points = 10; m30_text = "😴 Ters Yönlü Ama Sakin -> [+10 Puan]\n"; }
        } else {
-           if (m30_mom >= 20.0)      { m30_points = 25; m30_text = "M30 (Makro 2): Yön Uyumlu, ÇOK Sert Dönüş -> [+25 Puan] \n"; }
-           else if (m30_mom >= 15.0) { m30_points = 20; m30_text = "M30 (Makro 2): Yön Uyumlu, Sert Dönüş -> [+20 Puan] \n"; }
-           else if (p_m30 >= 50.0)   { m30_points = 15; m30_text = "M30 (Makro 2): Tepki Yok ama İdeal %50 Bölgesinde -> [+15 Puan] \n"; }
-           else                      { m30_points = 5;  m30_text = "M30 (Makro 2): Tepki Yok ve %50 Altı Şişkin -> [+5 Puan] \n"; }
+           if (m30_mom >= 20.0)      { m30_points = 25; m30_text = "🚀 Uyumlu, Çok Sert Dönüş -> [+25 Puan]\n"; }
+           else if (m30_mom >= 15.0) { m30_points = 20; m30_text = "⚡ Uyumlu, Sert Dönüş -> [+20 Puan]\n"; }
+           else if (p_m30 >= 50.0)   { m30_points = 15; m30_text = "🎯 Uyumlu, Tepki Yok Ama %50 İdeal -> [+15 Puan]\n"; }
+           else                      { m30_points = 5;  m30_text = "📉 Uyumlu, Tepki Yok Ve Şişkin -> [+5 Puan]\n"; }
        }
    }
    m30_text = GenerateMTFString("M30", t_m30, h_m30, l_m30, p_m30, mp_m30) + m30_text;
@@ -684,16 +684,16 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool clone_m15_m30 = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
 
    if (clone_m15_m30) {
-       m15_points = 0; m15_text = "M15 (Makro Yapı): M30 ile Aynı Yapı (Klon), Es Geçildi -> [0 Puan] \n";
+       m15_points = 0; m15_text = "👯 M30 İle Aynı Yapı Es Geçildi -> [0 Puan]\n";
    } else {
        if (!is_m15_aligned) {
-           if (m15_mom >= 15.0) { m15_points = 0; m15_text = "M15 (Makro Yapı): Bize Karşı Sert Tepki -> [0 Puan] \n"; }
-           else                 { m15_points = 5; m15_text = "M15 (Makro Yapı): Ters Yönlü Ama Sakin -> [+5 Puan] \n"; }
+           if (m15_mom >= 15.0) { m15_points = 0; m15_text = "🛑 Bize Karşı Sert Tepki -> [0 Puan]\n"; }
+           else                 { m15_points = 5; m15_text = "😴 Ters Yönlü Ama Sakin -> [+5 Puan]\n"; }
        } else {
-           if (m15_mom >= 20.0)      { m15_points = 20; m15_text = "M15 (Makro Yapı): Yön Uyumlu, ÇOK Sert Dönüş -> [+20 Puan] \n"; }
-           else if (m15_mom >= 15.0) { m15_points = 15; m15_text = "M15 (Makro Yapı): Yön Uyumlu, Sert Dönüş -> [+15 Puan] \n"; }
-           else if (p_m15 >= 50.0)   { m15_points = 15; m15_text = "M15 (Makro Yapı): Tepki Yok ama İdeal %50 Bölgesinde -> [+15 Puan] \n"; }
-           else                      { m15_points = 5;  m15_text = "M15 (Makro Yapı): Tepki Yok ve %50 Altı Şişkin -> [+5 Puan] \n"; }
+           if (m15_mom >= 20.0)      { m15_points = 20; m15_text = "🚀 Uyumlu, Çok Sert Dönüş -> [+20 Puan]\n"; }
+           else if (m15_mom >= 15.0) { m15_points = 15; m15_text = "⚡ Uyumlu, Sert Dönüş -> [+15 Puan]\n"; }
+           else if (p_m15 >= 50.0)   { m15_points = 15; m15_text = "🎯 Uyumlu, Tepki Yok Ama %50 İdeal -> [+15 Puan]\n"; }
+           else                      { m15_points = 5;  m15_text = "📉 Uyumlu, Tepki Yok Ve Şişkin -> [+5 Puan]\n"; }
        }
    }
    m15_text = GenerateMTFString("M15", t_m15, h_m15, l_m15, p_m15, mp_m15) + m15_text;
@@ -706,19 +706,19 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool clone_m5_m15 = (MathAbs(h_m5 - h_m15) < Point() * 5 && MathAbs(l_m5 - l_m15) < Point() * 5);
 
    if (clone_m5_m15) {
-       m5_points = 0; m5_text = "M5 (Mikro Filtre): M15 ile Aynı Yapı (Klon), Es Geçildi -> [0 Puan] \n";
+       m5_points = 0; m5_text = "👯 M15 İle Aynı Yapı Es Geçildi -> [0 Puan]\n";
    } else {
        if (!is_m5_aligned) {
-           if (m5_mom >= 15.0) { m5_points = 0; m5_text = "M5 (Mikro Filtre): Bize Karşı Sert Tepki -> [0 Puan] \n"; }
-           else                { m5_points = 5; m5_text = "M5 (Mikro Filtre): Ters Yönlü Ama Sakin -> [+5 Puan] \n"; }
+           if (m5_mom >= 15.0) { m5_points = 0; m5_text = "🛑 Bize Karşı Sert Tepki -> [0 Puan]\n"; }
+           else                { m5_points = 5; m5_text = "😴 Ters Yönlü Ama Sakin -> [+5 Puan]\n"; }
        } else {
-           if (m5_mom >= 20.0)      { m5_points = 15; m5_text = "M5 (Mikro Filtre): Yön Uyumlu, ÇOK Sert Dönüş -> [+15 Puan] \n"; }
-           else if (m5_mom >= 15.0) { m5_points = 10; m5_text = "M5 (Mikro Filtre): Yön Uyumlu, Sert Dönüş -> [+10 Puan] \n"; }
-           else if (p_m5 >= 50.0)   { m5_points = 10; m5_text = "M5 (Mikro Filtre): Tepki Yok ama İdeal %50 Bölgesinde -> [+10 Puan] \n"; }
-           else                     { m5_points = 5;  m5_text = "M5 (Mikro Filtre): Tepki Yok ve %50 Altı Şişkin -> [+5 Puan] \n"; }
+           if (m5_mom >= 20.0)      { m5_points = 15; m5_text = "🚀 Uyumlu, Çok Sert Dönüş -> [+15 Puan]\n"; }
+           else if (m5_mom >= 15.0) { m5_points = 10; m5_text = "⚡ Uyumlu, Sert Dönüş -> [+10 Puan]\n"; }
+           else if (p_m5 >= 50.0)   { m5_points = 10; m5_text = "🎯 Uyumlu, Tepki Yok Ama %50 İdeal -> [+10 Puan]\n"; }
+           else                     { m5_points = 5;  m5_text = "📉 Uyumlu, Tepki Yok Ve Şişkin -> [+5 Puan]\n"; }
        }
    }
-   m5_text = GenerateMTFString("M5", t_m5, h_m5, l_m5, p_m5, mp_m5) + m5_text;
+   m5_text = GenerateMTFString("M5 ", t_m5, h_m5, l_m5, p_m5, mp_m5) + m5_text;
    total_points += m5_points;
 
    // --- M1 vs M3 RANGE EXPECTATION ---
@@ -856,184 +856,38 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
 
    string decision = "";
    string detail = "";
-
-   bool m15_pullback_down = (t_m15 == 1 && t_m5 == -1);
-   bool m15_pullback_up   = (t_m15 == -1 && t_m5 == 1);
-
-   if (macro_bull)
-     {
-      if (t_m15 == -1) // M15 is in a Pullback (Down) against Macro
-        {
-         if (p_m15 >= InpGoodPullbackPct && t_m1 == 1 && t_m3 == 1)
-           {
-            decision = "✅ YAPISAL UYUM: İdeal Düzeltme Tamamlandı";
-            detail = "Makro trend YUKARI. M15 yapısı yeterli ucuzluk bölgesine (discount) indi. Alt zaman dilimi tetikleyicileri (M1/M3) ana trend yönüne dönüş sinyali üretiyor. Trendin devam etme ihtimali istatistiksel olarak yüksek.";
-           }
-         else if (t_m1 == -1 && t_m3 == -1 && p_m15 < 30.0)
-           {
-            decision = "⚡ YAPISAL UYUM: Derin Düzeltme Başlangıcı";
-            detail = "Makro trend YUKARI olmasına rağmen, M15 yapısı aşağı yönlü kırıldı ve henüz yeterli ucuzluk bölgesine inmedi. Kısa vadeli aşağı yönlü (Counter-Trend) momentum güçlü, ancak bu hareket makro trende terstir.";
-           }
-         else
-           {
-            decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-            detail = "M15 aşağı yönlü düzeltme aşamasında, ancak M1 ve M3 zıt yönde veya henüz kalıcı bir dönüş yapısı oluşturmadı. Fiyatta anlamlı bir trend yönü yok, izlemek en mantıklısı.";
-           }
-        }
-      else if (t_m15 == 1) // M15 is UP (Aligned with Macro)
-        {
-         if (t_m5 == -1) // M5 is pulling back down
-           {
-            if (p_m15 >= InpGoodPullbackPct && t_m1 == 1 && t_m3 == 1)
-              {
-               decision = "✅ YAPISAL UYUM: Güçlü Trend Devamı";
-               detail = "M15 Yukarı yönde ve yeterli ucuzluk bölgesinde. M5 düzeltmesini bitirmek üzereyken, M1/M3 tetik grubu ana yöne uyum sağladı. Yapı yukarı yönlü genişlemeyi destekliyor.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Kısa Süreli Tepki";
-               detail = "M15 Yukarı ancak M5 şu an fiyatı aşağı çekiyor. M1 yukarı kırmış olsa da M3 yapısı henüz onay vermedi. Bu hareket kalıcı bir dönüş değil, iç yapı düzeltmesidir.";
-              }
-           }
-         else // M15 UP, M5 UP
-           {
-            if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 <= 10.0)
-              {
-               decision = "⚠️ RİSKLİ YAPI: Aşırı Şişkin (Overextended)";
-               detail = "Ana zaman dilimlerinde (M15 ve M5) fiyat son kırılımdan bu yana hiç geri çekilme (pullback) yapmadı. Bu seviyelerden trend yönlü beklentiye girmek yapısal olarak mantıksızdır. Fiyatın dengelenmesi beklenmeli.";
-              }
-            else if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 > 10.0)
-              {
-               decision = "✅ YAPISAL UYUM: Kırılım Gerçekleşiyor (Breakout)";
-               detail = "M15 daha önce düzeltmesini (pullback) tamamlamış ve şu an yapısal direnci kırmak üzere ivmeleniyor. Makro ve mikro trendler tamamen aynı yönde.";
-              }
-            else if (t_m1 == 1 && t_m3 == 1)
-              {
-               decision = "✅ YAPISAL UYUM: Ara Düzeltme Devamı";
-               detail = "Makro ve M15 uyumlu. Fiyat M15'te sığ bir düzeltme yaptıktan sonra tekrar yukarı kırılım sinyali veriyor. Trend ivmesi oldukça güçlü.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-               detail = "Ana yön Yukarı ancak M1 ve M3 kendi içlerinde uyumsuz dalgalanıyor. Net bir yapı onayı gelene kadar işlem yapmak riskli.";
-              }
-           }
-        }
-     }
-   else if (macro_bear)
-     {
-      if (t_m15 == 1) // M15 is in a Pullback (Up) against Macro
-        {
-         if (p_m15 >= InpGoodPullbackPct && t_m1 == -1 && t_m3 == -1)
-           {
-            decision = "✅ YAPISAL UYUM: İdeal Düzeltme Tamamlandı";
-            detail = "Makro trend AŞAĞI. M15 yapısı yeterli pahalılık bölgesine (premium) ulaştı. Alt zaman dilimi tetikleyicileri (M1/M3) ana trend yönüne dönüş sinyali üretiyor. Trendin devam etme ihtimali yüksek.";
-           }
-         else if (t_m1 == 1 && t_m3 == 1 && p_m15 < 30.0)
-           {
-            decision = "⚡ YAPISAL UYUM: Derin Düzeltme Başlangıcı";
-            detail = "Makro trend AŞAĞI olmasına rağmen, M15 yapısı yukarı yönlü kırıldı ve henüz pahalılık bölgesine ulaşmadı. Kısa vadeli yukarı yönlü (Counter-Trend) momentum güçlü, ancak bu makro trende terstir.";
-           }
-         else
-           {
-            decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-            detail = "M15 yukarı çıkıyor (düzeltme). Ancak M1 ve M3 kendi aralarında uyumsuz. Bu bir trend başlangıcı değil, fiyatın denge arayışıdır.";
-           }
-        }
-      else if (t_m15 == -1) // M15 is DOWN (Aligned with Macro)
-        {
-         if (t_m5 == 1) // M5 is pulling back up
-           {
-            if (p_m15 >= InpGoodPullbackPct && t_m1 == -1 && t_m3 == -1)
-              {
-               decision = "✅ YAPISAL UYUM: Güçlü Trend Devamı";
-               detail = "M15 Aşağı yönde ve pahalılık bölgesinde. M5 düzeltmesini bitirirken Tetik Grubu (M1/M3) asıl yöne uyum sağladı. Aşağı yönlü genişleme devam edebilir.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Kısa Süreli Tepki";
-               detail = "M15 Aşağı iniyor ancak M5 şu an fiyatı yukarı çekiyor. M1 ve M3 yapısı dönüş için yeterli onayı vermedi. Henüz asıl trende girilmiş değil.";
-              }
-           }
-         else // M15 DOWN, M5 DOWN
-           {
-            if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 <= 10.0)
-              {
-               decision = "⚠️ RİSKLİ YAPI: Aşırı Şişkin (Overextended)";
-               detail = "Ana zaman dilimlerinde (M15 ve M5) fiyat son kırılımdan bu yana hiç geri çekilme (pullback) yapmadı. Bu seviyelerden ana trend yönlü beklentiye girmek yapısal olarak mantıksızdır, düzeltme beklenmeli.";
-              }
-            else if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 > 10.0)
-              {
-               decision = "✅ YAPISAL UYUM: Kırılım Gerçekleşiyor (Breakout)";
-               detail = "M15 daha önce düzeltmesini (pullback) tamamlamış ve şu an yapısal desteği kırmak üzere ivmeleniyor. Makro ve mikro trendler tamamen aynı yönde.";
-              }
-            else if (t_m1 == -1 && t_m3 == -1)
-              {
-               decision = "✅ YAPISAL UYUM: Ara Düzeltme Devamı";
-               detail = "Makro ve M15 uyumlu. Fiyat M15'te sığ bir tepki verdikten sonra tekrar aşağı kırılım sinyali veriyor. Ayı momentumu devam ediyor.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-               detail = "Ana yön Aşağı ancak M1 ve M3 kendi içlerinde uyumsuz dalgalanıyor. Piyasanın yön bulması beklenmeli.";
-              }
-           }
-        }
-     }
-   else
-     {
-      decision = "⚠️ YAPISAL KARARSIZLIK (Range / Testere)";
-      detail = "Makro trendler (H1 ve M30) birbiriyle uyumsuz durumda. Piyasa konsolidasyon (yatay) sürecinde, büyük zaman diliminde net bir yön tayini yok.";
-     }
-
-   // --- MOMENTUM REJECTION NOTU ---
-   string momentum_note = "";
-
-   if (mp_h1 >= InpMomentumMinPeak && (mp_h1 - p_h1) >= InpMomentumMinBounce) momentum_note += "  └ [H1] Zirveden %" + DoubleToString(mp_h1 - p_h1, 0) + " döndü. " + (t_h1 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m30 >= InpMomentumMinPeak && (mp_m30 - p_m30) >= InpMomentumMinBounce) momentum_note += "  └ [M30] Zirveden %" + DoubleToString(mp_m30 - p_m30, 0) + " döndü. " + (t_m30 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m15 >= InpMomentumMinPeak && (mp_m15 - p_m15) >= InpMomentumMinBounce) momentum_note += "  └ [M15] Zirveden %" + DoubleToString(mp_m15 - p_m15, 0) + " döndü. " + (t_m15 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m5 >= InpMomentumMinPeak && (mp_m5 - p_m5) >= InpMomentumMinBounce) momentum_note += "  └ [M5] Zirveden %" + DoubleToString(mp_m5 - p_m5, 0) + " döndü. " + (t_m5 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m3 >= InpMomentumMinPeak && (mp_m3 - p_m3) >= InpMomentumMinBounce) momentum_note += "  └ [M3] Zirveden %" + DoubleToString(mp_m3 - p_m3, 0) + " döndü. " + (t_m3 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-
-   string final_momentum_str = "";
-   if (momentum_note != "")
-     {
-      final_momentum_str = "🚀 İVME (MOMENTUM):\n" + momentum_note + "  * Fiyat düzeltmeyi sert reddetti, ana trend yönünde tepki güçlü!\n\n";
-     }
-
    string risk_advice = "";
-   if (StringFind(decision, "Aşırı Şişkin") != -1)
-     {
-      risk_advice = "🔴 RİSKLİ BÖLGE: Mevcut seviyeden trend yönünde beklentiye girmek yapısal olarak yanlıştır. Fiyatın sağlıklı bir düzeltme (pullback) yapması beklenmelidir.";
-     }
-   else if (StringFind(decision, "İdeal Düzeltme") != -1 || StringFind(decision, "Güçlü Trend") != -1)
-     {
-      risk_advice = "🟢 OPTİMAL BÖLGE: Zaman dilimleri tam uyum içinde. Fiyat ideal iskontoda ve trendin devam etme olasılığı çok yüksek.";
-     }
-   else if (StringFind(decision, "Kırılım Gerçekleşiyor") != -1 || StringFind(decision, "Ara Düzeltme") != -1)
-     {
-      risk_advice = "🟡 KABUL EDİLEBİLİR RİSK: Fiyat halihazırda düzeltmesini yapmış ve yapıyı kırmak üzere. Momentum yönlü hareket izlenebilir.";
-     }
-   else if (StringFind(decision, "Derin Düzeltme") != -1)
-     {
-      risk_advice = "🟠 YÜKSEK RİSK (Counter-Trend): Kısa zaman diliminde oluşan momentuma karşı işlem almak (Scalp) mümkündür ancak ana trende terstir. Düşük lot tavsiye edilir.";
-     }
-   else if (StringFind(decision, "Düzensiz Fiyat Hareketi") != -1 || StringFind(decision, "Kısa Süreli Tepki") != -1)
-     {
-      risk_advice = "🔴 UYUMSUZLUK: Yapılar birbiriyle çelişiyor. Trend henüz olgunlaşmadı veya fake-out (sahte kırılım) riski var. İzlemede kalın.";
-     }
-   else
-     {
-      risk_advice = "🔴 BEKLEME ZAMANI: Piyasa yapısında netlik yok. Yeni bir impulsif hareketin oluşumu beklenmelidir.";
-     }
 
-   string msg2 = "🚨 [" + Symbol() + "] BÖLÜM 2/2\n\n";
+   if (triggered_level == 1) { // %40-%60 Range (KIRILIM 1)
+       if (macro_bull && t_m1 == 1 || !macro_bull && t_m1 == -1) {
+           decision = "🟡 ERKEN AŞAMA (KIRILIM 1)";
+           detail = "Piyasa ana trend yönünde ilk yapısal kırılımı (CHoCH) gerçekleştirdi. Düzeltme henüz %60 sınırını geçmediği için taze bir momentum olabilir.";
+           risk_advice = "🚨 İlk kırılımlar güçlü trend başlatabilir ancak scalp (kısa menzilli) kâr alma ihtimalini göz önünde bulundurun.";
+       } else {
+           decision = "🔴 TERS YÖNLÜ ERKEN KIRILIM";
+           detail = "Fiyat ana trendin aksi yönünde ilk zayıf tepkisini verdi. Bu kırılım büyük ihtimalle bir düzeltme (pullback) başlatacak.";
+           risk_advice = "🛑 Ana trende karşı olduğunuz için hacimli bir pozisyondan ziyade dar stoplu reaksiyon aranmalıdır.";
+       }
+   } else { // >= %60 Range (KIRILIM 2)
+       if (macro_bull && t_m1 == 1 || !macro_bull && t_m1 == -1) {
+           decision = "🟢 GÜÇLÜ ONAY (KIRILIM 2)";
+           detail = "Fiyat derin ve sağlıklı bir düzeltme (%60+) yaptıktan sonra tekrar ana trend yönüne oturdu. Uyum mükemmel.";
+           risk_advice = "✅ En yüksek kazanma olasılığına sahip (High Probability) kurulumdur. Ana TP hedefine kadar takip edilebilir.";
+       } else {
+           decision = "🟡 DERİN DÜZELTME (Ters Yön)";
+           detail = "Fiyat çok derin bir düzeltme (%60+) yapıyor. Ana trend henüz dönmese de ciddi bir geri çekilme yaşanıyor.";
+           risk_advice = "⚠️ Tepki büyük. İşlem alınabilir ancak kâr hedefleri ana yapı dirençlerine göre (muhafazakar) belirlenmeli.";
+       }
+   }
+
+   string msg2 = "";
    if(InpTestMode) msg2 = "🧪 [TEST MODU - " + Symbol() + "] BÖLÜM 2/2\n\n";
+   else msg2 = "🚨 YAPI ONAYI BÖLÜM 2/2\n\n";
 
-   msg2 += final_momentum_str;
    msg2 += "🤖 PİYASA DURUMU:\n  " + decision + "\n\n";
    msg2 += "📝 YAPI ANALİZİ:\n  " + detail + "\n\n";
-   msg2 += "⚠️ ALGORİTMİK SONUÇ:\n  " + risk_advice;
+   msg2 += "⚠️ ALGORİTMİK SONUÇ:\n  " + risk_advice + "\n\n";
+
 
    if(InpAlertPopup)
      {
