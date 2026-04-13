@@ -486,38 +486,24 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
       double precise_tmp_h = st.tmp_h; // Fallback
 
       if(m1_copied > 0) {
-          bool extreme_found = false;
+          int best_i = 0;
+          double best_v = (trend == 1) ? 0.0 : 9999999.0;
 
-          if(trend == 1) {
-              precise_tmp_l = live_p; // Başlangıçta anlık fiyat olarak ata
-              for(int k=0; k<m1_copied; k++) {
-                  // M1 mumlarında Tepe noktasını bulduğumuz veya geçtiğimiz an
-                  if(!extreme_found && rates[k].high >= st.maj_h - (Point()*5)) {
-                      extreme_found = true;
-                      precise_tmp_l = rates[k].low;
-                  }
-                  // Tepe görüldükten SONRAKİ en düşük M1 iğnesini kaydet
-                  if(extreme_found && rates[k].low < precise_tmp_l) {
-                      precise_tmp_l = rates[k].low;
-                  }
-              }
-              if(!extreme_found) precise_tmp_l = st.tmp_l; // Bulunamazsa HTF fallback
+          // 1. O periyottaki en uç noktayı (Gerçek Tepeyi/Dibi) bul
+          for(int k=0; k<m1_copied; k++) {
+              if(trend == 1 && rates[k].high > best_v) { best_v = rates[k].high; best_i = k; }
+              if(trend == -1 && rates[k].low < best_v) { best_v = rates[k].low; best_i = k; }
           }
-          else if(trend == -1) {
-              precise_tmp_h = live_p;
-              for(int k=0; k<m1_copied; k++) {
-                  // M1 mumlarında Dip noktasını bulduğumuz veya geçtiğimiz an
-                  if(!extreme_found && rates[k].low <= st.maj_l + (Point()*5)) {
-                      extreme_found = true;
-                      precise_tmp_h = rates[k].high;
-                  }
-                  // Dip görüldükten SONRAKİ en yüksek M1 iğnesini kaydet
-                  if(extreme_found && rates[k].high > precise_tmp_h) {
-                      precise_tmp_h = rates[k].high;
-                  }
-              }
-              if(!extreme_found) precise_tmp_h = st.tmp_h; // Bulunamazsa HTF fallback
+
+          // 2. O uç noktadan sonrasındaki en büyük sarkmayı bul
+          double ext_val = live_p;
+          for(int k=best_i; k<m1_copied; k++) {
+              if(trend == 1 && rates[k].low < ext_val) ext_val = rates[k].low;
+              if(trend == -1 && rates[k].high > ext_val) ext_val = rates[k].high;
           }
+
+          if(trend == 1) precise_tmp_l = ext_val;
+          if(trend == -1) precise_tmp_h = ext_val;
       }
 
       if(trend == 1)
@@ -1643,6 +1629,36 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 //+------------------------------------------------------------------+
 //| Custom indicator iteration function                              |
 //+------------------------------------------------------------------+
+
+void UpdateLiveDashboard()
+  {
+   datetime t = TimeCurrent();
+   double live_price = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+
+   int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
+   double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
+   double mp_m1=0, mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
+   double h_m1=0, l_m1=0, h_m3=0, l_m3=0, h_m5=0, l_m5=0, h_m15=0, l_m15=0, h_m30=0, l_m30=0, h_h1=0, l_h1=0;
+   datetime dmy_th, dmy_tl, th_m15, tl_m15, th_m30, tl_m30;
+
+   GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, dmy_th, dmy_tl);
+   GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, h_m3, l_m3, dmy_th, dmy_tl);
+   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, h_m5, l_m5, dmy_th, dmy_tl);
+   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, th_m15, tl_m15);
+   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, th_m30, tl_m30);
+   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, h_h1, l_h1, dmy_th, dmy_tl);
+
+   string txt = "--- CANLI MTF ÇEKİLME TAKİBİ ---\n";
+   txt += GenerateMTFString("M1 ", t_m1, h_m1, l_m1, p_m1, mp_m1);
+   txt += GenerateMTFString("M3 ", t_m3, h_m3, l_m3, p_m3, mp_m3);
+   txt += GenerateMTFString("M5 ", t_m5, h_m5, l_m5, p_m5, mp_m5);
+   txt += GenerateMTFString("M15", t_m15, h_m15, l_m15, p_m15, mp_m15);
+   txt += GenerateMTFString("M30", t_m30, h_m30, l_m30, p_m30, mp_m30);
+   txt += GenerateMTFString("H1 ", t_h1, h_h1, l_h1, p_h1, mp_h1);
+
+   Comment(txt);
+  }
+
 int OnCalculate(const int rates_total,
                 const int prev_calculated,
                 const datetime &time[],
@@ -1898,5 +1914,13 @@ int OnCalculate(const int rates_total,
         }
      }
 
+
+   static uint last_dash_update = 0;
+   uint now_tick = GetTickCount();
+   if(now_tick - last_dash_update > 1000) {
+       UpdateLiveDashboard();
+       last_dash_update = now_tick;
+   }
+
    return(rates_total);
-  }
+}
