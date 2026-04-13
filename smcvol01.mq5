@@ -20,6 +20,7 @@ input double InpDaysH4   = 500.0;
 input double InpDaysD1   = 1500.0;
 
 //--- CHoCH Settings ---
+input int    InpMinTradeScoreLimit = 40;       // İşlem İçin Min. Puan (100 Üzerinden)
 input double InpMinPullbackPct = 40.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
 input double InpMaxPullbackPct = 100.0;          // CHoCH Max Çekilme % (İşlem Yüzdeliği)
 input color  InpColorChochStrong = clrPurple;      // Güçlü CHoCH (Mor)
@@ -621,91 +622,103 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string m5_text = "";
    string m1_text = "";
 
-   // --- M1 BASE SETUP ---
+   // --- YENİ 100 PUANLIK MATRİS SİSTEMİ ---
+
+   // --- M1 (Tetikleyici) - Maks 5 Puan ---
    int m1_points = is_strong ? 5 : 0;
    total_points += m1_points;
    m1_text = GenerateMTFString("M1", t_m1, h_m1, l_m1, p_m1, mp_m1);
-   if(is_strong) m1_text += "Durum: 🔥 GÜÇLÜ (Likidite Alındı) -> [+5 Puan]\n";
-   else          m1_text += "Durum: ⚠️ ZAYIF (Likidite Alınamadı) -> [+0 Puan]\n";
+   if(is_strong) m1_text += "Durum: 🔥 GÜÇLÜ (Likidite Temizlendi) -> [+5 Puan] \n";
+   else          m1_text += "Durum: ⚠️ ZAYIF (Likidite Alınmadan Kırılım) -> [+0 Puan] \n";
 
-   // --- H1 MACRO LOGIC ---
+   // --- H1 (Makro Trend) - Maks 35 Puan ---
    int h1_points = 0;
-   bool h1_momentum = ((mp_h1 - p_h1) >= 20.0);
+   double h1_mom = mp_h1 - p_h1;
    bool is_h1_aligned = (t_h1 == trigger_dir);
 
-   if (h1_momentum) {
-       if (is_h1_aligned) { h1_points = 30; h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + "H1 (Makro): Sert Momentum Dönüşü (Trend Onayı) -> [+30 Puan]\n"; }
-       else               { h1_points = 0;  h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + "H1 (Makro): Ters Yönde Sert Momentum (Tehlike!) -> [0 Puan]\n"; }
+   if (h1_mom >= 15.0) {
+       if (is_h1_aligned) {
+           if (h1_mom >= 20.0) { h1_points = 35; h1_text = "H1 (Makro): Yön Uyumlu, ÇOK Sert Momentum (>= %20) -> [+35 Puan] \n"; }
+           else                { h1_points = 30; h1_text = "H1 (Makro): Yön Uyumlu, Sert Momentum (>= %15) -> [+30 Puan] \n"; }
+       } else {
+           h1_points = 0; h1_text = "H1 (Makro): Ters Yönlü Sert Momentum (Büyük Tehlike!) -> [0 Puan] \n";
+       }
    } else {
-       if (p_h1 >= 50.0) { // Premium
-           if (is_h1_aligned) { h1_points = 30; h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + "H1 (Makro): İdeal Pahalı/Ucuz Bölgesinde (Altın Vuruş) -> [+30 Puan]\n"; }
-           else               { h1_points = 20; h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + "H1 (Makro): İdeal Bölgede ama Ters Yön (Son İtiş) -> [+20 Puan]\n"; }
-       } else { // Discount
-           if (is_h1_aligned) { h1_points = 0;  h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + "H1 (Makro): Trend Yönünde ama Fiyat Erken/Zayıf -> [0 Puan]\n"; }
-           else               { h1_points = 30; h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + "H1 (Makro): Yeni Düzeltme Başlıyor (Önü Açık) -> [+30 Puan]\n"; }
+       if (is_h1_aligned) {
+           if (p_h1 >= 50.0) { h1_points = 30; h1_text = "H1 (Makro): Momentum Yok ama %50 İdeal Düzeltme Bölgesinde -> [+30 Puan] \n"; }
+           else              { h1_points = 10; h1_text = "H1 (Makro): Momentum Yok ve %50 Altı Şişkin Bölge -> [+10 Puan] \n"; }
+       } else {
+           if (p_h1 >= 50.0) { h1_points = 20; h1_text = "H1 (Makro): Ters Yönlü ama İdeal %50 Bölgesinde (Dönüş İhtimali) -> [+20 Puan] \n"; }
+           else              { h1_points = 30; h1_text = "H1 (Makro): Ters Yönlü ve %50 Altı Şişkin (Düzeltme Fırsatı) -> [+30 Puan] \n"; }
        }
    }
+   h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + h1_text;
    total_points += h1_points;
 
-   // --- M30 MODIFIER LOGIC ---
+   // --- M30 (Makro Trend 2) - Maks 25 Puan ---
    int m30_points = 0;
-   bool m30_momentum = ((mp_m30 - p_m30) >= 20.0);
+   double m30_mom = mp_m30 - p_m30;
    bool is_m30_aligned = (t_m30 == trigger_dir);
+   bool clone_m30_h1 = (MathAbs(h_m30 - h_h1) < Point() * 5 && MathAbs(l_m30 - l_h1) < Point() * 5);
 
-   if (m30_momentum) {
-       if (is_m30_aligned) { m30_points = 15; m30_text = "M30 (Ara Filtre): Sert Momentum Desteği -> [+15 Puan]\n"; }
-       else                { m30_points = -5; m30_text = "M30 (Ara Filtre): Ters Yönlü Sert Çekilme (Engel) -> [-5 Puan]\n"; }
+   if (clone_m30_h1) {
+       m30_points = 0; m30_text = "M30 (Makro 2): H1 ile Tamamen Aynı Yapı (Klon), Es Geçildi -> [0 Puan] \n";
    } else {
-       if (p_m30 >= 50.0) {
-           if (is_m30_aligned) { m30_points = 10;  m30_text = "M30 (Ara Filtre): Şişkin Bölgede Destekliyor -> [+10 Puan]\n"; }
-           else                { m30_points = -10; m30_text = "M30 (Ara Filtre): Şişkin Bölgede Direnç (Ters) -> [-10 Puan]\n"; }
+       if (!is_m30_aligned) {
+           if (m30_mom >= 15.0) { m30_points = 0;  m30_text = "M30 (Makro 2): Bize Karşı Sert Tepki (Tehlike) -> [0 Puan] \n"; }
+           else                 { m30_points = 10; m30_text = "M30 (Makro 2): Ters Yönlü Ama Tepkisiz (Sakin) -> [+10 Puan] \n"; }
        } else {
-           if (is_m30_aligned) { m30_points = 10;  m30_text = "M30 (Ara Filtre): Yolun Başında Destekliyor -> [+10 Puan]\n"; }
-           else                { m30_points = 10;  m30_text = "M30 (Ara Filtre): Sağlıklı Düzeltme Yapıyor (Olumlu) -> [+10 Puan]\n"; }
+           if (m30_mom >= 20.0)      { m30_points = 25; m30_text = "M30 (Makro 2): Yön Uyumlu, ÇOK Sert Dönüş -> [+25 Puan] \n"; }
+           else if (m30_mom >= 15.0) { m30_points = 20; m30_text = "M30 (Makro 2): Yön Uyumlu, Sert Dönüş -> [+20 Puan] \n"; }
+           else if (p_m30 >= 50.0)   { m30_points = 15; m30_text = "M30 (Makro 2): Tepki Yok ama İdeal %50 Bölgesinde -> [+15 Puan] \n"; }
+           else                      { m30_points = 5;  m30_text = "M30 (Makro 2): Tepki Yok ve %50 Altı Şişkin -> [+5 Puan] \n"; }
        }
    }
+   m30_text = GenerateMTFString("M30", t_m30, h_m30, l_m30, p_m30, mp_m30) + m30_text;
    total_points += m30_points;
 
-   // --- M15 MODIFIER LOGIC (De-duplication) ---
+   // --- M15 (Makro Yapı) - Maks 20 Puan ---
    int m15_points = 0;
-   bool m15_momentum = ((mp_m15 - p_m15) >= 20.0);
+   double m15_mom = mp_m15 - p_m15;
    bool is_m15_aligned = (t_m15 == trigger_dir);
+   bool clone_m15_m30 = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
 
-   // Use MTF pullbacks to fetch the actual HIGH/LOW prices of the swings
-   datetime dmy1, dmy2;
-   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, dmy1, dmy2);
-   // double h_m15, l_m15;
-   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, dmy1, dmy2);
-
-   // Determine if M15 and M30 are tracking the exact same structural swing bounds
-   bool is_duplicate = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
-
-   if (is_duplicate) {
-       m15_points = 0; m15_text = "M15 (Ara Filtre): M30 ile aynı dalga, pas geçildi. -> [0 Puan]\n";
+   if (clone_m15_m30) {
+       m15_points = 0; m15_text = "M15 (Makro Yapı): M30 ile Aynı Yapı (Klon), Es Geçildi -> [0 Puan] \n";
    } else {
-       if (m15_momentum) {
-           if (is_m15_aligned) { m15_points = 10; m15_text = "M15 (Ara Filtre): Sert Momentum Desteği -> [+10 Puan]\n"; }
-           else                { m15_points = 0;  m15_text = "M15 (Ara Filtre): Ters Yönlü İvme (Zayıf Etki) -> [0 Puan]\n"; }
+       if (!is_m15_aligned) {
+           if (m15_mom >= 15.0) { m15_points = 0; m15_text = "M15 (Makro Yapı): Bize Karşı Sert Tepki -> [0 Puan] \n"; }
+           else                 { m15_points = 5; m15_text = "M15 (Makro Yapı): Ters Yönlü Ama Sakin -> [+5 Puan] \n"; }
        } else {
-           if (p_m15 >= 50.0) {
-               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15 (Ara Filtre): Şişkin Bölgede Destekliyor -> [+5 Puan]\n"; }
-               else                { m15_points = -5; m15_text = "M15 (Ara Filtre): Şişkin Bölgede Direnç (Ters) -> [-5 Puan]\n"; }
-           } else {
-               if (is_m15_aligned) { m15_points = 5;  m15_text = "M15 (Ara Filtre): Yolun Başında Destekliyor -> [+5 Puan]\n"; }
-               else                { m15_points = 5;  m15_text = "M15 (Ara Filtre): Sağlıklı Düzeltme Yapıyor -> [+5 Puan]\n"; }
-           }
+           if (m15_mom >= 20.0)      { m15_points = 20; m15_text = "M15 (Makro Yapı): Yön Uyumlu, ÇOK Sert Dönüş -> [+20 Puan] \n"; }
+           else if (m15_mom >= 15.0) { m15_points = 15; m15_text = "M15 (Makro Yapı): Yön Uyumlu, Sert Dönüş -> [+15 Puan] \n"; }
+           else if (p_m15 >= 50.0)   { m15_points = 15; m15_text = "M15 (Makro Yapı): Tepki Yok ama İdeal %50 Bölgesinde -> [+15 Puan] \n"; }
+           else                      { m15_points = 5;  m15_text = "M15 (Makro Yapı): Tepki Yok ve %50 Altı Şişkin -> [+5 Puan] \n"; }
        }
    }
+   m15_text = GenerateMTFString("M15", t_m15, h_m15, l_m15, p_m15, mp_m15) + m15_text;
    total_points += m15_points;
 
-   // --- M5 MODIFIER LOGIC ---
+   // --- M5 (Mikro Filtre) - Maks 15 Puan ---
    int m5_points = 0;
+   double m5_mom = mp_m5 - p_m5;
    bool is_m5_aligned = (t_m5 == trigger_dir);
-   if (is_m5_aligned && p_m5 >= 50.0) {
-       m5_points = 5; m5_text = "M5 (Mikro Filtre): Derin Çekilme Onayı -> [+5 Puan]\n";
+   bool clone_m5_m15 = (MathAbs(h_m5 - h_m15) < Point() * 5 && MathAbs(l_m5 - l_m15) < Point() * 5);
+
+   if (clone_m5_m15) {
+       m5_points = 0; m5_text = "M5 (Mikro Filtre): M15 ile Aynı Yapı (Klon), Es Geçildi -> [0 Puan] \n";
    } else {
-       m5_points = 0; m5_text = "M5 (Mikro Filtre): Çekilme Onayı Yok -> [0 Puan]\n";
+       if (!is_m5_aligned) {
+           if (m5_mom >= 15.0) { m5_points = 0; m5_text = "M5 (Mikro Filtre): Bize Karşı Sert Tepki -> [0 Puan] \n"; }
+           else                { m5_points = 5; m5_text = "M5 (Mikro Filtre): Ters Yönlü Ama Sakin -> [+5 Puan] \n"; }
+       } else {
+           if (m5_mom >= 20.0)      { m5_points = 15; m5_text = "M5 (Mikro Filtre): Yön Uyumlu, ÇOK Sert Dönüş -> [+15 Puan] \n"; }
+           else if (m5_mom >= 15.0) { m5_points = 10; m5_text = "M5 (Mikro Filtre): Yön Uyumlu, Sert Dönüş -> [+10 Puan] \n"; }
+           else if (p_m5 >= 50.0)   { m5_points = 10; m5_text = "M5 (Mikro Filtre): Tepki Yok ama İdeal %50 Bölgesinde -> [+10 Puan] \n"; }
+           else                     { m5_points = 5;  m5_text = "M5 (Mikro Filtre): Tepki Yok ve %50 Altı Şişkin -> [+5 Puan] \n"; }
+       }
    }
+   m5_text = GenerateMTFString("M5", t_m5, h_m5, l_m5, p_m5, mp_m5) + m5_text;
    total_points += m5_points;
 
    // --- M1 vs M3 RANGE EXPECTATION ---
@@ -718,7 +731,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    // --- FINAL VERDICT ---
    string verdict = "";
-   if (total_points >= 50) verdict = "✅ İŞLEME GİRİLEBİLİR (Yüksek Olasılıklı Kurulum)";
+   if (total_points >= InpMinTradeScoreLimit) verdict = "✅ İŞLEME GİRİLEBİLİR (Yüksek Olasılıklı Kurulum)";
    else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Puan Yetersiz)";
 
    string dir_str = (trigger_dir == 1) ? "⬆️ YUKARI (BUY)" : "⬇️ AŞAĞI (SELL)";
@@ -735,7 +748,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    msg += "* " + m5_text + "\n";
    msg += "🎯 İŞLEM MENZİLİ (M1 ve M3 Uyumu):\n" + range_text + "\n\n";
    msg += "📈 TOPLAM İŞLEM SKORU:\n";
-   msg += "Hesaplanan: " + IntegerToString(total_points) + " Puan (Gerekli Baraj: 50 Puan)\n";
+   msg += "Hesaplanan: " + IntegerToString(total_points) + " Puan (Gerekli Baraj: " + IntegerToString(InpMinTradeScoreLimit) + " Puan)\n";
    msg += "KARAR: " + verdict;
 
    if(InpAlertPopup) Alert(msg);
