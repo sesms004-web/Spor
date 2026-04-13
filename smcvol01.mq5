@@ -1677,6 +1677,9 @@ void UpdateLiveDashboard()
    txt += GenerateMTFString("M30", t_m30, h_m30, l_m30, p_m30, mp_m30);
    txt += GenerateMTFString("H1 ", t_h1, h_h1, l_h1, p_h1, mp_h1);
 
+   string range_text = (t_m1 == t_m3 && t_m1 != 0) ? "🚀 UZUN MENZİL (Trend Takibi)" : "⚠️ KISA SÜRECEK (Scalp/Tepki)";
+   txt += "\n🎯 İşlem Beklentisi: " + range_text;
+
    Comment(txt);
   }
 
