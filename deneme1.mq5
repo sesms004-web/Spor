@@ -1598,10 +1598,10 @@ int OnCalculate(const int rates_total,
    static uint last_ui_tick = 0;
    if (InpUseMasterSlave && Period() == PERIOD_M1 && GetTickCount() - last_ui_tick > 1000) {
        string ui = "\n\n--- 📡 MASTER/SLAVE MTF DURUMU ---\n";
-       ENUM_TIMEFRAMES tfs[] = {PERIOD_M3, PERIOD_M5, PERIOD_M15, PERIOD_M30, PERIOD_H1};
-       string tf_names[] = {"M3", "M5", "M15", "M30", "H1"};
+       ENUM_TIMEFRAMES tfs[] = {PERIOD_M1, PERIOD_M3, PERIOD_M5, PERIOD_M15, PERIOD_M30, PERIOD_H1};
+       string tf_names[] = {"M1", "M3", "M5", "M15", "M30", "H1"};
 
-       for(int j=0; j<5; j++) {
+       for(int j=0; j<6; j++) {
            string base_name = "ST_" + Symbol() + "_" + EnumToString(tfs[j]) + "_";
            if (GlobalVariableCheck(base_name + "TIME")) {
                datetime last_upd = (datetime)GlobalVariableGet(base_name + "TIME");
