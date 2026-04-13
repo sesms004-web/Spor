@@ -501,9 +501,12 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
          if(live_p >= st.maj_h || st.maj_st == 0)
            {
             double dyn_range = precise_tmp_h - st.maj_l;
-            if(dyn_range > 0) pct = ((precise_tmp_h - live_p) / dyn_range) * 100.0;
-            else pct = 0;
-            max_pct = 0;
+            if(dyn_range > 0) {
+                pct = ((precise_tmp_h - live_p) / dyn_range) * 100.0;
+                max_pct = ((precise_tmp_h - precise_tmp_l) / dyn_range) * 100.0;
+            } else {
+                pct = 0; max_pct = 0;
+            }
            }
          else
            {
@@ -516,9 +519,12 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
          if(live_p <= st.maj_l || st.maj_st == 0)
            {
             double dyn_range = st.maj_h - precise_tmp_l;
-            if(dyn_range > 0) pct = ((live_p - precise_tmp_l) / dyn_range) * 100.0;
-            else pct = 0;
-            max_pct = 0;
+            if(dyn_range > 0) {
+                pct = ((live_p - precise_tmp_l) / dyn_range) * 100.0;
+                max_pct = ((precise_tmp_h - precise_tmp_l) / dyn_range) * 100.0;
+            } else {
+                pct = 0; max_pct = 0;
+            }
            }
          else
            {
@@ -532,7 +538,7 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    if(pct > 100) pct = 100;
    if(max_pct < 0) max_pct = 0;
    if(max_pct > 100) max_pct = 100;
-   if(max_pct < pct) max_pct = pct; // Emniyet: Max pct her zaman en az anlık pct kadar olmalı
+
 
    return true;
   }
