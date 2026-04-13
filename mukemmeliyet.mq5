@@ -38,8 +38,11 @@ input int    InpMaxTradesPerSwing = 2;              // Aynı Majör Dalga İçin
 //--- Risk Test Ayarları (Sadece EA Risk Hesabını Test Etmek İçindir) ---
 
 
+
 //--- EA Risk & Lot Test Ayarı ---
 input bool   InpTestAnyChoch         = false;       // 🧪 [TEST] Yöne ve Puana Bakmaksızın HER CHoCH'ta İşlem Gönder! (Risk Testi İçin)
+input double InpTestRiskUSD          = 20.0;        // 🧪 [TEST] Test İşlemindeki Dolar Riski (EA JSON'dan okuyacak)
+
 
 //--- Trade Range/Testere Kontrol Değişkenleri ---
 static int    g_json_last_maj_i = -1;
@@ -711,7 +714,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string dir_emoji = (trigger_dir == 1) ? "⬆️ BUY" : "⬇️ SELL";
 
    string msg = "";
-   msg = "🚨 [" + Symbol() + "] FIRSAT [" + lvl_text + "] 🚨\n";
+   if (InpTestAnyChoch) msg = "🧪 [" + Symbol() + "] TEST RİSK RAPORU [" + lvl_text + "] 🧪\n";
+   else                 msg = "🚨 [" + Symbol() + "] FIRSAT [" + lvl_text + "] 🚨\n";
 
    msg += "🎯 Yön: " + dir_emoji + " | Beklenti: " + range_text + "\n";
    msg += "⏱️ Kırılım Saati: " + TimeToString(t, TIME_DATE|TIME_SECONDS) + "\n";
@@ -794,7 +798,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                json += "  \"sl\": " + DoubleToString(sl, 5) + ",\n";
                json += "  \"tp\": " + DoubleToString(tp, 5) + ",\n";
                json += "  \"base_extreme\": " + DoubleToString(ext_pt, 5) + ",\n";
-               json += "  \"is_strong\": " + (is_strong ? "true" : "false") + "\n";
+               json += "  \"is_strong\": " + (is_strong ? "true" : "false") + ",\n";
+               json += "  \"risk_usd\": " + DoubleToString(InpTestAnyChoch ? InpTestRiskUSD : 0.0, 2) + "\n";
                json += "}";
 
                FileWrite(file_handle, json);

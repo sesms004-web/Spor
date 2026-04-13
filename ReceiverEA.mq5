@@ -115,7 +115,7 @@ void OnTimer()
 
          if(direction == "") return;
 
-         ExecuteSignal(direction, entry, sl, tp);
+         ExecuteSignal(direction, entry, sl, tp, GetJsonDouble(json_content, "risk_usd"));
         }
      }
   }
@@ -123,7 +123,7 @@ void OnTimer()
 //+------------------------------------------------------------------+
 //| Execute Signal (Lot Calculation & Execution)                     |
 //+------------------------------------------------------------------+
-void ExecuteSignal(string direction, double entry, double sl, double tp)
+void ExecuteSignal(string direction, double entry, double sl, double tp, double risk_usd)
   {
    double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
    double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
@@ -137,7 +137,8 @@ void ExecuteSignal(string direction, double entry, double sl, double tp)
    if (sl_distance_points > 0 && tick_size > 0) {
        double loss_per_lot = (sl_distance_points * point / tick_size) * tick_val;
        if (loss_per_lot > 0) {
-           lot_size = InpRiskUSD / loss_per_lot;
+           double active_risk = (risk_usd > 0) ? risk_usd : InpRiskUSD;
+           lot_size = active_risk / loss_per_lot;
            // Küsurat düzeltme (örn 0.01 hassasiyetine)
            double step = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_STEP);
            lot_size = MathFloor(lot_size / step) * step;
@@ -146,7 +147,7 @@ void ExecuteSignal(string direction, double entry, double sl, double tp)
            if(lot_size < InpMinLot) lot_size = InpMinLot;
            if(lot_size > InpMaxLot) lot_size = InpMaxLot;
 
-           Print("🧮 [RECEIVER EA] SL Mesafe: ", sl_distance_points, " Point | Risk: $", InpRiskUSD, " -> Hesaplan Lot: ", lot_size);
+           Print("🧮 [RECEIVER EA] SL Mesafe: ", sl_distance_points, " Point | Risk: $", active_risk, " -> Hesaplan Lot: ", lot_size);
        }
    }
 
