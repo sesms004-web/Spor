@@ -181,7 +181,5 @@ void ExecuteSignal(string direction, double entry, double sl, double tp, double 
                        "Açıklama: " + err_desc;
 
       Print(err_msg);
-      Alert(err_msg); // Ekranda uyarı pop-up'ı çıkarır, gözden kaçmasını engeller
-      SendNotification(err_msg); // Telefona push bildirimi gönderir
      }
   }
