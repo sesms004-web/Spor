@@ -29,7 +29,7 @@ input double InpPullbackM5   = 50.0;     // M5 Mikro Filtre Çekilme %
 input bool   InpEnableAutoTradeWriter = true;       // JSON Sinyal Gönderimini Aç
 input int    InpMinTradeScoreLimit = 40;            // Minimum İşleme Giriş Skoru
 input double InpStrongSLMultiplier = 1.0;           // Güçlü İşlem Stop Loss Çarpanı
-input double InpWeakSLMultiplier = 1.5;             // Zayıf İşlem Stop Loss Çarpanı
+input double InpWeakSLMultiplier = 1.05;            // Zayıf İşlem Stop Loss Çarpanı (Örn 1.05)
 input double InpTPRewardRatio = 3.0;                // İşlem Kâr/Zarar (R:R) Oranı
 input int    InpMaxTradesPerSwing = 2;              // Aynı Majör Dalga İçinde Max Sinyal
 
@@ -708,6 +708,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    else         msg = "🚨 [" + Symbol() + "] FIRSAT [" + lvl_text + "] 🚨\n";
 
    msg += "🎯 Yön: " + dir_emoji + " | Beklenti: " + range_text + "\n";
+   msg += "⏱️ Kırılım Saati: " + TimeToString(t, TIME_DATE|TIME_SECONDS) + "\n";
    msg += "📊 Karar: " + verdict + " | Skor: " + IntegerToString(total_points) + "/" + IntegerToString(InpMinTradeScoreLimit) + "\n\n";
 
    msg += "⏳ M1:\n" + m1_text;
@@ -1088,7 +1089,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           // İşlem Koruması: Sadece ve sadece grafikte fiziksel kırılım çizgisi (CHoCH_Signal) çizildiyse işlemi/bildirimi fırlat!
           static int last_alert_d1_i_bear = 0;
-          if (!is_history && (!InpShowChoch || is_line_drawn)) {
+          if (!is_history) { // (Çizim gecikmesi işlemleri geciktirmesin diye is_line_drawn kaldırıldı)
               if (state.d1_i != last_alert_d1_i_bear) {
                   if (InpEnableTradeExecution && draw_ui) {
                       EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong, trade_sl_anchor);
@@ -1136,7 +1137,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           // İşlem Koruması: Sadece ve sadece grafikte fiziksel kırılım çizgisi (CHoCH_Signal) çizildiyse işlemi/bildirimi fırlat!
           static int last_alert_d1_i_bull = 0;
-          if (!is_history && (!InpShowChoch || is_line_drawn)) {
+          if (!is_history) { // (Çizim gecikmesi işlemleri geciktirmesin diye is_line_drawn kaldırıldı)
               if (state.d1_i != last_alert_d1_i_bull) {
                   if (InpEnableTradeExecution && draw_ui) {
                       EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong, trade_sl_anchor);
