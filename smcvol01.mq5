@@ -592,7 +592,9 @@ string PctToText(double pct, double max_pct, datetime swing_time, datetime curre
 //+------------------------------------------------------------------+
 string GenerateMTFString(string tf_name, int trend, double h, double l, double p, double mp) {
     string trend_str = (trend == 1) ? "🟢 YÜKSELİŞ" : ((trend == -1) ? "🔴 DÜŞÜŞ" : "⚪ YATAY");
-    string res = StringFormat("%s: %s | Tepe: %.5f Dip: %.5f | Maks Çekilme: %%%.2f, Anlık: %%%.2f\n", tf_name, trend_str, h, l, mp, p);
+    string str_h = DoubleToString(h, _Digits);
+    string str_l = DoubleToString(l, _Digits);
+    string res = StringFormat("%s: %s | Tepe: %s Dip: %s | Maks Çekilme: %%%.2f, Anlık: %%%.2f\n", tf_name, trend_str, str_h, str_l, mp, p);
     return res;
 }
 
