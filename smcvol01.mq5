@@ -473,37 +473,55 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    if(st.maj_h_i >= 0 && st.maj_h_i < copied) ref_t_h = rates[st.maj_h_i].time; else ref_t_h = 0;
    if(st.maj_l_i >= 0 && st.maj_l_i < copied) ref_t_l = rates[st.maj_l_i].time; else ref_t_l = 0;
 
-   if(st.maj_h != EMPTY_VALUE && st.maj_l != EMPTY_VALUE && st.maj_h != st.maj_l)
+      if(st.maj_h != EMPTY_VALUE && st.maj_l != EMPTY_VALUE && st.maj_h != st.maj_l)
      {
       double range = st.maj_h - st.maj_l;
+
+      // M1 hassasiyetinde tmp_h ve tmp_l bulalım
+      datetime start_time = (trend == 1) ? ref_t_h : ref_t_l;
+      if (start_time == 0) start_time = current_time - (3600 * 24); // Fallback
+
+      int m1_copied = CopyRates(Symbol(), PERIOD_M1, start_time, current_time, rates);
+      double precise_tmp_l = st.tmp_l;
+      double precise_tmp_h = st.tmp_h;
+
+      if(m1_copied > 0) {
+          precise_tmp_l = rates[0].low;
+          precise_tmp_h = rates[0].high;
+          for(int k=1; k<m1_copied; k++) {
+              if(rates[k].low < precise_tmp_l) precise_tmp_l = rates[k].low;
+              if(rates[k].high > precise_tmp_h) precise_tmp_h = rates[k].high;
+          }
+      }
+
       if(trend == 1)
         {
          if(live_p >= st.maj_h || st.maj_st == 0)
            {
-            double dyn_range = st.tmp_h - st.maj_l;
-            if(dyn_range > 0) pct = ((st.tmp_h - live_p) / dyn_range) * 100.0;
+            double dyn_range = precise_tmp_h - st.maj_l;
+            if(dyn_range > 0) pct = ((precise_tmp_h - live_p) / dyn_range) * 100.0;
             else pct = 0;
             max_pct = 0;
            }
          else
            {
             pct = ((st.maj_h - live_p) / range) * 100.0;
-            max_pct = ((st.maj_h - st.tmp_l) / range) * 100.0;
+            max_pct = ((st.maj_h - precise_tmp_l) / range) * 100.0;
            }
         }
       else if(trend == -1)
         {
          if(live_p <= st.maj_l || st.maj_st == 0)
            {
-            double dyn_range = st.maj_h - st.tmp_l;
-            if(dyn_range > 0) pct = ((live_p - st.tmp_l) / dyn_range) * 100.0;
+            double dyn_range = st.maj_h - precise_tmp_l;
+            if(dyn_range > 0) pct = ((live_p - precise_tmp_l) / dyn_range) * 100.0;
             else pct = 0;
             max_pct = 0;
            }
          else
            {
             pct = ((live_p - st.maj_l) / range) * 100.0;
-            max_pct = ((st.tmp_h - st.maj_l) / range) * 100.0;
+            max_pct = ((precise_tmp_h - st.maj_l) / range) * 100.0;
            }
         }
      }
