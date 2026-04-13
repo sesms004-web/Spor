@@ -538,7 +538,7 @@ string GetTimeAgoString(datetime past_time, datetime now_time)
 string PctToText(double pct, double max_pct, datetime swing_time, datetime current_time)
   {
    string age = "\n   └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
-   string base_str = "(Çekilme: %" + DoubleToString(pct, 0) + " ↑↑%" + DoubleToString(max_pct, 0);
+   string base_str = "(Çekilme: %" + DoubleToString(pct, 2) + " ↑↑%" + DoubleToString(max_pct, 2);
 
    if(pct <= 10.0)
      {
@@ -769,6 +769,8 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    msg1 += "  └ Süre: " + ago_str + "\n";
    msg1 += "- Swing High: " + DoubleToString(h_m1, _Digits) + "\n";
    msg1 += "- Swing Low: " + DoubleToString(l_m1, _Digits) + "\n";
+   msg1 += StringFormat("- Anlık Çekilme: %%%.2f\n", p_m1);
+   msg1 += StringFormat("- Maks Çekilme: %%%.2f\n", mp_m1);
    if(p_m1 == 0 && mp_m1 == 0)
      {
       string temp_dir = (t_m1 == 1) ? "SELL" : "BUY";
@@ -781,7 +783,7 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
      }
    else
      {
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 0) + " ↑↑%" + DoubleToString(mp_m1, 0) + ")\n\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 2) + " ↑↑%" + DoubleToString(mp_m1, 2) + ")\n\n";
      }
 
    msg1 += "🧭 MAKRO TREND (H1/M30)\n";
