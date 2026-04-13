@@ -482,15 +482,41 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
       if (start_time == 0) start_time = current_time - (3600 * 24); // Fallback
 
       int m1_copied = CopyRates(Symbol(), PERIOD_M1, start_time, current_time, rates);
-      double precise_tmp_l = st.tmp_l;
-      double precise_tmp_h = st.tmp_h;
+      double precise_tmp_l = st.tmp_l; // Fallback
+      double precise_tmp_h = st.tmp_h; // Fallback
 
       if(m1_copied > 0) {
-          precise_tmp_l = rates[0].low;
-          precise_tmp_h = rates[0].high;
-          for(int k=1; k<m1_copied; k++) {
-              if(rates[k].low < precise_tmp_l) precise_tmp_l = rates[k].low;
-              if(rates[k].high > precise_tmp_h) precise_tmp_h = rates[k].high;
+          bool extreme_found = false;
+
+          if(trend == 1) {
+              precise_tmp_l = live_p; // Başlangıçta anlık fiyat olarak ata
+              for(int k=0; k<m1_copied; k++) {
+                  // M1 mumlarında Tepe noktasını bulduğumuz veya geçtiğimiz an
+                  if(!extreme_found && rates[k].high >= st.maj_h - (Point()*5)) {
+                      extreme_found = true;
+                      precise_tmp_l = rates[k].low;
+                  }
+                  // Tepe görüldükten SONRAKİ en düşük M1 iğnesini kaydet
+                  if(extreme_found && rates[k].low < precise_tmp_l) {
+                      precise_tmp_l = rates[k].low;
+                  }
+              }
+              if(!extreme_found) precise_tmp_l = st.tmp_l; // Bulunamazsa HTF fallback
+          }
+          else if(trend == -1) {
+              precise_tmp_h = live_p;
+              for(int k=0; k<m1_copied; k++) {
+                  // M1 mumlarında Dip noktasını bulduğumuz veya geçtiğimiz an
+                  if(!extreme_found && rates[k].low <= st.maj_l + (Point()*5)) {
+                      extreme_found = true;
+                      precise_tmp_h = rates[k].high;
+                  }
+                  // Dip görüldükten SONRAKİ en yüksek M1 iğnesini kaydet
+                  if(extreme_found && rates[k].high > precise_tmp_h) {
+                      precise_tmp_h = rates[k].high;
+                  }
+              }
+              if(!extreme_found) precise_tmp_h = st.tmp_h; // Bulunamazsa HTF fallback
           }
       }
 
