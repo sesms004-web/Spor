@@ -634,9 +634,9 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    bool is_m15_aligned = (t_m15 == trigger_dir);
 
    // Use MTF pullbacks to fetch the actual HIGH/LOW prices of the swings
-   double h_m30, l_m30; datetime dmy1, dmy2;
+   datetime dmy1, dmy2;
    GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, dmy1, dmy2);
-   double h_m15, l_m15;
+   // double h_m15, l_m15;
    GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, dmy1, dmy2);
 
    // Determine if M15 and M30 are tracking the exact same structural swing bounds
