@@ -14,6 +14,7 @@ input group "--- SLAVE EA SETTINGS ---"
 input int    InpMagicNumber = 454545;
 input int    InpMaxSlippage = 10;
 input double InpLotOverride = 0.0; // 0 ise masterin risk hesabını kullan
+input string InpSymbolSuffix = "r"; // Master ile Slave arasındaki sembol farkı (Örn: r, .pro)
 
 void OnInit() {
     trade.SetExpertMagicNumber(InpMagicNumber);
@@ -27,7 +28,16 @@ void OnDeinit(const int reason) {
 }
 
 void OnTimer() {
-    string filename = "SMC_SIGNAL_" + Symbol() + ".json";
+    // Slave EA kendi sembolünün sonundan suffixi çıkarıp ana sembolü (Örn: XAUUSD) bulur
+    string base_symbol = Symbol();
+    int suffix_len = StringLen(InpSymbolSuffix);
+    if(suffix_len > 0) {
+        if(StringSubstr(base_symbol, StringLen(base_symbol) - suffix_len, suffix_len) == InpSymbolSuffix) {
+            base_symbol = StringSubstr(base_symbol, 0, StringLen(base_symbol) - suffix_len);
+        }
+    }
+
+    string filename = "SMC_SIGNAL_" + base_symbol + ".json";
 
     // Dosya var mı kontrol et
     if (FileIsExist(filename, FILE_COMMON)) {
@@ -42,7 +52,7 @@ void OnTimer() {
             // Okuduktan sonra dosyayı hemen sil ki tekrar tekrar girmesin
             FileDelete(filename, FILE_COMMON);
 
-            ProcessSignal(json);
+            ProcessSignal(json, base_symbol);
         }
     }
 }
@@ -80,9 +90,9 @@ string GetJSONValue(string json, string key) {
     return val;
 }
 
-void ProcessSignal(string json) {
+void ProcessSignal(string json, string expected_base_symbol) {
     string sym = GetJSONValue(json, "symbol");
-    if (sym != Symbol()) return; // Başka pariteyse es geç
+    if (sym != expected_base_symbol) return; // Başka pariteyse es geç
 
     string dir = GetJSONValue(json, "direction");
     double m_entry = StringToDouble(GetJSONValue(json, "entry"));
