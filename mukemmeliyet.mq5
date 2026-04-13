@@ -29,20 +29,21 @@ input double InpPullbackM5   = 50.0;     // M5 Mikro Filtre Çekilme %
 input bool   InpEnableAutoTradeWriter = true;       // JSON Sinyal Gönderimini Aç
 input int    InpMinTradeScoreLimit = 40;            // Minimum İşleme Giriş Skoru
 input double InpStrongSLMultiplier = 1.0;           // Güçlü İşlem Stop Loss Çarpanı
-input double InpWeakSLMultiplier = 1.05;            // Zayıf İşlem Stop Loss Çarpanı (Örn 1.05)
+input double InpWeakSLMultiplier = 1.5;             // Zayıf İşlem Stop Loss Çarpanı
 input double InpTPRewardRatio = 3.0;                // İşlem Kâr/Zarar (R:R) Oranı
 input int    InpMaxTradesPerSwing = 2;              // Aynı Majör Dalga İçinde Max Sinyal
 
-//--- Test Ayarları ---
-input bool   InpTestMode              = false;      // 🧪 Test Modu (Manuel Mesafe Testi İçin)
-input double InpTestManualSLDistance  = 100.0;      // 🧪 Test SL Mesafesi (Point Cinsinden, Örn: 100)
-
-input bool   InpForceTestSignal       = false;      // ⚠️ [TEST] Ortak Klasöre Manuel Deneme Sinyali Atar
 
 //--- Trade Range/Testere Kontrol Değişkenleri ---
 static int    g_json_last_maj_i = -1;
 static int    g_json_trades_in_swing = 0;
 static double g_json_last_sl = 0.0;
+
+//--- Sanal İşlem Takibi (Virtual Tracker) ---
+static bool   g_virtual_trade_active = false;
+static int    g_virtual_trade_dir = 0;
+static double g_virtual_tp = 0.0;
+
 
 //--- Visual Settings ---
 input color  InpColorChochStrong = clrPurple;      // Güçlü CHoCH (Mor)
@@ -64,7 +65,6 @@ input bool   InpEnableTradeExecution   = true;       // Özel Skorluk 'İşleme 
 input int    InpMinTradeScore          = 40;         // Minimum İşleme Giriş Skoru (Varsayılan 40)
 
 
-input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Skorları Hesapla ve Bildir
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
 
@@ -543,7 +543,7 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
 //+------------------------------------------------------------------+
 //| 100-Point Execution Analysis Engine                              |
 //+------------------------------------------------------------------+
-void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double ext_pt, bool is_test = false)
+void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double ext_pt)
   {
    int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
    double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
@@ -580,8 +580,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    int m1_points = is_strong ? 5 : 0;
    total_points += m1_points;
-   if(is_strong) m1_text = "  └ 💎 🔥 GÜÇLÜ [+5]\n";
-   else          m1_text = "  └ 💎 ⚠️ ZAYIF [+0]\n";
+   if(is_strong) m1_text = "  └ 💎 🔥 GÜÇLÜ [+" + IntegerToString(m1_points) + " Puan]\n";
+   else          m1_text = "  └ 💎 ⚠️ ZAYIF [+" + IntegerToString(m1_points) + " Puan]\n";
 
    int h1_points = 0;
    double h1_bounce = mp_h1 - p_h1;
@@ -594,10 +594,10 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    if (h1_mom_15) {
        if (is_h1_aligned) {
-           if (h1_mom_20) { h1_points = 35; h1_text = h1_dir_emoji + " " + stats_h1 + "  └ 🚀 Yön Uyumlu, Çok Sert Dönüş [+35]\n"; }
+           if (h1_mom_20) { h1_points = 35; h1_text = h1_dir_emoji + " " + stats_h1 + "  └ 🚀 Yön Uyumlu, Çok Sert Dönüş [+35 Puan]\n"; }
            else           { h1_points = 30; h1_text = h1_dir_emoji + " " + stats_h1 + "  └ 🚀 Yön Uyumlu, Sert Dönüş [+30]\n"; }
        } else {
-           h1_points = 0; h1_text = h1_dir_emoji + " " + stats_h1 + "  └ 🛑 Ters Yön Sert Dönüş (Tuzak) [0]\n";
+           h1_points = 0; h1_text = h1_dir_emoji + " " + stats_h1 + "  └ 🛑 Ters Yön Sert Dönüş (Tuzak) [0 Puan]\n";
        }
    } else {
        if (is_h1_aligned) {
@@ -621,17 +621,17 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string stats_m30 = "[Maks:%" + DoubleToString(mp_m30, 1) + " | Anlık:%" + DoubleToString(p_m30, 1) + "]\n";
 
    if (is_m30_duplicate) {
-       m30_points = 0; m30_text = "⚪ M30 (H1 ile Klon) [0]\n";
+       m30_points = 0; m30_text = "⚪ M30 (H1 ile Klon) [0 Puan]\n";
    } else {
        if (!is_m30_aligned) {
-           if (m30_mom_15) { m30_points = 0;  m30_text = m30_dir_emoji + " " + stats_m30 + "  └ 🛑 Ters Yön %15 İvme [0]\n"; }
+           if (m30_mom_15) { m30_points = 0;  m30_text = m30_dir_emoji + " " + stats_m30 + "  └ 🛑 Ters Yön %15 İvme [0 Puan]\n"; }
            else            { m30_points = 10; m30_text = m30_dir_emoji + " " + stats_m30 + "  └ 📉 Ters Yön İvmesiz [+10]\n"; }
        } else {
-           if (m30_mom_20)      { m30_points = 25; m30_text = m30_dir_emoji + " " + stats_m30 + "  └ 🚀 Yön Uyumlu Çok Sert Dönüş [+25]\n"; }
+           if (m30_mom_20)      { m30_points = 25; m30_text = m30_dir_emoji + " " + stats_m30 + "  └ 🚀 Yön Uyumlu Çok Sert Dönüş [+25 Puan]\n"; }
            else if (m30_mom_15) { m30_points = 20; m30_text = m30_dir_emoji + " " + stats_m30 + "  └ 🚀 Yön Uyumlu Sert Dönüş [+20]\n"; }
            else {
-               if (m30_is_premium) { m30_points = 15; m30_text = m30_dir_emoji + " " + stats_m30 + "  └ 🎯 %50 Üstü Yön Uyumlu [+15]\n"; }
-               else                { m30_points = 5;  m30_text = m30_dir_emoji + " " + stats_m30 + "  └ ⚠️ %50 Altı Yön Uyumlu [+5]\n"; }
+               if (m30_is_premium) { m30_points = 15; m30_text = m30_dir_emoji + " " + stats_m30 + "  └ 🎯 %50 Üstü Yön Uyumlu [+15 Puan]\n"; }
+               else                { m30_points = 5;  m30_text = m30_dir_emoji + " " + stats_m30 + "  └ ⚠️ %50 Altı Yön Uyumlu [+5 Puan]\n"; }
            }
        }
    }
@@ -648,17 +648,17 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string stats_m15 = "[Maks:%" + DoubleToString(mp_m15, 1) + " | Anlık:%" + DoubleToString(p_m15, 1) + "]\n";
 
    if (is_m15_duplicate) {
-       m15_points = 0; m15_text = "⚪ M15 (M30 ile Klon) [0]\n";
+       m15_points = 0; m15_text = "⚪ M15 (M30 ile Klon) [0 Puan]\n";
    } else {
        if (!is_m15_aligned) {
-           if (m15_mom_15) { m15_points = 0; m15_text = m15_dir_emoji + " " + stats_m15 + "  └ 🛑 Ters Yön %15 İvme [0]\n"; }
-           else            { m15_points = 5; m15_text = m15_dir_emoji + " " + stats_m15 + "  └ 📉 Ters Yön İvmesiz [+5]\n"; }
+           if (m15_mom_15) { m15_points = 0; m15_text = m15_dir_emoji + " " + stats_m15 + "  └ 🛑 Ters Yön %15 İvme [0 Puan]\n"; }
+           else            { m15_points = 5; m15_text = m15_dir_emoji + " " + stats_m15 + "  └ 📉 Ters Yön İvmesiz [+5 Puan]\n"; }
        } else {
            if (m15_mom_20)      { m15_points = 20; m15_text = m15_dir_emoji + " " + stats_m15 + "  └ 🚀 Yön Uyumlu Çok Sert Dönüş [+20]\n"; }
-           else if (m15_mom_15) { m15_points = 15; m15_text = m15_dir_emoji + " " + stats_m15 + "  └ 🚀 Yön Uyumlu Sert Dönüş [+15]\n"; }
+           else if (m15_mom_15) { m15_points = 15; m15_text = m15_dir_emoji + " " + stats_m15 + "  └ 🚀 Yön Uyumlu Sert Dönüş [+15 Puan]\n"; }
            else {
-               if (m15_is_premium) { m15_points = 15; m15_text = m15_dir_emoji + " " + stats_m15 + "  └ 🎯 %50 Üstü Yön Uyumlu [+15]\n"; }
-               else                { m15_points = 5;  m15_text = m15_dir_emoji + " " + stats_m15 + "  └ ⚠️ %50 Altı Yön Uyumlu [+5]\n"; }
+               if (m15_is_premium) { m15_points = 15; m15_text = m15_dir_emoji + " " + stats_m15 + "  └ 🎯 %50 Üstü Yön Uyumlu [+15 Puan]\n"; }
+               else                { m15_points = 5;  m15_text = m15_dir_emoji + " " + stats_m15 + "  └ ⚠️ %50 Altı Yön Uyumlu [+5 Puan]\n"; }
            }
        }
    }
@@ -675,17 +675,17 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string stats_m5 = "[Maks:%" + DoubleToString(mp_m5, 1) + " | Anlık:%" + DoubleToString(p_m5, 1) + "]\n";
 
    if (is_m5_duplicate) {
-       m5_points = 0; m5_text = "⚪ M5 (M15 ile Klon) [0]\n";
+       m5_points = 0; m5_text = "⚪ M5 (M15 ile Klon) [0 Puan]\n";
    } else {
        if (!is_m5_aligned) {
-           if (m5_mom_15) { m5_points = 0; m5_text = m5_dir_emoji + " " + stats_m5 + "  └ 🛑 Ters Yön %15 İvme [0]\n"; }
-           else           { m5_points = 5; m5_text = m5_dir_emoji + " " + stats_m5 + "  └ 📉 Ters Yön İvmesiz [+5]\n"; }
+           if (m5_mom_15) { m5_points = 0; m5_text = m5_dir_emoji + " " + stats_m5 + "  └ 🛑 Ters Yön %15 İvme [0 Puan]\n"; }
+           else           { m5_points = 5; m5_text = m5_dir_emoji + " " + stats_m5 + "  └ 📉 Ters Yön İvmesiz [+5 Puan]\n"; }
        } else {
-           if (m5_mom_20)      { m5_points = 15; m5_text = m5_dir_emoji + " " + stats_m5 + "  └ 🚀 Yön Uyumlu Çok Sert Dönüş [+15]\n"; }
+           if (m5_mom_20)      { m5_points = 15; m5_text = m5_dir_emoji + " " + stats_m5 + "  └ 🚀 Yön Uyumlu Çok Sert Dönüş [+15 Puan]\n"; }
            else if (m5_mom_15) { m5_points = 10; m5_text = m5_dir_emoji + " " + stats_m5 + "  └ 🚀 Yön Uyumlu Sert Dönüş [+10]\n"; }
            else {
                if (m5_is_premium) { m5_points = 10; m5_text = m5_dir_emoji + " " + stats_m5 + "  └ 🎯 %50 Üstü Yön Uyumlu [+10]\n"; }
-               else               { m5_points = 5;  m5_text = m5_dir_emoji + " " + stats_m5 + "  └ ⚠️ %50 Altı Yön Uyumlu [+5]\n"; }
+               else               { m5_points = 5;  m5_text = m5_dir_emoji + " " + stats_m5 + "  └ ⚠️ %50 Altı Yön Uyumlu [+5 Puan]\n"; }
            }
        }
    }
@@ -704,18 +704,17 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string dir_emoji = (trigger_dir == 1) ? "⬆️ BUY" : "⬇️ SELL";
 
    string msg = "";
-   if (is_test) msg = "🧪 [" + Symbol() + "] TEST RAPORU\n";
-   else         msg = "🚨 [" + Symbol() + "] FIRSAT [" + lvl_text + "] 🚨\n";
+   msg = "🚨 [" + Symbol() + "] FIRSAT [" + lvl_text + "] 🚨\n";
 
    msg += "🎯 Yön: " + dir_emoji + " | Beklenti: " + range_text + "\n";
    msg += "⏱️ Kırılım Saati: " + TimeToString(t, TIME_DATE|TIME_SECONDS) + "\n";
    msg += "📊 Karar: " + verdict + " | Skor: " + IntegerToString(total_points) + "/" + IntegerToString(InpMinTradeScoreLimit) + "\n\n";
 
-   msg += "⏳ M1:\n" + m1_text;
-   msg += "⏳ H1:\n" + h1_text;
-   msg += "⏳ M30:\n" + m30_text;
-   msg += "⏳ M15:\n" + m15_text;
-   msg += "⏳ M5:\n" + m5_text;
+   msg += "⏳ M1 (" + IntegerToString(m1_points) + " Puan):\n" + m1_text;
+   msg += "⏳ H1 (" + IntegerToString(h1_points) + " Puan):\n" + h1_text;
+   msg += "⏳ M30 (" + IntegerToString(m30_points) + " Puan):\n" + m30_text;
+   msg += "⏳ M15 (" + IntegerToString(m15_points) + " Puan):\n" + m15_text;
+   msg += "⏳ M5 (" + IntegerToString(m5_points) + " Puan):\n" + m5_text;
 
    if(InpAlertPopup) Alert(msg);
    if(InpAlertPush) SendNotification(msg);
@@ -728,6 +727,13 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            g_json_trades_in_swing = 0;
            g_json_last_maj_i = current_maj_i;
            g_json_last_sl = 0.0;
+           g_virtual_trade_active = false;
+       }
+
+       // SANAL İŞLEM TAKİBİ: Eğer içeride aktif bir işlem varsa (henüz SL veya TP olmadıysa), 2. işlemi ATMA!
+       if (g_virtual_trade_active) {
+           Print("⚠️ [JSON-TRADE] Yeni sinyal reddedildi: İçeride hala kapanmamış (SL veya TP olmamış) bir işlem var.");
+           return;
        }
 
        bool is_deep_elastic = (mp_m1 >= 40.0);
@@ -735,7 +741,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
        if (g_json_trades_in_swing < allowed_trades) {
 
-           if (g_json_trades_in_swing > 0 && !InpTestMode) {
+           if (g_json_trades_in_swing > 0) {
                if (trigger_dir == 1) {
                    if (live_price >= g_json_last_sl) {
                         Print("⚠️ [JSON-TRADE] BUY reddedildi: Fiyat hala testere bölgesinde. (Eski SL: ", g_json_last_sl, " - Anlık: ", live_price, ") Seviyenin altına inip oradan CHoCH vermesi bekleniyor.");
@@ -754,30 +760,15 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            double tp = 0.0;
            double entry = live_price;
            double base_dist = 0.0;
-           string dir_str = (trigger_dir == 1) ? "BUY" : "SELL";
 
-           if (InpTestMode) {
-               double point_size = Point();
-               base_dist = InpTestManualSLDistance * point_size;
-               if (trigger_dir == 1) {
-                   sl = entry - base_dist;
-                   tp = entry + (base_dist * InpTPRewardRatio);
-                   ext_pt = entry - (base_dist / (is_strong ? InpStrongSLMultiplier : InpWeakSLMultiplier));
-               } else {
-                   sl = entry + base_dist;
-                   tp = entry - (base_dist * InpTPRewardRatio);
-                   ext_pt = entry + (base_dist / (is_strong ? InpStrongSLMultiplier : InpWeakSLMultiplier));
-               }
-           } else {
-               if (trigger_dir == 1) {
-                   base_dist = entry - ext_pt;
-                   sl = is_strong ? entry - (base_dist * InpStrongSLMultiplier) : entry - (base_dist * InpWeakSLMultiplier);
-                   tp = entry + ((entry - sl) * InpTPRewardRatio);
-               } else {
-                   base_dist = ext_pt - entry;
-                   sl = is_strong ? entry + (base_dist * InpStrongSLMultiplier) : entry + (base_dist * InpWeakSLMultiplier);
-                   tp = entry - ((sl - entry) * InpTPRewardRatio);
-               }
+           if (trigger_dir == 1) { // BUY
+               base_dist = entry - ext_pt;
+               sl = is_strong ? entry - (base_dist * InpStrongSLMultiplier) : entry - (base_dist * InpWeakSLMultiplier);
+               tp = entry + ((entry - sl) * InpTPRewardRatio);
+           } else { // SELL
+               base_dist = ext_pt - entry;
+               sl = is_strong ? entry + (base_dist * InpStrongSLMultiplier) : entry + (base_dist * InpWeakSLMultiplier);
+               tp = entry - ((sl - entry) * InpTPRewardRatio);
            }
 
            string filename = "signal_" + Symbol() + ".json";
@@ -790,8 +781,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
                json += "  \"sl\": " + DoubleToString(sl, 5) + ",\n";
                json += "  \"tp\": " + DoubleToString(tp, 5) + ",\n";
                json += "  \"base_extreme\": " + DoubleToString(ext_pt, 5) + ",\n";
-               json += "  \"is_strong\": " + (is_strong ? "true" : "false") + ",\n";
-               json += "  \"is_test\": " + (InpTestMode ? "true" : "false") + "\n";
+               json += "  \"is_strong\": " + (is_strong ? "true" : "false") + "\n";
                json += "}";
 
                FileWrite(file_handle, json);
@@ -801,6 +791,9 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
                g_json_trades_in_swing++;
                g_json_last_sl = sl;
+               g_virtual_trade_active = true;
+               g_virtual_trade_dir = trigger_dir;
+               g_virtual_tp = tp;
            } else {
                Print("❌ [JSON-TRADE] Dosya yazılamadı! Hata: ", GetLastError());
            }
@@ -823,39 +816,8 @@ int OnInit()
   {
    IndicatorSetString(INDICATOR_SHORTNAME, "Structure");
 
-   // --- 🧪 MANUEL TEST SİNYALİ FIRLATICI ---
-   if (InpForceTestSignal) {
-       Print("🧪 [TEST SİNYALİ] Gönderiliyor...");
-       string filename = "signal_" + Symbol() + ".json";
-       int file_handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_COMMON);
-       if (file_handle != INVALID_HANDLE) {
-           double entry = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
-           double point_size = Point();
 
-           // Sahte bir BUY işlemi simüle edelim:
-           double sl = entry - (InpTestManualSLDistance * point_size);
-           double tp = entry + ((entry - sl) * InpTPRewardRatio);
-           double ext_pt = entry - ((InpTestManualSLDistance * point_size) / InpStrongSLMultiplier);
 
-           string json = "{\n";
-           json += "  \"symbol\": \"" + Symbol() + "\",\n";
-           json += "  \"direction\": \"BUY\",\n";
-           json += "  \"entry\": " + DoubleToString(entry, 5) + ",\n";
-           json += "  \"sl\": " + DoubleToString(sl, 5) + ",\n";
-           json += "  \"tp\": " + DoubleToString(tp, 5) + ",\n";
-           json += "  \"base_extreme\": " + DoubleToString(ext_pt, 5) + ",\n";
-           json += "  \"is_strong\": true,\n";
-           json += "  \"is_test\": true\n";
-           json += "}";
-
-           FileWrite(file_handle, json);
-           FileClose(file_handle);
-           Print("✅ [TEST BAŞARILI] Ortak Klasöre (Common) Sahte JSON Sinyal Bırakıldı: ", filename);
-           Print("⚠️ Lütfen bir sonraki gerçek işlem için gösterge ayarlarından 'InpForceTestSignal' ayarını tekrar FALSE yapmayı unutmayın!");
-       } else {
-           Print("❌ [TEST HATASI] Ortak klasöre dosya yazılamadı! Kod: ", GetLastError());
-       }
-   }
    return(INIT_SUCCEEDED);
   }
 
@@ -1625,27 +1587,6 @@ int OnCalculate(const int rates_total,
             g_last_alert_trend = g_state_hist.maj_tr;
            }
      }
-   // 🧪 TEST TRIGGER EXECUTION (Yalnızca bir kez ve en güncel veriler işlendikten sonra çalıştırılır)
-   static bool prev_test_state = false;
-   if (InpTestTradeExecution != prev_test_state) {
-       prev_test_state = InpTestTradeExecution;
-
-       if (InpTestTradeExecution && last_idx > 0) {
-           int live_tr = 0;
-           double live_pct = 0.0;
-           double dmy_mpct = 0.0;
-           double dmy_h, dmy_l; datetime dmy_th, dmy_tl;
-
-           double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-
-           // Milimetrik olarak diğer grafikleri de besleyen ANA fonksiyonu çağır
-           GetMTFPullback(PERIOD_M1, live_tr, live_pct, dmy_mpct, time[last_idx], bid, dmy_h, dmy_l, dmy_th, dmy_tl);
-
-           // Test Analizi, kullanıcının "Pullback sonrası ana trend devamı (BOS/Continuation CHoCH)" mantığına göre simüle edilir.
-           int test_choch_dir = live_tr; // Trend Yönü ile aynı olmalı
-           EvaluateTradeSignal(last_idx, TimeCurrent(), bid, test_choch_dir, live_pct, true, bid, true);
-       }
-   }
 
    // --- MTF SLAVE DASHBOARD (SADECE M1 İÇİN) ---
    static uint last_ui_tick = 0;
@@ -1672,6 +1613,30 @@ int OnCalculate(const int rates_total,
        last_ui_tick = GetTickCount();
    } else if (!InpUseMasterSlave && Period() == PERIOD_M1) {
        Comment(""); // Master slave kapalıysa ekranı temizle
+   }
+
+
+   // --- 🕵️‍♂️ VIRTUAL TRADE TRACKER (Sanal SL/TP Kontrolü) ---
+   if (g_virtual_trade_active && last_idx > 0) {
+       double live_bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+       double live_ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
+       if (g_virtual_trade_dir == 1) { // BUY Trade
+           if (live_bid <= g_json_last_sl) {
+               Print("🔴 [VIRTUAL TRADE] BUY İşlemi Sanal SL Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_trade_active = false;
+           } else if (live_bid >= g_virtual_tp) {
+               Print("🟢 [VIRTUAL TRADE] BUY İşlemi Sanal TP Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_trade_active = false;
+           }
+       } else if (g_virtual_trade_dir == -1) { // SELL Trade
+           if (live_ask >= g_json_last_sl) {
+               Print("🔴 [VIRTUAL TRADE] SELL İşlemi Sanal SL Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_trade_active = false;
+           } else if (live_ask <= g_virtual_tp) {
+               Print("🟢 [VIRTUAL TRADE] SELL İşlemi Sanal TP Oldu! Yeni işlem hakkı açıldı.");
+               g_virtual_trade_active = false;
+           }
+       }
    }
 
    // --- SLAVE GÜNCELLEMESİ (SADECE ONAYLANAN BARLAR) ---

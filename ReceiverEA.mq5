@@ -112,11 +112,10 @@ void OnTimer()
          double entry     = GetJsonDouble(json_content, "entry");
          double sl        = GetJsonDouble(json_content, "sl");
          double tp        = GetJsonDouble(json_content, "tp");
-         bool is_test     = GetJsonBool(json_content, "is_test");
 
          if(direction == "") return;
 
-         ExecuteSignal(direction, entry, sl, tp, is_test);
+         ExecuteSignal(direction, entry, sl, tp);
         }
      }
   }
@@ -124,7 +123,7 @@ void OnTimer()
 //+------------------------------------------------------------------+
 //| Execute Signal (Lot Calculation & Execution)                     |
 //+------------------------------------------------------------------+
-void ExecuteSignal(string direction, double entry, double sl, double tp, bool is_test)
+void ExecuteSignal(string direction, double entry, double sl, double tp)
   {
    double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
    double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
@@ -134,27 +133,20 @@ void ExecuteSignal(string direction, double entry, double sl, double tp, bool is
 
    double lot_size = InpMinLot;
 
-   if (is_test) {
-       // TEST İŞLEMİ: Kesinlikle 0.01 Lot
-       lot_size = 0.01;
-       Print("🧪 [RECEIVER EA] TEST SİNYALİ algılandı. Lot boyutu 0.01 olarak sabitlendi.");
-   } else {
-       // NORMAL İŞLEM: $ Risk Hesaplaması
-       double sl_distance_points = MathAbs(entry - sl) / point;
-       if (sl_distance_points > 0 && tick_size > 0) {
-           double loss_per_lot = (sl_distance_points * point / tick_size) * tick_val;
-           if (loss_per_lot > 0) {
-               lot_size = InpRiskUSD / loss_per_lot;
-               // Küsurat düzeltme (örn 0.01 hassasiyetine)
-               double step = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_STEP);
-               lot_size = MathFloor(lot_size / step) * step;
+   double sl_distance_points = MathAbs(entry - sl) / point;
+   if (sl_distance_points > 0 && tick_size > 0) {
+       double loss_per_lot = (sl_distance_points * point / tick_size) * tick_val;
+       if (loss_per_lot > 0) {
+           lot_size = InpRiskUSD / loss_per_lot;
+           // Küsurat düzeltme (örn 0.01 hassasiyetine)
+           double step = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_STEP);
+           lot_size = MathFloor(lot_size / step) * step;
 
-               // Min ve Max lot sınırları
-               if(lot_size < InpMinLot) lot_size = InpMinLot;
-               if(lot_size > InpMaxLot) lot_size = InpMaxLot;
+           // Min ve Max lot sınırları
+           if(lot_size < InpMinLot) lot_size = InpMinLot;
+           if(lot_size > InpMaxLot) lot_size = InpMaxLot;
 
-               Print("🧮 [RECEIVER EA] SL Mesafe: ", sl_distance_points, " Point | Risk: $", InpRiskUSD, " -> Hesaplan Lot: ", lot_size);
-           }
+           Print("🧮 [RECEIVER EA] SL Mesafe: ", sl_distance_points, " Point | Risk: $", InpRiskUSD, " -> Hesaplan Lot: ", lot_size);
        }
    }
 
@@ -164,11 +156,11 @@ void ExecuteSignal(string direction, double entry, double sl, double tp, bool is
    // Doğrudan SL/TP ile aç (PositionModify kullanılmıyor)
    if(direction == "BUY")
      {
-      success = trade.Buy(lot_size, Symbol(), ask, sl, tp, is_test ? "TEST BUY" : "JSON BUY");
+      success = trade.Buy(lot_size, Symbol(), ask, sl, tp, "JSON BUY");
      }
    else if(direction == "SELL")
      {
-      success = trade.Sell(lot_size, Symbol(), bid, sl, tp, is_test ? "TEST SELL" : "JSON SELL");
+      success = trade.Sell(lot_size, Symbol(), bid, sl, tp, "JSON SELL");
      }
 
    if(success)
