@@ -694,12 +694,19 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    string range_text = (t_m1 == t_m3) ? "🚀 UZUN" : "⚠️ KISA";
    string lvl_text = "BİLİNMİYOR";
-   if (p_pct >= 40.0 && p_pct < 60.0) lvl_text = "KIRILIM 1";
+   if (p_pct >= InpMinPullbackPct && p_pct < 60.0) lvl_text = "KIRILIM 1";
    if (p_pct >= 60.0) lvl_text = "KIRILIM 2";
 
+   bool is_valid_pullback = (p_pct >= InpMinPullbackPct);
+
    string verdict = "";
-   if (total_points >= InpMinTradeScoreLimit) verdict = "✅ ONAYLANDI";
-   else verdict = "❌ REDDEDİLDİ";
+   if (!is_valid_pullback) {
+       verdict = "❌ REDDEDİLDİ (M1 Çekilme Yetersiz < %" + DoubleToString(InpMinPullbackPct, 0) + ")";
+   } else if (total_points >= InpMinTradeScoreLimit) {
+       verdict = "✅ ONAYLANDI";
+   } else {
+       verdict = "❌ REDDEDİLDİ (Skor Yetersiz)";
+   }
 
    string dir_str = (trigger_dir == 1) ? "BUY" : "SELL";
    string dir_emoji = (trigger_dir == 1) ? "⬆️ BUY" : "⬇️ SELL";
@@ -727,7 +734,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    }
 
    // --- YENİ AKILLI JSON AUTO-TRADE YAZICI ---
-   bool send_trade = (total_points >= InpMinTradeScoreLimit);
+   bool send_trade = (is_valid_pullback && total_points >= InpMinTradeScoreLimit);
 
    if (send_trade && InpEnableAutoTradeWriter) {
 
@@ -1061,9 +1068,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               ChartRedraw(); // Force UI update before MTF scan
           }
 
-          // İşlem Koruması: Sadece ve sadece grafikte fiziksel kırılım çizgisi (CHoCH_Signal) çizildiyse işlemi/bildirimi fırlat!
+          // İşlem Koruması: Grafik çizimi gecikmesini beklememek için is_line_drawn şartı kaldırıldı
           static int last_alert_d1_i_bear = 0;
-          if (!is_history && is_line_drawn) {
+          if (!is_history) {
               if (state.d1_i != last_alert_d1_i_bear) {
                   if (InpEnableTradeExecution && draw_ui) {
                       EvaluateTradeSignal(i, time[i], val_c, -1, ext_pct, is_strong, trade_sl_anchor);
@@ -1109,9 +1116,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               ChartRedraw(); // Force UI update before MTF scan
           }
 
-          // İşlem Koruması: Sadece ve sadece grafikte fiziksel kırılım çizgisi (CHoCH_Signal) çizildiyse işlemi/bildirimi fırlat!
+          // İşlem Koruması: Grafik çizimi gecikmesini beklememek için is_line_drawn şartı kaldırıldı
           static int last_alert_d1_i_bull = 0;
-          if (!is_history && is_line_drawn) {
+          if (!is_history) {
               if (state.d1_i != last_alert_d1_i_bull) {
                   if (InpEnableTradeExecution && draw_ui) {
                       EvaluateTradeSignal(i, time[i], val_c, 1, ext_pct, is_strong, trade_sl_anchor);
