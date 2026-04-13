@@ -173,6 +173,14 @@ void ExecuteSignal(string direction, double entry, double sl, double tp, double 
      }
    else
      {
-      Print("❌ [RECEIVER EA] İşlem Açılamadı! Hata Kodu: ", GetLastError());
+      string err_desc = trade.ResultRetcodeDescription();
+      uint retcode = trade.ResultRetcode();
+      string err_msg = "❌ [RECEIVER EA] İŞLEM REDDEDİLDİ!\n" +
+                       "Yön: " + direction + " | Lot: " + DoubleToString(lot_size, 2) + "\n" +
+                       "Hata Kodu: " + IntegerToString(retcode) + "\n" +
+                       "Açıklama: " + err_desc;
+
+      Print(err_msg);
+      Alert(err_msg); // Ekranda uyarı pop-up'ı çıkarır, gözden kaçmasını engeller
      }
   }
