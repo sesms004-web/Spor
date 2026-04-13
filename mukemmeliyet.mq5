@@ -34,6 +34,13 @@ input double InpTPRewardRatio = 3.0;                // İşlem Kâr/Zarar (R:R) 
 input int    InpMaxTradesPerSwing = 2;              // Aynı Majör Dalga İçinde Max Sinyal
 
 
+
+//--- Risk Test Ayarları (Sadece EA Risk Hesabını Test Etmek İçindir) ---
+
+
+//--- EA Risk & Lot Test Ayarı ---
+input bool   InpTestAnyChoch         = false;       // 🧪 [TEST] Yöne ve Puana Bakmaksızın HER CHoCH'ta İşlem Gönder! (Risk Testi İçin)
+
 //--- Trade Range/Testere Kontrol Değişkenleri ---
 static int    g_json_last_maj_i = -1;
 static int    g_json_trades_in_swing = 0;
@@ -720,7 +727,13 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    if(InpAlertPush) SendNotification(msg);
 
    // --- YENİ AKILLI JSON AUTO-TRADE YAZICI ---
-   if (total_points >= InpMinTradeScoreLimit && InpEnableAutoTradeWriter) {
+   bool send_trade = (total_points >= InpMinTradeScoreLimit);
+   if (InpTestAnyChoch) {
+       send_trade = true;
+       Print("🧪 [TEST MODU] InpTestAnyChoch Aktif: Puan veya yön önemsenmeden işlem zorla gönderiliyor.");
+   }
+
+   if (send_trade && InpEnableAutoTradeWriter) {
 
        int current_maj_i = (trigger_dir == 1) ? g_state_curr.maj_l_i : g_state_curr.maj_h_i;
        if (current_maj_i != g_json_last_maj_i) {
@@ -818,6 +831,7 @@ int OnInit()
 
 
 
+
    return(INIT_SUCCEEDED);
   }
 
@@ -826,6 +840,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
+
    ObjectsDeleteAll(0, "Structure_");
    ObjectsDeleteAll(0, "Minor_");
    ObjectsDeleteAll(0, "Major_");
@@ -916,7 +931,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          }
 
          // CHoCH Bearish sequence tracking
-         if (state.maj_tr == -1 && in_pullback_zone) {
+         if ((state.maj_tr == -1 && in_pullback_zone) || InpTestAnyChoch) {
              if (state.choch_dir == 0 || state.choch_dir == 1) { // Initiate T1 for Bearish
                  state.t1_h = state.min_h;
                  state.t1_l = state.min_l;
@@ -983,7 +998,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          }
 
          // CHoCH Bullish sequence tracking
-         if (state.maj_tr == 1 && in_pullback_zone) {
+         if ((state.maj_tr == 1 && in_pullback_zone) || InpTestAnyChoch) {
              if (state.choch_dir == 0 || state.choch_dir == -1) { // Initiate T1 for Bullish
                  state.t1_l = state.min_l;
                  state.t1_h = state.min_h;
@@ -1014,7 +1029,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
      }
    // CHoCH Trigger & Drawing Logic
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
-      if (val_c < state.d1_l && in_pullback_zone) {
+      if (val_c < state.d1_l && (in_pullback_zone || InpTestAnyChoch)) {
           // Bearish CHoCH confirmed!
           double ext_pct = 0;
           double break_pct = 0;
@@ -1062,7 +1077,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           state.choch_dir = 0; // Reset after trigger
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
-      if (val_c > state.d1_h && in_pullback_zone) {
+      if (val_c > state.d1_h && (in_pullback_zone || InpTestAnyChoch)) {
           // Bullish CHoCH confirmed!
           double ext_pct = 0;
           double break_pct = 0;
@@ -1601,7 +1616,10 @@ int OnCalculate(const int rates_total,
                datetime last_upd = (datetime)GlobalVariableGet(base_name + "TIME");
                int age = (int)(TimeCurrent() - last_upd);
                if (age <= InpMaxDataAge) {
-                   ui += "✅ " + tf_names[j] + " : Bağlı (Gecikme: " + IntegerToString(age) + "sn)\n";
+                   int tr = (int)GlobalVariableGet(base_name + "TR");
+                   double pct = GlobalVariableGet(base_name + "PCT");
+                   string dir_emo = (tr == 1) ? "🟢 YUKARI" : "🔴 AŞAĞI";
+                   ui += "✅ " + tf_names[j] + " : " + dir_emo + " | Çekilme: %" + DoubleToString(pct, 1) + " (Gecikme: " + IntegerToString(age) + "sn)\n";
                } else {
                    ui += "❌ " + tf_names[j] + " : KOPUK (Eski Veri: " + IntegerToString(age) + "sn)\n";
                }
