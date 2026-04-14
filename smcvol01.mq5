@@ -1068,11 +1068,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
              state.choch_dir = 0;
          }
 
-         // CHoCH Sequence Abort Rule (Out of Pullback Zone)
-         if (state.choch_dir != 0 && !in_pullback_zone) {
-             state.choch_dir = 0; // Left the authorized zone entirely ([InpMinPullbackPct, InpMaxPullbackPct])
-         }
-
          // CHoCH Bearish sequence tracking
          if (state.maj_tr == -1 && in_pullback_zone) {
              if (state.choch_dir == 0 || state.choch_dir == 1) { // Initiate T1 for Bearish
@@ -1173,7 +1168,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
    // CHoCH Trigger & Drawing Logic
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
-      if (val_c < state.d1_l && in_pullback_zone) {
+
+      double range = state.maj_h - state.maj_l;
+      double t2_pct = (range != 0) ? ((state.t2_h - state.maj_l) / range) * 100.0 : 0;
+      bool t2_valid = (t2_pct >= InpMinPullbackPct && t2_pct <= InpMaxPullbackPct);
+
+      if (val_c < state.d1_l && t2_valid) {
           // Bearish CHoCH confirmed!
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
@@ -1222,7 +1222,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           state.choch_dir = 0; // Reset after trigger
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
-      if (val_c > state.d1_h && in_pullback_zone) {
+
+      double range = state.maj_h - state.maj_l;
+      double t2_pct = (range != 0) ? ((state.maj_h - state.t2_l) / range) * 100.0 : 0;
+      bool t2_valid = (t2_pct >= InpMinPullbackPct && t2_pct <= InpMaxPullbackPct);
+
+      if (val_c > state.d1_h && t2_valid) {
           // Bullish CHoCH confirmed!
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
@@ -1627,8 +1632,19 @@ int OnCalculate(const int rates_total,
 
    int limit;
 
+
+   static datetime last_calc_time = 0;
+
+   // MT5 terminali uyandığında veya ufak bir kopmada prev_calculated 0 gönderir.
+   // Eğer son mumumuzun zamanı aynıysa boşuna ekranı silip geçmişi baştan yükleme. (Hafıza Koruması)
+   if (prev_calculated == 0 && last_calc_time == time[rates_total - 1]) {
+       return rates_total;
+   }
+
    if(prev_calculated == 0)
      {
+      last_calc_time = time[rates_total - 1];
+
       double tf_days = GetDaysForTF(Period());
       g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
 
