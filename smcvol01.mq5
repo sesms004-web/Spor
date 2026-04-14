@@ -46,7 +46,6 @@ input color  InpColorBear = clrRed;
 input bool   InpEnableAlertTrendChange = true;       // Ana Trend (Kapanış) Dönüş Bildirimini Aç
 input bool   InpEnableAlertMTFLevels   = true;       // %40/%60 MTF Analiz Bildirimini Aç (Bölüm 1/2)
 input bool   InpEnableAlertCHoCHBase   = true;       // Temel CHoCH (Kırılım) Bildirimini Aç
-input bool   InpEnableTradeExecution   = true;       // 50 Puanlık 'İşleme Gir' Analiz Sistemini Aç
 input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Puanları Hesapla ve Bildir
 input double InpTriggerLevel1    = 40.0;             // 1. Bildirim Çekilme % (örn. %40)
 input double InpTriggerLevel2    = 60.0;             // 2. Bildirim Çekilme % (örn. %60)
@@ -928,7 +927,7 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    string risk_advice = "";
 
    if (triggered_level == 1) { // %40-%60 Range (KIRILIM 1)
-       if (macro_bull && t_m1 == 1 || !macro_bull && t_m1 == -1) {
+       if ((macro_bull && t_m1 == 1) || (!macro_bull && t_m1 == -1)) {
            decision = "🟡 ERKEN AŞAMA (KIRILIM 1)";
            detail = "Piyasa ana trend yönünde ilk yapısal kırılımı (CHoCH) gerçekleştirdi. Düzeltme henüz %60 sınırını geçmediği için taze bir momentum olabilir.";
            risk_advice = "🚨 İlk kırılımlar güçlü trend başlatabilir ancak scalp (kısa menzilli) kâr alma ihtimalini göz önünde bulundurun.";
@@ -938,7 +937,7 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
            risk_advice = "🛑 Ana trende karşı olduğunuz için hacimli bir pozisyondan ziyade dar stoplu reaksiyon aranmalıdır.";
        }
    } else { // >= %60 Range (KIRILIM 2)
-       if (macro_bull && t_m1 == 1 || !macro_bull && t_m1 == -1) {
+       if ((macro_bull && t_m1 == 1) || (!macro_bull && t_m1 == -1)) {
            decision = "🟢 GÜÇLÜ ONAY (KIRILIM 2)";
            detail = "Fiyat derin ve sağlıklı bir düzeltme (%60+) yaptıktan sonra tekrar ana trend yönüne oturdu. Uyum mükemmel.";
            risk_advice = "✅ En yüksek kazanma olasılığına sahip (High Probability) kurulumdur. Ana TP hedefine kadar takip edilebilir.";
