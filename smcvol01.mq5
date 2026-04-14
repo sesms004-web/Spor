@@ -1593,6 +1593,11 @@ void UpdateLiveDashboard()
    GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, th_m30, tl_m30);
    GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, h_h1, l_h1, dmy_th, dmy_tl);
 
+   if (h_h1 == 0 || h_m30 == 0 || h_m15 == 0) {
+       Comment("⏳ Arka Plandaki Zaman Dilimleri (H1, M30, vb.) İndiriliyor... Lütfen Bekleyin.");
+       return;
+   }
+
    string txt = "--- CANLI MTF ÇEKİLME TAKİBİ ---\n";
    txt += GenerateMTFString("M1 ", t_m1, h_m1, l_m1, p_m1, mp_m1);
    txt += GenerateMTFString("M3 ", t_m3, h_m3, l_m3, p_m3, mp_m3);
