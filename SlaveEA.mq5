@@ -11,10 +11,10 @@
 CTrade trade;
 
 input group "--- SLAVE EA SETTINGS ---"
-input int    InpMagicNumber = 454545;
-input int    InpMaxSlippage = 10;
-input double InpLotOverride = 0.0; // 0 ise masterin risk hesabını kullan
-input string InpSymbolSuffix = "r"; // Master ile Slave arasındaki sembol farkı (Örn: r, .pro)
+input int    InpMagicNumber  = 454545;
+input int    InpMaxSlippage  = 10;
+input double InpMaxLotSize   = 0.50; // Kasa Koruyucu: Maksimum Lot Sınırı (Pariteye Özel)
+input string InpSymbolSuffix = "r";  // Master ile Slave arasındaki sembol farkı (Örn: r, .pro)
 
 void OnInit() {
     trade.SetExpertMagicNumber(InpMagicNumber);
@@ -99,7 +99,7 @@ void ProcessSignal(string json, string expected_base_symbol) {
     double m_sl = StringToDouble(GetJSONValue(json, "sl"));
     double m_tp = StringToDouble(GetJSONValue(json, "tp"));
     double risk_usd = StringToDouble(GetJSONValue(json, "risk_usd"));
-    double max_lot = StringToDouble(GetJSONValue(json, "max_lot"));
+
 
     if (dir == "" || m_sl == 0) {
         Print("Geçersiz Sinyal Dosyası: Eksik Veri.");
@@ -140,12 +140,12 @@ void ProcessSignal(string json, string expected_base_symbol) {
     double step_vol = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_STEP);
 
     if (calc_lot < min_vol) calc_lot = min_vol;
-    if (calc_lot > max_lot) calc_lot = max_lot;
+    if (calc_lot > InpMaxLotSize) calc_lot = InpMaxLotSize;
     if (calc_lot > max_vol) calc_lot = max_vol;
 
     calc_lot = MathRound(calc_lot / step_vol) * step_vol;
 
-    if (InpLotOverride > 0) calc_lot = InpLotOverride;
+
 
     Print("--- SİNYAL ALINDI ---");
     Print("Yön: ", dir, " | Risk: $", risk_usd, " | Hesaplan Lot: ", calc_lot);

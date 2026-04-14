@@ -23,7 +23,6 @@ input double InpDaysD1   = 1500.0;
 input group "--- TRADE EXECUTION & RISK ---"
 input bool   InpEnableTradeExecution   = true;        // Master->Slave Sinyal Köprüsü Aktif
 input double InpRiskUSD                = 50.0;        // İşlem Başına Dolar Riski
-input double InpMaxLotSize             = 0.50;        // Kasa Koruyucu: Maks Lot Sınırı
 input double InpStrongSLMultiplier     = 1.0;         // Güçlü Kırılım SL Genişletme Çarpanı
 input double InpWeakSLMultiplier       = 1.5;         // Zayıf Kırılım SL Genişletme Çarpanı
 
@@ -630,8 +629,7 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
     json += "  \"is_strong\": " + is_strong_str + ",\n";
     json += "  \"score\": " + IntegerToString(score) + ",\n";
     json += "  \"is_test\": " + is_test_str + ",\n";
-    json += "  \"risk_usd\": " + DoubleToString(InpRiskUSD, 2) + ",\n";
-    json += "  \"max_lot\": " + DoubleToString(InpMaxLotSize, 2) + "\n";
+    json += "  \"risk_usd\": " + DoubleToString(InpRiskUSD, 2) + "\n";
     json += "}";
 
     FileWrite(handle, json);
