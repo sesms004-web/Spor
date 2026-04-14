@@ -22,6 +22,9 @@ input double InpDaysD1   = 1500.0;
 //--- CHoCH Settings ---
 input group "--- TRADE EXECUTION & RISK ---"
 input bool   InpEnableTradeExecution   = true;        // Master->Slave Sinyal Köprüsü Aktif
+input bool   InpWaitRetest             = false;       // 🎯 Gelişmiş Retest (Pusu) Modu Aktif
+input int    InpRetestMaxBars          = 15;          // ⏳ Pusu Modunda Beklenecek Maksimum Mum
+input double InpRetestDepthPct         = 0.0;         // 📉 Kırılım Çizgisine Göre Ucuzluk Beklentisi (%0=%100 Çizgisi)
 input double InpRiskUSD                = 50.0;        // İşlem Başına Dolar Riski
 input double InpStrongSLMultiplier     = 1.0;         // Güçlü Kırılım SL Genişletme Çarpanı
 input double InpWeakSLMultiplier       = 1.5;         // Zayıf Kırılım SL Genişletme Çarpanı
@@ -156,6 +159,16 @@ public:
       ArrayCopy(m_idx, source.m_idx);
      }
   };
+
+
+// --- RETEST (PUSU) ENGINE GLOBALS ---
+bool   g_pending_active = false;
+int    g_pending_dir = 0;
+int    g_pending_bar_i = 0;
+double g_pending_entry = 0.0;
+double g_pending_sl = 0.0;
+bool   g_pending_is_strong = false;
+double g_pending_p_pct = 0.0;
 
 struct SState
   {
@@ -1006,6 +1019,24 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
    string prefix = is_history ? "" : "Live_";
 
+   // --- RETEST PUSU MOTORU (Sadece Canlı Piyasada) ---
+   if (!is_history && g_pending_active && i > g_pending_bar_i) {
+       // Zaman Aşımı (Max Bars)
+       if (i - g_pending_bar_i > InpRetestMaxBars) {
+           g_pending_active = false;
+       } else {
+           // Emir Tetiklendi mi?
+           bool executed = false;
+           if (g_pending_dir == 1 && val_l <= g_pending_entry) executed = true;
+           if (g_pending_dir == -1 && val_h >= g_pending_entry) executed = true;
+
+           if (executed) {
+               EvaluateTradeSignal(i, time[i], g_pending_entry, g_pending_dir, g_pending_p_pct, g_pending_is_strong, g_pending_sl);
+               g_pending_active = false; // Pusu tamamlandı, emir gönderildi.
+           }
+       }
+   }
+
    // CHoCH & T1-D1-T2 TRACKING LOGIC
    // Current major trend structure
    double cur_maj_h = state.maj_h;
@@ -1194,9 +1225,25 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       if(InpAlertPopup) Alert(msg);
                       if(InpAlertPush) SendNotification(msg);
                   }
+
                   if (InpEnableTradeExecution) {
-                      EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, is_strong ? state.t2_h : state.t1_h);
+                      if (!InpWaitRetest) {
+                          EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, state.t2_h);
+                      } else {
+                          // Retest Modu: İşlemi Pusuya Yatır
+                          g_pending_active = true;
+                          g_pending_dir = -1;
+                          g_pending_bar_i = i;
+                          g_pending_sl = state.t2_h;
+                          g_pending_is_strong = is_strong;
+                          g_pending_p_pct = p_pct;
+
+                          // Entry = CHoCH Line + (SL - CHoCH Line) * Depth%
+                          double dist = state.t2_h - state.d1_l;
+                          g_pending_entry = state.d1_l + (dist * (InpRetestDepthPct / 100.0));
+                      }
                   }
+
                   last_alert_d1_i_bear = state.d1_i;
                   last_alert_maj_i_bear = state.maj_h_i;
               }
@@ -1248,9 +1295,25 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       if(InpAlertPopup) Alert(msg);
                       if(InpAlertPush) SendNotification(msg);
                   }
+
                   if (InpEnableTradeExecution) {
-                      EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, is_strong ? state.t2_l : state.t1_l);
+                      if (!InpWaitRetest) {
+                          EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, state.t2_l);
+                      } else {
+                          // Retest Modu: İşlemi Pusuya Yatır
+                          g_pending_active = true;
+                          g_pending_dir = 1;
+                          g_pending_bar_i = i;
+                          g_pending_sl = state.t2_l;
+                          g_pending_is_strong = is_strong;
+                          g_pending_p_pct = p_pct;
+
+                          // Entry = CHoCH Line - (CHoCH Line - SL) * Depth%
+                          double dist = state.d1_h - state.t2_l;
+                          g_pending_entry = state.d1_h - (dist * (InpRetestDepthPct / 100.0));
+                      }
                   }
+
                   last_alert_d1_i_bull = state.d1_i;
                   last_alert_maj_i_bull = state.maj_l_i;
               }
@@ -1633,39 +1696,44 @@ int OnCalculate(const int rates_total,
    int limit;
 
 
-   static datetime last_calc_time = 0;
 
-   // MT5 terminali uyandığında veya ufak bir kopmada prev_calculated 0 gönderir.
-   // Eğer son mumumuzun zamanı aynıysa boşuna ekranı silip geçmişi baştan yükleme. (Hafıza Koruması)
+
+
+   // Hafıza Koruması (Wipe Bug Fix)
+   static datetime last_calc_time = 0;
+   bool is_reconnect = false;
    if (prev_calculated == 0 && last_calc_time == time[rates_total - 1]) {
-       return rates_total;
+       is_reconnect = true; // Sadece bağlantı koptu geldi, geçmişi silme!
    }
 
    if(prev_calculated == 0)
      {
       last_calc_time = time[rates_total - 1];
 
-      double tf_days = GetDaysForTF(Period());
-      g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
+      if (!is_reconnect) {
+          double tf_days = GetDaysForTF(Period());
+          g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
 
-      g_counter = 0;
-      g_last_alert_maj_h = 0;
-      g_last_alert_maj_l = 0;
-      g_last_alert_trend = 0;
-      g_level1_triggered = false;
-      g_level2_triggered = false;
-      g_level1_missed = false;
-      g_level2_missed = false;
+          g_counter = 0;
+          g_last_alert_maj_h = 0;
+          g_last_alert_maj_l = 0;
+          g_last_alert_trend = 0;
+          g_level1_triggered = false;
+          g_level2_triggered = false;
+          g_level1_missed = false;
+          g_level2_missed = false;
 
-      ObjectsDeleteAll(0, "Structure_");
-      ObjectsDeleteAll(0, "Minor_");
-      ObjectsDeleteAll(0, "Major_");
-      ObjectsDeleteAll(0, "HLine_");
-      ObjectsDeleteAll(0, "LiveLeg_");
-      ObjectsDeleteAll(0, "CHoCH_Bear_");
-      ObjectsDeleteAll(0, "CHoCH_Bull_");
-      ObjectsDeleteAll(0, "CHoCH_Path_");
-      ObjectsDeleteAll(0, "CHoCH_Signal_");
+          ObjectsDeleteAll(0, "Structure_");
+          ObjectsDeleteAll(0, "Minor_");
+          ObjectsDeleteAll(0, "Major_");
+          ObjectsDeleteAll(0, "HLine_");
+          ObjectsDeleteAll(0, "LiveLeg_");
+          ObjectsDeleteAll(0, "CHoCH_Bear_");
+          ObjectsDeleteAll(0, "CHoCH_Bull_");
+          ObjectsDeleteAll(0, "CHoCH_Path_");
+          ObjectsDeleteAll(0, "CHoCH_Signal_");
+      }
+
 
       int start_idx = 0;
       for(int k=0; k<rates_total; k++) {
