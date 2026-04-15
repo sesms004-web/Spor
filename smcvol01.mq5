@@ -22,6 +22,7 @@ input double InpDaysD1   = 1500.0;
 //--- CHoCH Settings ---
 input group "--- TRADE EXECUTION & RISK ---"
 input bool   InpEnableTradeExecution   = true;        // Master->Slave Sinyal Köprüsü Aktif
+input bool   InpAlertRejectedTrades    = false;       // ❌ Reddedilen (Puanı Yetersiz) İşlemleri Bildir
 input bool   InpWaitRetest             = false;       // 🎯 Gelişmiş Retest (Pusu) Modu Aktif
 input int    InpRetestMaxBars          = 15;          // ⏳ Pusu Modunda Beklenecek Maksimum Mum
 input double InpRetestDepthPct         = 0.0;         // 📉 Kırılım Çizgisine Göre Ucuzluk Beklentisi (%0=%100 Çizgisi)
@@ -830,8 +831,10 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    msg += "KARAR: " + verdict;
    msg += order_details;
 
-   if(InpAlertPopup) Alert(msg);
-   if(InpAlertPush) SendNotification(msg);
+   if (total_points >= InpMinTradeScoreLimit || InpAlertRejectedTrades) {
+       if(InpAlertPopup) Alert(msg);
+       if(InpAlertPush) SendNotification(msg);
+   }
   }
 
 //+------------------------------------------------------------------+
