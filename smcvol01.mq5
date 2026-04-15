@@ -533,15 +533,18 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    if(copied < 2) return false;
 
    double high[], low[], close[];
+   datetime time[];
    ArrayResize(high, copied);
    ArrayResize(low, copied);
    ArrayResize(close, copied);
+   ArrayResize(time, copied);
 
    for(int i=0; i<copied; i++)
      {
       high[i] = rates[i].high;
       low[i]  = rates[i].low;
       close[i] = rates[i].close;
+      time[i] = rates[i].time;
      }
 
    SState st;
