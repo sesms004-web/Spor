@@ -1204,11 +1204,17 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       double t2_pct = (range != 0) ? ((state.t2_h - state.maj_l) / range) * 100.0 : 0;
       bool t2_valid = (t2_pct >= InpMinPullbackPct && t2_pct <= InpMaxPullbackPct);
 
-      if (val_c < state.d1_l && t2_valid) {
+
+      int r_total = ArraySize(close);
+      bool is_live_bar = (i == r_total - 1);
+      bool is_just_closed = (i == r_total - 2);
+      bool should_eval_bear = (!InpWaitRetest) ? (val_c < state.d1_l) : (is_history && val_c < state.d1_l);
+
+      if (should_eval_bear && t2_valid) {
           // Bearish CHoCH confirmed!
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
-          if (!is_history) {
+          if (!is_history || (InpWaitRetest && is_just_closed)) {
               string msg = "🔴 [" + Symbol() + "] M1 Trend Döndü! (CHoCH)\n";
               msg += "Yön: ⬇️ AŞAĞI\n";
               if (is_strong) {
@@ -1274,11 +1280,17 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       double t2_pct = (range != 0) ? ((state.maj_h - state.t2_l) / range) * 100.0 : 0;
       bool t2_valid = (t2_pct >= InpMinPullbackPct && t2_pct <= InpMaxPullbackPct);
 
-      if (val_c > state.d1_h && t2_valid) {
+
+      int r_total = ArraySize(close);
+      bool is_live_bar = (i == r_total - 1);
+      bool is_just_closed = (i == r_total - 2);
+      bool should_eval_bull = (!InpWaitRetest) ? (val_c > state.d1_h) : (is_history && val_c > state.d1_h);
+
+      if (should_eval_bull && t2_valid) {
           // Bullish CHoCH confirmed!
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
-          if (!is_history) {
+          if (!is_history || (InpWaitRetest && is_just_closed)) {
               string msg = "🟢 [" + Symbol() + "] M1 Trend Döndü! (CHoCH)\n";
               msg += "Yön: ⬆️ YUKARI\n";
               if (is_strong) {
