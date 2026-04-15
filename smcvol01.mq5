@@ -598,7 +598,7 @@ string GetTimeAgoString(datetime past_time, datetime now_time)
 
 string PctToText(double pct, double max_pct, datetime swing_time, datetime current_time)
   {
-   string age = "\n   └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
+   string age = "    └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
    string base_str = "(Çekilme: %" + DoubleToString(pct, 2) + " ↑↑%" + DoubleToString(max_pct, 2);
 
    if(pct <= 10.0)
@@ -648,7 +648,7 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
     json += "  \"is_strong\": " + is_strong_str + ",\n";
     json += "  \"score\": " + IntegerToString(score) + ",\n";
     json += "  \"is_test\": " + is_test_str + ",\n";
-    json += "  \"risk_usd\": " + DoubleToString(InpRiskUSD, 2) + "\n";
+    json += "  \"risk_usd\": " + DoubleToString(InpRiskUSD, 2) + " ";
     json += "}";
 
     FileWrite(handle, json);
@@ -826,16 +826,10 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        double tp_price = (trigger_dir == 1) ? (entry_price + tp_dist) : (entry_price - tp_dist);
 
        BroadcastTradeSignal(Symbol(), trigger_dir, entry_price, sl_price, tp_price, is_strong, total_points, is_test);
-
-       order_details = "
-📊 HESAPLANAN HEDEFLER (Sinyal Köprüsüne Gönderildi):
-";
-       order_details += "Giriş: " + DoubleToString(entry_price, _Digits) + "
-";
-       order_details += "Zarar Durdur (SL): " + DoubleToString(sl_price, _Digits) + " (" + DoubleToString(sl_dist/_Point, 0) + " points)" + sl_note + "
-";
-       order_details += "Kâr Al (TP 3R): " + DoubleToString(tp_price, _Digits) + " (" + DoubleToString(tp_dist/_Point, 0) + " points)
-";
+       order_details = "   📊 HESAPLANAN HEDEFLER (Sinyal Köprüsü):\n";
+       order_details += "Giriş: " + DoubleToString(entry_price, _Digits) + " ";
+       order_details += "Zarar Durdur (SL): " + DoubleToString(sl_price, _Digits) + " (" + DoubleToString(sl_dist/_Point, 0) + " points)" + sl_note + " ";
+       order_details += "Kâr Al (TP 3R): " + DoubleToString(tp_price, _Digits) + " (" + DoubleToString(tp_dist/_Point, 0) + " points)\n";
    }
    else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Puan Yetersiz)";
 
@@ -845,14 +839,14 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string msg = "";
    if (is_test) msg = "🧪 [" + Symbol() + "] TEST ANALİZ RAPORU (Şu Anki Durum)\n";
    else msg = "🚨 [" + Symbol() + "] YENİ İŞLEM FIRSATI [" + lvl_text + "] 🚨\n";
-   msg += "Yön: " + dir_str + "\n\n";
-   msg += "🔍 M1 KIRILIM KALİTESİ:\n" + m1_text + "\n";
+   msg += "Yön: " + dir_str + " \n";
+   msg += "🔍 M1 KIRILIM KALİTESİ:\n" + m1_text + " ";
    msg += "📊 ZAMAN DİLİMİ ANALİZİ (Ana Yön H1: " + (t_h1==1?"⬆️":"⬇️") + "):\n";
    msg += "* " + h1_text;
    msg += "* " + m30_text;
    msg += "* " + m15_text;
-   msg += "* " + m5_text + "\n";
-   msg += "🎯 İŞLEM MENZİLİ (M1 ve M3 Uyumu):\n" + range_text + "\n\n";
+   msg += "* " + m5_text + " ";
+   msg += "🎯 İŞLEM MENZİLİ (M1 ve M3 Uyumu):\n" + range_text + " \n";
    msg += "📈 TOPLAM İŞLEM SKORU:\n";
    msg += "Hesaplanan: " + IntegerToString(total_points) + " Puan (Gerekli Baraj: " + IntegerToString(InpMinTradeScoreLimit) + " Puan)\n";
    msg += "KARAR: " + verdict;
@@ -924,17 +918,17 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    string ago_str = GetTimeAgoString(start_t, t);
 
    msg1 += "📌 REFERANS SWING (M1):\n";
-   msg1 += "- Yön: " + swing_dir + "\n";
-   msg1 += "- Başlangıç: " + swing_start_str + "\n";
-   msg1 += "  └ Süre: " + ago_str + "\n";
-   msg1 += "- Swing High: " + DoubleToString(h_m1, _Digits) + "\n";
-   msg1 += "- Swing Low: " + DoubleToString(l_m1, _Digits) + "\n";
+   msg1 += "- Yön: " + swing_dir + " ";
+   msg1 += "- Başlangıç: " + swing_start_str + " ";
+   msg1 += "  └ Süre: " + ago_str + " ";
+   msg1 += "- Swing High: " + DoubleToString(h_m1, _Digits) + " ";
+   msg1 += "- Swing Low: " + DoubleToString(l_m1, _Digits) + " ";
    msg1 += StringFormat("- Anlık Çekilme: %%%.2f\n", p_m1);
    msg1 += StringFormat("- Maks Çekilme: %%%.2f\n", mp_m1);
    if(p_m1 == 0 && mp_m1 == 0)
      {
       string temp_dir = (t_m1 == 1) ? "SELL" : "BUY";
-      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + "\n";
+      msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " ";
       msg1 += "⚠️ DİKKAT: Trend şişkin! M1 için kısa süreli düzeltme hareketi (" + temp_dir + ") fırsatı beklenebilir.\n\n";
      }
    else if(p_m1 <= 10.0 && mp_m1 <= 10.0)
@@ -948,18 +942,18 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
 
    msg1 += "🧭 MAKRO TREND (H1/M30)\n";
    msg1 += "Durum: " + (bull_pressure >= 50 ? "🟢 YÜKSELİŞ" : "🔴 DÜŞÜŞ") + " (%" + DoubleToString(bull_pressure, 0) + " Boğa Baskısı)\n";
-   msg1 += "H1:  " + (t_h1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_h1, mp_h1, (t_h1==1?tl_h1:th_h1), t) + "\n";
-   msg1 += "M30: " + (t_m30 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m30, mp_m30, (t_m30==1?tl_m30:th_m30), t) + "\n\n";
+   msg1 += "H1:  " + (t_h1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_h1, mp_h1, (t_h1==1?tl_h1:th_h1), t) + " ";
+   msg1 += "M30: " + (t_m30 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m30, mp_m30, (t_m30==1?tl_m30:th_m30), t) + " \n";
 
    msg1 += "🔬 DÜZELTME VE HEDEF (M15/M5)\n";
-   msg1 += "M15: " + (t_m15 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m15, mp_m15, (t_m15==1?tl_m15:th_m15), t) + "\n";
-   msg1 += "M5:  " + (t_m5 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m5, mp_m5, (t_m5==1?tl_m5:th_m5), t) + "\n\n";
+   msg1 += "M15: " + (t_m15 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m15, mp_m15, (t_m15==1?tl_m15:th_m15), t) + " ";
+   msg1 += "M5:  " + (t_m5 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m5, mp_m5, (t_m5==1?tl_m5:th_m5), t) + " \n";
 
    msg1 += "🎯 TETİK VE ONAY GRUBU (M3/M1)\n";
-   msg1 += "M3:  " + (t_m3 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m3, mp_m3, (t_m3==1?tl_m3:th_m3), t) + "\n";
-   msg1 += "M1:  " + (t_m1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m1, mp_m1, (t_m1==1?tl_m1:th_m1), t) + "\n\n";
+   msg1 += "M3:  " + (t_m3 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m3, mp_m3, (t_m3==1?tl_m3:th_m3), t) + " ";
+   msg1 += "M1:  " + (t_m1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m1, mp_m1, (t_m1==1?tl_m1:th_m1), t) + " \n";
 
-   msg1 += "📊 Baskınlık: Makro=↑%" + DoubleToString(macro_bull_pct, 0) + " ↓%" + DoubleToString(macro_bear_pct, 0) + " | Mikro=↑%" + DoubleToString(micro_bull_pct, 0) + " ↓%" + DoubleToString(micro_bear_pct, 0) + "\n";
+   msg1 += "📊 Baskınlık: Makro=↑%" + DoubleToString(macro_bull_pct, 0) + " ↓%" + DoubleToString(macro_bear_pct, 0) + " | Mikro=↑%" + DoubleToString(micro_bull_pct, 0) + " ↓%" + DoubleToString(micro_bear_pct, 0) + " ";
   bool macro_bull = (t_h1 == 1 && t_m30 == 1);
    bool macro_bear = (t_h1 == -1 && t_m30 == -1);
 
@@ -993,9 +987,9 @@ bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int trigg
    if(InpTestMode) msg2 = "🧪 [TEST MODU - " + Symbol() + "] BÖLÜM 2/2\n\n";
    else msg2 = "🚨 YAPI ONAYI BÖLÜM 2/2\n\n";
 
-   msg2 += "🤖 PİYASA DURUMU:\n  " + decision + "\n\n";
-   msg2 += "📝 YAPI ANALİZİ:\n  " + detail + "\n\n";
-   msg2 += "⚠️ ALGORİTMİK SONUÇ:\n  " + risk_advice + "\n\n";
+   msg2 += "🤖 PİYASA DURUMU:\n  " + decision + " \n";
+   msg2 += "📝 YAPI ANALİZİ:\n  " + detail + " \n";
+   msg2 += "⚠️ ALGORİTMİK SONUÇ:\n  " + risk_advice + " \n";
 
 
    if(InpAlertPopup)
@@ -1717,7 +1711,7 @@ void UpdateLiveDashboard()
    txt += GenerateMTFString("H1 ", t_h1, h_h1, l_h1, p_h1, mp_h1);
 
    string range_text = (t_m1 == t_m3 && t_m1 != 0) ? "🚀 UZUN MENZİL (Trend Takibi)" : "⚠️ KISA SÜRECEK (Scalp/Tepki)";
-   txt += "\n🎯 İşlem Beklentisi: " + range_text;
+   txt += " 🎯 İşlem Beklentisi: " + range_text;
 
    Comment(txt);
   }
