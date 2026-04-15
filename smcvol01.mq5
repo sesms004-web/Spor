@@ -380,6 +380,11 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
          if(val_h > state.maj_h && val_c <= state.maj_h) state.maj_h = val_h;
          if(val_c > state.maj_h)
            {
+            state.last_choch_dir = 1;
+            state.last_choch_level = state.maj_h;
+            state.last_choch_time = time[i];
+            state.last_choch_i = i;
+
             state.bos_i = i; state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
             state.st_h.Clear(); state.maj_st = 0; state.tmp_h = val_h; state.tmp_h_i = i;
            }
@@ -428,6 +433,11 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
          if(val_l < state.maj_l && val_c >= state.maj_l) state.maj_l = val_l;
          if(val_c < state.maj_l)
            {
+            state.last_choch_dir = -1;
+            state.last_choch_level = state.maj_l;
+            state.last_choch_time = time[i];
+            state.last_choch_i = i;
+
             state.maj_h = state.tmp_h; state.bos_i = i; state.maj_h_i = state.tmp_h_i;
             state.st_l.Clear(); state.maj_st = 0; state.tmp_l = val_l; state.tmp_l_i = i;
            }
