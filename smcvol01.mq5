@@ -30,6 +30,11 @@ input double InpRiskUSD                = 50.0;        // İşlem Başına Dolar 
 input double InpStrongSLMultiplier     = 1.0;         // Güçlü Kırılım SL Genişletme Çarpanı
 input double InpWeakSLMultiplier       = 1.5;         // Zayıf Kırılım SL Genişletme Çarpanı
 
+input group "--- DİNAMİK SL MESAFE FİLTRESİ ---"
+input bool   InpEnableSLPctLimit       = true;        // Ana Dalga Boyuna Göre SL Sınırlandırıcı (Aktif/Pasif)
+input double InpMinSLPct               = 3.0;         // Min SL Uzaklığı (Ana Dalganın %'si)
+input double InpMaxSLPct               = 15.0;        // Maks SL Uzaklığı (Ana Dalganın %'si)
+
 input int    InpMinTradeScoreLimit = 40;       // İşlem İçin Min. Puan (100 Üzerinden)
 input double InpMinPullbackPct = 40.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
 input double InpMaxPullbackPct = 100.0;          // CHoCH Max Çekilme % (İşlem Yüzdeliği)
@@ -785,6 +790,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    // --- FINAL VERDICT ---
    string verdict = "";
 
+
    if (total_points >= InpMinTradeScoreLimit) {
        verdict = "✅ İŞLEME GİRİLEBİLİR (Yüksek Olasılıklı Kurulum)";
 
@@ -796,6 +802,22 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        if (is_strong) sl_dist *= InpStrongSLMultiplier;
        else           sl_dist *= InpWeakSLMultiplier;
 
+       // YENİ KURAL: Ana Dalga Yüzdesine Göre Dinamik SL Kısıtlaması (Fren/Gaz)
+       string sl_note = "";
+       if (InpEnableSLPctLimit && h_m1 != 0 && l_m1 != 0) {
+           double swing_range = MathAbs(h_m1 - l_m1);
+           if (swing_range > 0) {
+               double sl_pct = (sl_dist / swing_range) * 100.0;
+               if (sl_pct > InpMaxSLPct) {
+                   sl_dist = swing_range * (InpMaxSLPct / 100.0);
+                   sl_note = " 🛑 (Çok Geniş SL Daraltıldı: %" + DoubleToString(InpMaxSLPct, 1) + ")";
+               } else if (sl_pct < InpMinSLPct) {
+                   sl_dist = swing_range * (InpMinSLPct / 100.0);
+                   sl_note = " 🚀 (Çok Dar SL Genişletildi: %" + DoubleToString(InpMinSLPct, 1) + ")";
+               }
+           }
+       }
+
        if (trigger_dir == 1) sl_price = entry_price - sl_dist;
        else                  sl_price = entry_price + sl_dist;
 
@@ -805,10 +827,15 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
        BroadcastTradeSignal(Symbol(), trigger_dir, entry_price, sl_price, tp_price, is_strong, total_points, is_test);
 
-       order_details = "\n📊 HESAPLANAN HEDEFLER (Sinyal Köprüsüne Gönderildi):\n";
-       order_details += "Giriş: " + DoubleToString(entry_price, _Digits) + "\n";
-       order_details += "Zarar Durdur (SL): " + DoubleToString(sl_price, _Digits) + " (" + DoubleToString(sl_dist/_Point, 0) + " points)\n";
-       order_details += "Kâr Al (TP 3R): " + DoubleToString(tp_price, _Digits) + " (" + DoubleToString(tp_dist/_Point, 0) + " points)\n";
+       order_details = "
+📊 HESAPLANAN HEDEFLER (Sinyal Köprüsüne Gönderildi):
+";
+       order_details += "Giriş: " + DoubleToString(entry_price, _Digits) + "
+";
+       order_details += "Zarar Durdur (SL): " + DoubleToString(sl_price, _Digits) + " (" + DoubleToString(sl_dist/_Point, 0) + " points)" + sl_note + "
+";
+       order_details += "Kâr Al (TP 3R): " + DoubleToString(tp_price, _Digits) + " (" + DoubleToString(tp_dist/_Point, 0) + " points)
+";
    }
    else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Puan Yetersiz)";
 
