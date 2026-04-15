@@ -22,6 +22,7 @@ input double InpDaysD1   = 1500.0;
 //--- CHoCH Settings ---
 input group "--- TRADE EXECUTION & RISK ---"
 input bool   InpEnableTradeExecution   = true;        // Master->Slave Sinyal Köprüsü Aktif
+input bool   InpTestMTFChochReport     = false;       // 🧪 Üst Zaman Dilimi (MTF) CHoCH Raporunu Tetikle
 input bool   InpAlertRejectedTrades    = false;       // ❌ Reddedilen (Puanı Yetersiz) İşlemleri Bildir
 input bool   InpWaitRetest             = false;       // 🎯 Gelişmiş Retest (Pusu) Modu Aktif
 input int    InpRetestMaxBars          = 15;          // ⏳ Pusu Modunda Beklenecek Maksimum Mum
@@ -212,6 +213,13 @@ struct SState
    double            mb_l;
    int               mb_i;
 
+   // --- MTF CHoCH Tracking ---
+   int               last_choch_dir;
+   double            last_choch_level;
+   int               last_choch_i;
+   datetime          last_choch_time;
+
+
    // CHoCH Tracking
    double            t1_h;
    double            t1_l;
@@ -302,7 +310,7 @@ double GetDaysForTF(ENUM_TIMEFRAMES tf)
    return days;
   }
 
-void ProcessBarMathOnly(int i, const double &high[], const double &low[], const double &close[], SState &state)
+void ProcessBarMathOnly(int i, const double &high[], const double &low[], const double &close[], const datetime &time[], SState &state)
   {
    double val_h = high[i];
    double val_l = low[i];
@@ -356,6 +364,11 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
          if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_l < state.maj_l && val_c >= state.maj_l) state.maj_l = val_l;
          if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_c < state.maj_l)
            {
+            state.last_choch_dir = -1;
+            state.last_choch_level = state.maj_l;
+            state.last_choch_i = i;
+            state.last_choch_time = time[i];
+
             state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
             state.st_l.Clear(); state.tmp_l = val_l; state.tmp_l_i = i;
             state.maj_h = state.tmp_h; state.maj_h_i = state.tmp_h_i;
@@ -373,6 +386,11 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
          if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_l < state.maj_l && val_c >= state.maj_l) state.maj_l = val_l;
          if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_c < state.maj_l)
            {
+            state.last_choch_dir = -1;
+            state.last_choch_level = state.maj_l;
+            state.last_choch_i = i;
+            state.last_choch_time = time[i];
+
             state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
             state.st_l.Clear(); state.tmp_l = val_l; state.tmp_l_i = i;
             state.maj_h = state.tmp_h; state.maj_h_i = state.tmp_h_i;
@@ -394,6 +412,11 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
          if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_h > state.maj_h && val_c <= state.maj_h) state.maj_h = val_h;
          if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_c > state.maj_h)
            {
+            state.last_choch_dir = 1;
+            state.last_choch_level = state.maj_h;
+            state.last_choch_i = i;
+            state.last_choch_time = time[i];
+
             state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
             state.st_h.Clear(); state.tmp_h = val_h; state.tmp_h_i = i;
             state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
@@ -411,6 +434,11 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
          if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_h > state.maj_h && val_c <= state.maj_h) state.maj_h = val_h;
          if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_c > state.maj_h)
            {
+            state.last_choch_dir = 1;
+            state.last_choch_level = state.maj_h;
+            state.last_choch_i = i;
+            state.last_choch_time = time[i];
+
             state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
             state.st_h.Clear(); state.tmp_h = val_h; state.tmp_h_i = i;
             state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
@@ -418,6 +446,79 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
         }
      }
   }
+
+
+void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, double &c_level, datetime &c_time) {
+   MqlRates rates[];
+   ArraySetAsSeries(rates, false);
+   double tf_days = GetDaysForTF(tf);
+   datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
+
+   int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
+   if(copied < 2) return;
+
+   double high[], low[], close[];
+   datetime time[];
+   ArrayResize(high, copied);
+   ArrayResize(low, copied);
+   ArrayResize(close, copied);
+   ArrayResize(time, copied);
+
+   for(int i=0; i<copied; i++) {
+      high[i] = rates[i].high;
+      low[i]  = rates[i].low;
+      close[i] = rates[i].close;
+      time[i] = rates[i].time;
+   }
+
+   SState st;
+   st.min_h   = high[0]; st.min_h_i = 0; st.min_l   = low[0]; st.min_l_i = 0;
+   st.trig_h  = high[0]; st.trig_l  = low[0];
+   st.tmp_h   = high[0]; st.tmp_h_i = 0; st.tmp_l   = low[0]; st.tmp_l_i = 0;
+   st.min_tr  = (close[0] > rates[0].open) ? 1 : -1;
+
+   double initial_gap = (high[0] - low[0]);
+   if(initial_gap == 0) initial_gap = Point() * 10;
+   double tiny_gap = initial_gap * 0.1;
+
+   st.maj_h = high[0] + tiny_gap;
+   st.maj_l = low[0] - tiny_gap;
+   st.maj_tr = st.min_tr;
+   st.maj_st = 1;
+   st.bos_i = 0;
+   st.maj_h_i = 0;
+   st.maj_l_i = 0;
+   st.mb_h = high[0];
+   st.mb_l = low[0];
+   st.mb_i = 0;
+
+   st.last_choch_dir = 0;
+   st.last_choch_level = 0;
+   st.last_choch_time = 0;
+
+   for(int i = 1; i < copied; i++) {
+      bool inside = (high[i] <= st.mb_h) && (low[i] >= st.mb_l);
+      if(!inside) {
+         if (high[i] > st.mb_h || low[i] < st.mb_l) {
+            st.mb_h = high[i];
+            st.mb_l = low[i];
+            st.mb_i = i;
+         }
+         if(i == copied - 1) {
+            double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+            close[i] = bid;
+            if(bid > high[i]) high[i] = bid;
+            if(bid < low[i]) low[i] = bid;
+         }
+         ProcessBarMathOnly(i, high, low, close, time, st);
+      }
+   }
+
+   c_dir = st.last_choch_dir;
+   c_level = st.last_choch_level;
+   c_time = st.last_choch_time;
+}
+
 
 bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct, datetime current_time,
                     double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l)
@@ -484,7 +585,7 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
             if(bid < low[i]) low[i] = bid;
            }
 
-         ProcessBarMathOnly(i, high, low, close, st);
+         ProcessBarMathOnly(i, high, low, close, time, st);
         }
      }
 
@@ -654,6 +755,64 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
     FileWrite(handle, json);
     FileClose(handle);
     Print("✅ Sinyal Master EA (smcvol01) tarafından Terminal Ortak Klasörüne Yazıldı -> ", filename);
+}
+
+
+struct SMTFReport {
+    string tf_name;
+    int dir;
+    double level;
+    datetime time;
+    string text;
+};
+
+void GenerateMTFChochReport() {
+    SMTFReport reports[4];
+    reports[0].tf_name = "M5 ";
+    reports[1].tf_name = "M15";
+    reports[2].tf_name = "M30";
+    reports[3].tf_name = "H1 ";
+
+    ENUM_TIMEFRAMES tfs[4] = {PERIOD_M5, PERIOD_M15, PERIOD_M30, PERIOD_H1};
+    datetime t = TimeCurrent();
+
+    for (int i=0; i<4; i++) {
+        GetMTFChochDetails(tfs[i], t, reports[i].dir, reports[i].level, reports[i].time);
+    }
+
+    for(int i=0; i<3; i++) {
+        for(int j=0; j<3-i; j++) {
+            if(reports[j].time < reports[j+1].time) {
+                SMTFReport temp = reports[j];
+                reports[j] = reports[j+1];
+                reports[j+1] = temp;
+            }
+        }
+    }
+
+    string msg = "\n⏱️ ÜST ZAMAN DİLİMİ KIRILIM (CHoCH) RAPORU:\n\n";
+    double live_price = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+
+    for(int i=0; i<4; i++) {
+        if (reports[i].time == 0) continue;
+
+        string dir_str = (reports[i].dir == 1) ? "🟢 YUKARI" : ((reports[i].dir == -1) ? "🔴 AŞAĞI " : "BİLİNMİYOR");
+        string age_str = GetTimeAgoString(reports[i].time, t);
+
+        bool is_valid = false;
+        if (reports[i].dir == 1 && live_price > reports[i].level) is_valid = true;
+        if (reports[i].dir == -1 && live_price < reports[i].level) is_valid = true;
+
+        string valid_str = "";
+        if (is_valid) valid_str = "✅ GEÇERLİ";
+        else if (reports[i].dir == -1) valid_str = "❌ GEÇERSİZ (Fiyat Çizginin Üstünde)";
+        else if (reports[i].dir == 1) valid_str = "❌ GEÇERSİZ (Fiyat Çizginin Altında)";
+
+        msg += IntegerToString(i+1) + ". " + reports[i].tf_name + ": " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(reports[i].level, _Digits) + " -> " + valid_str + "\n";
+    }
+
+    if(InpAlertPopup) Alert(msg);
+    if(InpAlertPush) SendNotification(msg);
 }
 
 void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, bool is_test = false)
@@ -1739,6 +1898,13 @@ int OnCalculate(const int rates_total,
    if (prev_calculated == 0 && last_calc_time == time[rates_total - 1]) {
        is_reconnect = true; // Sadece bağlantı koptu geldi, geçmişi silme!
    }
+
+
+   static bool last_test_state = false;
+   if (InpTestMTFChochReport && !last_test_state) {
+       GenerateMTFChochReport();
+   }
+   last_test_state = InpTestMTFChochReport;
 
    if(prev_calculated == 0)
      {
