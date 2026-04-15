@@ -26,7 +26,6 @@ input bool   InpAlertRejectedTrades    = false;       // ❌ Reddedilen (Puanı 
 input bool   InpWaitRetest             = false;       // 🎯 Gelişmiş Retest (Pusu) Modu Aktif
 input int    InpRetestMaxBars          = 15;          // ⏳ Pusu Modunda Beklenecek Maksimum Mum
 input double InpRetestDepthPct         = 0.0;         // 📉 Kırılım Çizgisine Göre Ucuzluk Beklentisi (%0=%100 Çizgisi)
-input double InpMaxChochLineDistPct    = 10.0;        // 📏 D1 (Kırılım Çizgisi) Ana Tepeye Maks Uzaklık %'si
 input double InpRiskUSD                = 50.0;        // İşlem Başına Dolar Riski
 input double InpStrongSLMultiplier     = 1.0;         // Güçlü Kırılım SL Genişletme Çarpanı
 input double InpWeakSLMultiplier       = 1.5;         // Zayıf Kırılım SL Genişletme Çarpanı
@@ -1229,26 +1228,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       double t2_pct = (range != 0) ? ((state.t2_h - state.maj_l) / range) * 100.0 : 0;
       bool t2_valid = (t2_pct >= InpMinPullbackPct && t2_pct <= InpMaxPullbackPct);
 
-      double d1_dist_pct = (range != 0) ? ((state.maj_h - state.d1_l) / range) * 100.0 : 0;
-      bool d1_valid = (d1_dist_pct <= InpMaxChochLineDistPct);
-
       int r_total = ArraySize(close);
       bool is_live_bar = (i == r_total - 1);
       bool is_just_closed = (i == r_total - 2);
       bool should_eval_bear = (!InpWaitRetest) ? (val_c < state.d1_l) : (is_history && val_c < state.d1_l);
 
       if (should_eval_bear && t2_valid) {
-          if (!d1_valid) {
-              if (InpAlertRejectedTrades && (!is_history || (InpWaitRetest && is_just_closed))) {
-                  string rej_msg = "❌ REDDEDİLDİ: CHoCH Kırılım Çizgisi (D1) Ana Tepeye Çok Uzak\n";
-                  rej_msg += "Sınır: %" + DoubleToString(InpMaxChochLineDistPct, 1) + "\n";
-                  rej_msg += "D1 Uzaklığı: %" + DoubleToString(d1_dist_pct, 2) + "\n";
-                  if(InpAlertPopup) Alert(rej_msg);
-                  if(InpAlertPush) SendNotification(rej_msg);
-              }
-              state.choch_dir = 0; // Reset
-          }
-          else {
           // Bearish CHoCH confirmed!
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
@@ -1311,7 +1296,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
           }
           state.choch_dir = 0; // Reset after trigger
-          }
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
 
@@ -1319,26 +1303,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       double t2_pct = (range != 0) ? ((state.maj_h - state.t2_l) / range) * 100.0 : 0;
       bool t2_valid = (t2_pct >= InpMinPullbackPct && t2_pct <= InpMaxPullbackPct);
 
-      double d1_dist_pct = (range != 0) ? ((state.d1_h - state.maj_l) / range) * 100.0 : 0;
-      bool d1_valid = (d1_dist_pct <= InpMaxChochLineDistPct);
-
       int r_total = ArraySize(close);
       bool is_live_bar = (i == r_total - 1);
       bool is_just_closed = (i == r_total - 2);
       bool should_eval_bull = (!InpWaitRetest) ? (val_c > state.d1_h) : (is_history && val_c > state.d1_h);
 
       if (should_eval_bull && t2_valid) {
-          if (!d1_valid) {
-              if (InpAlertRejectedTrades && (!is_history || (InpWaitRetest && is_just_closed))) {
-                  string rej_msg = "❌ REDDEDİLDİ: CHoCH Kırılım Çizgisi (D1) Ana Dibe Çok Uzak\n";
-                  rej_msg += "Sınır: %" + DoubleToString(InpMaxChochLineDistPct, 1) + "\n";
-                  rej_msg += "D1 Uzaklığı: %" + DoubleToString(d1_dist_pct, 2) + "\n";
-                  if(InpAlertPopup) Alert(rej_msg);
-                  if(InpAlertPush) SendNotification(rej_msg);
-              }
-              state.choch_dir = 0; // Reset
-          }
-          else {
           // Bullish CHoCH confirmed!
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
@@ -1401,7 +1371,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
           }
           state.choch_dir = 0; // Reset after trigger
-          }
       }
    }
 
