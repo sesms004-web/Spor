@@ -366,7 +366,6 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
            {
             state.last_choch_dir = -1;
             state.last_choch_level = state.maj_l;
-            state.last_choch_i = i;
             state.last_choch_time = time[i];
 
             state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
@@ -393,7 +392,6 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
            {
             state.last_choch_dir = -1;
             state.last_choch_level = state.maj_l;
-            state.last_choch_i = i;
             state.last_choch_time = time[i];
 
             state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
@@ -419,7 +417,6 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
            {
             state.last_choch_dir = 1;
             state.last_choch_level = state.maj_h;
-            state.last_choch_i = i;
             state.last_choch_time = time[i];
 
             state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
@@ -446,7 +443,6 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
            {
             state.last_choch_dir = 1;
             state.last_choch_level = state.maj_h;
-            state.last_choch_i = i;
             state.last_choch_time = time[i];
 
             state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
@@ -1410,39 +1406,25 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
           if (!is_history || (InpWaitRetest && is_just_closed)) {
-              string msg = "🔴 [" + Symbol() + "] M1 Trend Döndü! (CHoCH)\n";
-              msg += "Yön: ⬇️ AŞAĞI\n";
-              if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.";
-              } else {
-                  msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.";
-              }
-
               // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bear = 0;
               static int last_alert_maj_i_bear = 0;
               if (state.d1_i != last_alert_d1_i_bear && state.maj_h_i != last_alert_maj_i_bear) {
-                  if (InpEnableAlertCHoCHBase) {
-                      if(InpAlertPopup) Alert(msg);
-                      if(InpAlertPush) SendNotification(msg);
-                  }
 
-                  if (InpEnableTradeExecution) {
-                      if (!InpWaitRetest) {
-                          EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, state.t2_h);
-                      } else {
-                          // Retest Modu: İşlemi Pusuya Yatır
-                          g_pending_active = true;
-                          g_pending_dir = -1;
-                          g_pending_bar_i = i;
-                          g_pending_sl = state.t2_h;
-                          g_pending_is_strong = is_strong;
-                          g_pending_p_pct = p_pct;
+                  if (!InpWaitRetest) {
+                      EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, state.t2_h);
+                  } else {
+                      // Retest Modu: İşlemi Pusuya Yatır
+                      g_pending_active = true;
+                      g_pending_dir = -1;
+                      g_pending_bar_i = i;
+                      g_pending_sl = state.t2_h;
+                      g_pending_is_strong = is_strong;
+                      g_pending_p_pct = p_pct;
 
-                          // Entry = CHoCH Line + (SL - CHoCH Line) * Depth%
-                          double dist = state.t2_h - state.d1_l;
-                          g_pending_entry = state.d1_l + (dist * (InpRetestDepthPct / 100.0));
-                      }
+                      // Entry = CHoCH Line + (SL - CHoCH Line) * Depth%
+                      double dist = state.t2_h - state.d1_l;
+                      g_pending_entry = state.d1_l + (dist * (InpRetestDepthPct / 100.0));
                   }
 
                   last_alert_d1_i_bear = state.d1_i;
@@ -1485,39 +1467,25 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
           if (!is_history || (InpWaitRetest && is_just_closed)) {
-              string msg = "🟢 [" + Symbol() + "] M1 Trend Döndü! (CHoCH)\n";
-              msg += "Yön: ⬆️ YUKARI\n";
-              if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Dip likiditesi alındı.";
-              } else {
-                  msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.";
-              }
-
               // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bull = 0;
               static int last_alert_maj_i_bull = 0;
               if (state.d1_i != last_alert_d1_i_bull && state.maj_l_i != last_alert_maj_i_bull) {
-                  if (InpEnableAlertCHoCHBase) {
-                      if(InpAlertPopup) Alert(msg);
-                      if(InpAlertPush) SendNotification(msg);
-                  }
 
-                  if (InpEnableTradeExecution) {
-                      if (!InpWaitRetest) {
-                          EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, state.t2_l);
-                      } else {
-                          // Retest Modu: İşlemi Pusuya Yatır
-                          g_pending_active = true;
-                          g_pending_dir = 1;
-                          g_pending_bar_i = i;
-                          g_pending_sl = state.t2_l;
-                          g_pending_is_strong = is_strong;
-                          g_pending_p_pct = p_pct;
+                  if (!InpWaitRetest) {
+                      EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, state.t2_l);
+                  } else {
+                      // Retest Modu: İşlemi Pusuya Yatır
+                      g_pending_active = true;
+                      g_pending_dir = 1;
+                      g_pending_bar_i = i;
+                      g_pending_sl = state.t2_l;
+                      g_pending_is_strong = is_strong;
+                      g_pending_p_pct = p_pct;
 
-                          // Entry = CHoCH Line - (CHoCH Line - SL) * Depth%
-                          double dist = state.d1_h - state.t2_l;
-                          g_pending_entry = state.d1_h - (dist * (InpRetestDepthPct / 100.0));
-                      }
+                      // Entry = CHoCH Line - (CHoCH Line - SL) * Depth%
+                      double dist = state.d1_h - state.t2_l;
+                      g_pending_entry = state.d1_h - (dist * (InpRetestDepthPct / 100.0));
                   }
 
                   last_alert_d1_i_bull = state.d1_i;
@@ -1905,13 +1873,12 @@ int OnCalculate(const int rates_total,
 
 
 
-   // Hafıza Koruması (Wipe Bug Fix)
    static datetime last_calc_time = 0;
-   bool is_reconnect = false;
-   if (prev_calculated == 0 && last_calc_time == time[rates_total - 1]) {
-       is_reconnect = true; // Sadece bağlantı koptu geldi, geçmişi silme!
-   }
+   int virtual_prev = prev_calculated;
 
+   if (prev_calculated == 0 && last_calc_time == time[rates_total - 1]) {
+       virtual_prev = rates_total - 1; // Hafıza Koruması (Wipe Bug Fix)
+   }
 
    static bool last_test_state = false;
    if (InpTestMTFChochReport && !last_test_state) {
@@ -1919,33 +1886,31 @@ int OnCalculate(const int rates_total,
    }
    last_test_state = InpTestMTFChochReport;
 
-   if(prev_calculated == 0)
+   if(virtual_prev == 0)
      {
       last_calc_time = time[rates_total - 1];
 
-      if (!is_reconnect) {
-          double tf_days = GetDaysForTF(Period());
-          g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
+      double tf_days = GetDaysForTF(Period());
+      g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
 
-          g_counter = 0;
-          g_last_alert_maj_h = 0;
-          g_last_alert_maj_l = 0;
-          g_last_alert_trend = 0;
-          g_level1_triggered = false;
-          g_level2_triggered = false;
-          g_level1_missed = false;
-          g_level2_missed = false;
+      g_counter = 0;
+      g_last_alert_maj_h = 0;
+      g_last_alert_maj_l = 0;
+      g_last_alert_trend = 0;
+      g_level1_triggered = false;
+      g_level2_triggered = false;
+      g_level1_missed = false;
+      g_level2_missed = false;
 
-          ObjectsDeleteAll(0, "Structure_");
-          ObjectsDeleteAll(0, "Minor_");
-          ObjectsDeleteAll(0, "Major_");
-          ObjectsDeleteAll(0, "HLine_");
-          ObjectsDeleteAll(0, "LiveLeg_");
-          ObjectsDeleteAll(0, "CHoCH_Bear_");
-          ObjectsDeleteAll(0, "CHoCH_Bull_");
-          ObjectsDeleteAll(0, "CHoCH_Path_");
-          ObjectsDeleteAll(0, "CHoCH_Signal_");
-      }
+      ObjectsDeleteAll(0, "Structure_");
+      ObjectsDeleteAll(0, "Minor_");
+      ObjectsDeleteAll(0, "Major_");
+      ObjectsDeleteAll(0, "HLine_");
+      ObjectsDeleteAll(0, "LiveLeg_");
+      ObjectsDeleteAll(0, "CHoCH_Bear_");
+      ObjectsDeleteAll(0, "CHoCH_Bull_");
+      ObjectsDeleteAll(0, "CHoCH_Path_");
+      ObjectsDeleteAll(0, "CHoCH_Signal_");
 
 
       int start_idx = 0;
@@ -2021,10 +1986,10 @@ int OnCalculate(const int rates_total,
      }
    else
      {
-      limit = prev_calculated - 1;
+      limit = virtual_prev - 1;
      }
 
-   if (prev_calculated == 0 && limit < rates_total) {
+   if (virtual_prev == 0 && limit < rates_total) {
       g_state_hist.mb_h = high[limit-1];
       g_state_hist.mb_l = low[limit-1];
       g_state_hist.mb_i = limit-1;
