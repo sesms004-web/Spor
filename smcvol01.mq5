@@ -1138,7 +1138,13 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    if (total_points >= InpMinTradeScoreLimit || InpAlertRejectedTrades) {
        if(InpAlertPopup) Alert(msg);
-       if(InpAlertPush) SendNotification(msg);
+       if(InpAlertPush) {
+           string msg1 = "🚨 [" + Symbol() + "] YENİ İŞLEM (1/2)\n" + "🔍 M1 KIRILIM:\n" + m1_text + "\n📊 ZAMAN DİLİMİ ANALİZİ:\n" + h1_text + m30_text + m15_text + m5_text;
+           string msg2 = "🚨 [" + Symbol() + "] (2/2)\n" + sup_text + "\n📈 SKOR: " + IntegerToString(total_points) + " Puan\n" + verdict;
+           SendNotification(msg1);
+           Sleep(100); // Prevent spam block
+           SendNotification(msg2);
+       }
    }
   }
 
