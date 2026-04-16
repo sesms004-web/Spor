@@ -2039,7 +2039,7 @@ int OnCalculate(const int rates_total,
       ProcessBar(last_idx, open, high, low, close, time, g_state_curr, false, true);
      }
 
-   if(draw_ui && InpShowMin)
+   if(InpShowMin)
      {
       int leg_i;
       double leg_p;
