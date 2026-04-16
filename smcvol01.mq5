@@ -176,6 +176,7 @@ double g_pending_entry = 0.0;
 double g_pending_sl = 0.0;
 bool   g_pending_is_strong = false;
 double g_pending_p_pct = 0.0;
+int    g_pending_maj_extreme_i = 0;
 
 struct SState
   {
@@ -830,7 +831,7 @@ void GenerateMTFChochReport() {
     if(InpAlertPush) SendNotification(msg);
 }
 
-void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, bool is_test = false)
+void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, int maj_extreme_i, bool is_test = false)
   {
    int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
    double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
@@ -999,11 +1000,19 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        double tp_dist = sl_dist * 3.0;
        double tp_price = (trigger_dir == 1) ? (entry_price + tp_dist) : (entry_price - tp_dist);
 
-       BroadcastTradeSignal(Symbol(), trigger_dir, entry_price, sl_price, tp_price, is_strong, total_points, is_test);
+
        order_details = "   📊 HESAPLANAN HEDEFLER (Sinyal Köprüsü):\n";
        order_details += "Giriş: " + DoubleToString(entry_price, _Digits) + " ";
        order_details += "Zarar Durdur (SL): " + DoubleToString(sl_price, _Digits) + " (" + DoubleToString(sl_dist/_Point, 0) + " points)" + sl_note + " ";
        order_details += "Kâr Al (TP 3R): " + DoubleToString(tp_price, _Digits) + " (" + DoubleToString(tp_dist/_Point, 0) + " points)\n";
+
+       static int last_broadcast_maj_extreme_i = -1;
+       if (maj_extreme_i != last_broadcast_maj_extreme_i || is_test || maj_extreme_i == 0) {
+           BroadcastTradeSignal(Symbol(), trigger_dir, entry_price, sl_price, tp_price, is_strong, total_points, is_test);
+           last_broadcast_maj_extreme_i = maj_extreme_i;
+       } else {
+           order_details += "\n⚠️ UYARI: Bu dalgada zaten işleme girildi, tekrar girilmiyor! Sadece bildirim.";
+       }
    }
    else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Puan Yetersiz)";
 
@@ -1229,7 +1238,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
            if (g_pending_dir == -1 && val_h >= g_pending_entry) executed = true;
 
            if (executed) {
-               EvaluateTradeSignal(i, time[i], g_pending_entry, g_pending_dir, g_pending_p_pct, g_pending_is_strong, g_pending_sl);
+               EvaluateTradeSignal(i, time[i], g_pending_entry, g_pending_dir, g_pending_p_pct, g_pending_is_strong, g_pending_sl, g_pending_maj_extreme_i);
                g_pending_active = false; // Pusu tamamlandı, emir gönderildi.
            }
        }
@@ -1419,10 +1428,10 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bear = 0;
               static int last_alert_maj_i_bear = 0;
-              if (state.d1_i != last_alert_d1_i_bear && state.maj_h_i != last_alert_maj_i_bear) {
+              if (state.d1_i != last_alert_d1_i_bear) {
 
                   if (!InpWaitRetest) {
-                      EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, state.t2_h);
+                      EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, state.t2_h, state.maj_h_i);
                   } else {
                       // Retest Modu: İşlemi Pusuya Yatır
                       g_pending_active = true;
@@ -1431,6 +1440,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       g_pending_sl = state.t2_h;
                       g_pending_is_strong = is_strong;
                       g_pending_p_pct = p_pct;
+                      g_pending_maj_extreme_i = state.maj_h_i;
 
                       // Entry = CHoCH Line + (SL - CHoCH Line) * Depth%
                       double dist = state.t2_h - state.d1_l;
@@ -1484,10 +1494,10 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bull = 0;
               static int last_alert_maj_i_bull = 0;
-              if (state.d1_i != last_alert_d1_i_bull && state.maj_l_i != last_alert_maj_i_bull) {
+              if (state.d1_i != last_alert_d1_i_bull) {
 
                   if (!InpWaitRetest) {
-                      EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, state.t2_l);
+                      EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, state.t2_l, state.maj_l_i);
                   } else {
                       // Retest Modu: İşlemi Pusuya Yatır
                       g_pending_active = true;
@@ -1496,6 +1506,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       g_pending_sl = state.t2_l;
                       g_pending_is_strong = is_strong;
                       g_pending_p_pct = p_pct;
+                      g_pending_maj_extreme_i = state.maj_l_i;
 
                       // Entry = CHoCH Line - (CHoCH Line - SL) * Depth%
                       double dist = state.d1_h - state.t2_l;
@@ -1995,7 +2006,7 @@ int OnCalculate(const int rates_total,
 
           // EvaluateTradeSignal param format: current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, bool is_test
           double dummy_ext = (test_dir == 1) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) - 50*Point() : SymbolInfoDouble(Symbol(), SYMBOL_BID) + 50*Point();
-          EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, dummy_ext, true);
+          EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, dummy_ext, 0, true);
       }
      }
    else
