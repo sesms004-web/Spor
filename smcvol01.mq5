@@ -951,7 +951,107 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        }
    }
    m5_text = GenerateMTFString("M5 ", t_m5, h_m5, l_m5, p_m5, mp_m5) + m5_text;
+
    total_points += m5_points;
+
+   // --- YENİ DESTEKLEYİCİ CHOCH FAKEOUT (TUZAK) MATRİS SİSTEMİ ---
+
+   int c_dir_h1=0, c_dir_m30=0, c_dir_m15=0, c_dir_m5=0;
+   double c_lvl_h1=0, c_lvl_m30=0, c_lvl_m15=0, c_lvl_m5=0;
+   datetime c_t_h1=0, c_t_m30=0, c_t_m15=0, c_t_m5=0;
+
+   GetMTFChochDetails(PERIOD_H1, t, c_dir_h1, c_lvl_h1, c_t_h1);
+   GetMTFChochDetails(PERIOD_M30, t, c_dir_m30, c_lvl_m30, c_t_m30);
+   GetMTFChochDetails(PERIOD_M15, t, c_dir_m15, c_lvl_m15, c_t_m15);
+   GetMTFChochDetails(PERIOD_M5, t, c_dir_m5, c_lvl_m5, c_t_m5);
+
+   int h1_sup_points=0, m30_sup_points=0, m15_sup_points=0, m5_sup_points=0;
+   string h1_sup_text="", m30_sup_text="", m15_sup_text="", m5_sup_text="";
+
+   bool valid_h1 = (c_dir_h1 == 1 && live_price > c_lvl_h1) || (c_dir_h1 == -1 && live_price < c_lvl_h1);
+   bool valid_m30 = (c_dir_m30 == 1 && live_price > c_lvl_m30) || (c_dir_m30 == -1 && live_price < c_lvl_m30);
+   bool valid_m15 = (c_dir_m15 == 1 && live_price > c_lvl_m15) || (c_dir_m15 == -1 && live_price < c_lvl_m15);
+   bool valid_m5 = (c_dir_m5 == 1 && live_price > c_lvl_m5) || (c_dir_m5 == -1 && live_price < c_lvl_m5);
+
+   if (trigger_dir == 1) { // M1 BUY
+       if (c_dir_h1 == 1 && valid_h1) { h1_sup_points = 20; h1_sup_text = "🟢 H1 Yukarı + Geçerli -> [+20 Puan]\n"; }
+       else if (c_dir_h1 == 1 && !valid_h1) { h1_sup_points = -20; h1_sup_text = "🔴 H1 Yukarı + Geçersiz (Tuzak) -> [-20 Puan]\n"; }
+       else if (c_dir_h1 == -1 && valid_h1) { h1_sup_points = -20; h1_sup_text = "🔴 H1 Aşağı + Geçerli -> [-20 Puan]\n"; }
+       else if (c_dir_h1 == -1 && !valid_h1) { h1_sup_points = 20; h1_sup_text = "🟢 H1 Aşağı + Geçersiz (Tuzak) -> [+20 Puan]\n"; }
+
+       if (c_dir_m30 == 1 && valid_m30) { m30_sup_points = 15; m30_sup_text = "🟢 M30 Yukarı + Geçerli -> [+15 Puan]\n"; }
+       else if (c_dir_m30 == 1 && !valid_m30) { m30_sup_points = -15; m30_sup_text = "🔴 M30 Yukarı + Geçersiz (Tuzak) -> [-15 Puan]\n"; }
+       else if (c_dir_m30 == -1 && valid_m30) { m30_sup_points = -15; m30_sup_text = "🔴 M30 Aşağı + Geçerli -> [-15 Puan]\n"; }
+       else if (c_dir_m30 == -1 && !valid_m30) { m30_sup_points = 15; m30_sup_text = "🟢 M30 Aşağı + Geçersiz (Tuzak) -> [+15 Puan]\n"; }
+
+       if (c_dir_m15 == 1 && valid_m15) { m15_sup_points = 10; m15_sup_text = "🟢 M15 Yukarı + Geçerli -> [+10 Puan]\n"; }
+       else if (c_dir_m15 == 1 && !valid_m15) { m15_sup_points = -10; m15_sup_text = "🔴 M15 Yukarı + Geçersiz (Tuzak) -> [-10 Puan]\n"; }
+       else if (c_dir_m15 == -1 && valid_m15) { m15_sup_points = -10; m15_sup_text = "🔴 M15 Aşağı + Geçerli -> [-10 Puan]\n"; }
+       else if (c_dir_m15 == -1 && !valid_m15) { m15_sup_points = 10; m15_sup_text = "🟢 M15 Aşağı + Geçersiz (Tuzak) -> [+10 Puan]\n"; }
+
+       if (c_dir_m5 == 1 && valid_m5) { m5_sup_points = 5; m5_sup_text = "🟢 M5 Yukarı + Geçerli -> [+5 Puan]\n"; }
+       else if (c_dir_m5 == 1 && !valid_m5) { m5_sup_points = -5; m5_sup_text = "🔴 M5 Yukarı + Geçersiz (Tuzak) -> [-5 Puan]\n"; }
+       else if (c_dir_m5 == -1 && valid_m5) { m5_sup_points = -5; m5_sup_text = "🔴 M5 Aşağı + Geçerli -> [-5 Puan]\n"; }
+       else if (c_dir_m5 == -1 && !valid_m5) { m5_sup_points = 5; m5_sup_text = "🟢 M5 Aşağı + Geçersiz (Tuzak) -> [+5 Puan]\n"; }
+   } else { // M1 SELL
+       if (c_dir_h1 == -1 && valid_h1) { h1_sup_points = 20; h1_sup_text = "🔴 H1 Aşağı + Geçerli -> [+20 Puan]\n"; }
+       else if (c_dir_h1 == -1 && !valid_h1) { h1_sup_points = -20; h1_sup_text = "🟢 H1 Aşağı + Geçersiz (Tuzak) -> [-20 Puan]\n"; }
+       else if (c_dir_h1 == 1 && valid_h1) { h1_sup_points = -20; h1_sup_text = "🟢 H1 Yukarı + Geçerli -> [-20 Puan]\n"; }
+       else if (c_dir_h1 == 1 && !valid_h1) { h1_sup_points = 20; h1_sup_text = "🔴 H1 Yukarı + Geçersiz (Tuzak) -> [+20 Puan]\n"; }
+
+       if (c_dir_m30 == -1 && valid_m30) { m30_sup_points = 15; m30_sup_text = "🔴 M30 Aşağı + Geçerli -> [+15 Puan]\n"; }
+       else if (c_dir_m30 == -1 && !valid_m30) { m30_sup_points = -15; m30_sup_text = "🟢 M30 Aşağı + Geçersiz (Tuzak) -> [-15 Puan]\n"; }
+       else if (c_dir_m30 == 1 && valid_m30) { m30_sup_points = -15; m30_sup_text = "🟢 M30 Yukarı + Geçerli -> [-15 Puan]\n"; }
+       else if (c_dir_m30 == 1 && !valid_m30) { m30_sup_points = 15; m30_sup_text = "🔴 M30 Yukarı + Geçersiz (Tuzak) -> [+15 Puan]\n"; }
+
+       if (c_dir_m15 == -1 && valid_m15) { m15_sup_points = 10; m15_sup_text = "🔴 M15 Aşağı + Geçerli -> [+10 Puan]\n"; }
+       else if (c_dir_m15 == -1 && !valid_m15) { m15_sup_points = -10; m15_sup_text = "🟢 M15 Aşağı + Geçersiz (Tuzak) -> [-10 Puan]\n"; }
+       else if (c_dir_m15 == 1 && valid_m15) { m15_sup_points = -10; m15_sup_text = "🟢 M15 Yukarı + Geçerli -> [-10 Puan]\n"; }
+       else if (c_dir_m15 == 1 && !valid_m15) { m15_sup_points = 10; m15_sup_text = "🔴 M15 Yukarı + Geçersiz (Tuzak) -> [+10 Puan]\n"; }
+
+       if (c_dir_m5 == -1 && valid_m5) { m5_sup_points = 5; m5_sup_text = "🔴 M5 Aşağı + Geçerli -> [+5 Puan]\n"; }
+       else if (c_dir_m5 == -1 && !valid_m5) { m5_sup_points = -5; m5_sup_text = "🟢 M5 Aşağı + Geçersiz (Tuzak) -> [-5 Puan]\n"; }
+       else if (c_dir_m5 == 1 && valid_m5) { m5_sup_points = -5; m5_sup_text = "🟢 M5 Yukarı + Geçerli -> [-5 Puan]\n"; }
+       else if (c_dir_m5 == 1 && !valid_m5) { m5_sup_points = 5; m5_sup_text = "🔴 M5 Yukarı + Geçersiz (Tuzak) -> [+5 Puan]\n"; }
+   }
+
+   total_points += h1_sup_points + m30_sup_points + m15_sup_points + m5_sup_points;
+
+   // TIME PENALTY LOGIC (4. Sırada H1 ise -15, değilse -10)
+   SMTFReport treps[4];
+   treps[0].time = c_t_h1; treps[0].tf = PERIOD_H1; treps[0].tf_name = "H1";
+   treps[1].time = c_t_m30; treps[1].tf = PERIOD_M30; treps[1].tf_name = "M30";
+   treps[2].time = c_t_m15; treps[2].tf = PERIOD_M15; treps[2].tf_name = "M15";
+   treps[3].time = c_t_m5; treps[3].tf = PERIOD_M5; treps[3].tf_name = "M5";
+
+   for(int i=0; i<3; i++) {
+       for(int j=0; j<3-i; j++) {
+           if(treps[j].time < treps[j+1].time) {
+               SMTFReport temp = treps[j];
+               treps[j] = treps[j+1];
+               treps[j+1] = temp;
+           }
+       }
+   }
+
+   string penalty_text = "";
+   int penalty = 0;
+
+   // Sadece 4. En Eskiye Ceza Var (index 3)
+   if (treps[3].time != 0) {
+       int pen_4 = (treps[3].tf == PERIOD_H1) ? -15 : -10;
+       penalty += pen_4;
+       penalty_text += "4. En Eski (" + treps[3].tf_name + "): [" + IntegerToString(pen_4) + " Puan]\n";
+   }
+
+   total_points += penalty;
+
+   string sup_text = "\n🛡️ DESTEKLEYİCİ YAPILAR & CEZALAR:\n";
+   sup_text += h1_sup_text + m30_sup_text + m15_sup_text + m5_sup_text;
+   if (penalty != 0) {
+       sup_text += "⏱️ ZAMAN CEZALARI:\n" + penalty_text;
+   }
+
 
    string order_details = "";
    // --- M1 vs M3 RANGE EXPECTATION ---
@@ -1030,6 +1130,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    msg += "* " + m15_text;
    msg += "* " + m5_text + " ";
    msg += "🎯 İŞLEM MENZİLİ (M1 ve M3 Uyumu):\n" + range_text + " \n";
+   msg += sup_text + "\n";
    msg += "📈 TOPLAM İŞLEM SKORU:\n";
    msg += "Hesaplanan: " + IntegerToString(total_points) + " Puan (Gerekli Baraj: " + IntegerToString(InpMinTradeScoreLimit) + " Puan)\n";
    msg += "KARAR: " + verdict;
