@@ -770,6 +770,7 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
 
 
 struct SMTFReport {
+    ENUM_TIMEFRAMES tf;
     string tf_name;
     int dir;
     double level;
@@ -788,6 +789,7 @@ void GenerateMTFChochReport() {
     datetime t = TimeCurrent();
 
     for (int i=0; i<4; i++) {
+        reports[i].tf = tfs[i];
         GetMTFChochDetails(tfs[i], t, reports[i].dir, reports[i].level, reports[i].time);
     }
 
@@ -809,6 +811,8 @@ void GenerateMTFChochReport() {
 
         string dir_str = (reports[i].dir == 1) ? "🟢 YUKARI" : ((reports[i].dir == -1) ? "🔴 AŞAĞI " : "BİLİNMİYOR");
         string age_str = GetTimeAgoString(reports[i].time, t);
+        int bars_ago = iBarShift(Symbol(), reports[i].tf, reports[i].time);
+        age_str += ", " + IntegerToString(bars_ago) + " Mum Önce";
 
         bool is_valid = false;
         if (reports[i].dir == 1 && live_price > reports[i].level) is_valid = true;
