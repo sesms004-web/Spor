@@ -464,41 +464,41 @@ void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, d
    int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
    if(copied < 2) return;
 
-   double open[], high[], low[], close[];
-   datetime time[];
-   ArrayResize(open, copied);
-   ArrayResize(high, copied);
-   ArrayResize(low, copied);
-   ArrayResize(close, copied);
-   ArrayResize(time, copied);
+   double _open[], _high[], _low[], _close[];
+   datetime _time[];
+   ArrayResize(_open, copied);
+   ArrayResize(_high, copied);
+   ArrayResize(_low, copied);
+   ArrayResize(_close, copied);
+   ArrayResize(_time, copied);
 
    for(int i=0; i<copied; i++) {
-      open[i]  = rates[i].open;
-      high[i]  = rates[i].high;
-      low[i]   = rates[i].low;
-      close[i] = rates[i].close;
-      time[i]  = rates[i].time;
+      _open[i]  = rates[i].open;
+      _high[i]  = rates[i].high;
+      _low[i]   = rates[i].low;
+      _close[i] = rates[i].close;
+      _time[i]  = rates[i].time;
    }
 
    SState st;
-   st.min_h   = high[0]; st.min_h_i = 0; st.min_l   = low[0]; st.min_l_i = 0;
-   st.trig_h  = high[0]; st.trig_l  = low[0];
-   st.tmp_h   = high[0]; st.tmp_h_i = 0; st.tmp_l   = low[0]; st.tmp_l_i = 0;
-   st.min_tr  = (close[0] > rates[0].open) ? 1 : -1;
+   st.min_h   = _high[0]; st.min_h_i = 0; st.min_l   = _low[0]; st.min_l_i = 0;
+   st.trig_h  = _high[0]; st.trig_l  = _low[0];
+   st.tmp_h   = _high[0]; st.tmp_h_i = 0; st.tmp_l   = _low[0]; st.tmp_l_i = 0;
+   st.min_tr  = (_close[0] > rates[0].open) ? 1 : -1;
 
-   double initial_gap = (high[0] - low[0]);
+   double initial_gap = (_high[0] - _low[0]);
    if(initial_gap == 0) initial_gap = Point() * 10;
    double tiny_gap = initial_gap * 0.1;
 
-   st.maj_h = high[0] + tiny_gap;
-   st.maj_l = low[0] - tiny_gap;
+   st.maj_h = _high[0] + tiny_gap;
+   st.maj_l = _low[0] - tiny_gap;
    st.maj_tr = st.min_tr;
    st.maj_st = 1;
    st.bos_i = 0;
    st.maj_h_i = 0;
    st.maj_l_i = 0;
-   st.mb_h = high[0];
-   st.mb_l = low[0];
+   st.mb_h = _high[0];
+   st.mb_l = _low[0];
    st.mb_i = 0;
 
    st.last_choch_dir = 0;
@@ -506,20 +506,20 @@ void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, d
    st.last_choch_time = 0;
 
    for(int i = 1; i < copied; i++) {
-      bool inside = (high[i] <= st.mb_h) && (low[i] >= st.mb_l);
+      bool inside = (_high[i] <= st.mb_h) && (_low[i] >= st.mb_l);
       if(!inside) {
-         if (high[i] > st.mb_h || low[i] < st.mb_l) {
-            st.mb_h = high[i];
-            st.mb_l = low[i];
+         if (_high[i] > st.mb_h || _low[i] < st.mb_l) {
+            st.mb_h = _high[i];
+            st.mb_l = _low[i];
             st.mb_i = i;
          }
          if(i == copied - 1) {
             double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-            close[i] = bid;
-            if(bid > high[i]) high[i] = bid;
-            if(bid < low[i]) low[i] = bid;
+            _close[i] = bid;
+            if(bid > _high[i]) _high[i] = bid;
+            if(bid < _low[i]) _low[i] = bid;
          }
-         ProcessBar(i, open, high, low, close, time, st, true, false);
+         ProcessBar(i, _open, _high, _low, _close, _time, st, true, false);
       }
    }
 
@@ -541,63 +541,65 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
    if(copied < 2) return false;
 
-   double high[], low[], close[];
-   datetime time[];
-   ArrayResize(high, copied);
-   ArrayResize(low, copied);
-   ArrayResize(close, copied);
-   ArrayResize(time, copied);
+   double _open[], _high[], _low[], _close[];
+   datetime _time[];
+   ArrayResize(_open, copied);
+   ArrayResize(_high, copied);
+   ArrayResize(_low, copied);
+   ArrayResize(_close, copied);
+   ArrayResize(_time, copied);
 
    for(int i=0; i<copied; i++)
      {
-      high[i] = rates[i].high;
-      low[i]  = rates[i].low;
-      close[i] = rates[i].close;
-      time[i] = rates[i].time;
+      _open[i]  = rates[i].open;
+      _high[i] = rates[i].high;
+      _low[i]  = rates[i].low;
+      _close[i] = rates[i].close;
+      _time[i] = rates[i].time;
      }
 
    SState st;
-   st.min_h   = high[0]; st.min_h_i = 0; st.min_l   = low[0]; st.min_l_i = 0;
-   st.trig_h  = high[0]; st.trig_l  = low[0];
-   st.tmp_h   = high[0]; st.tmp_h_i = 0; st.tmp_l   = low[0]; st.tmp_l_i = 0;
-   st.min_tr  = (close[0] > rates[0].open) ? 1 : -1;
+   st.min_h   = _high[0]; st.min_h_i = 0; st.min_l   = _low[0]; st.min_l_i = 0;
+   st.trig_h  = _high[0]; st.trig_l  = _low[0];
+   st.tmp_h   = _high[0]; st.tmp_h_i = 0; st.tmp_l   = _low[0]; st.tmp_l_i = 0;
+   st.min_tr  = (_close[0] > rates[0].open) ? 1 : -1;
 
-   double initial_gap = (high[0] - low[0]);
+   double initial_gap = (_high[0] - _low[0]);
    if(initial_gap == 0) initial_gap = Point() * 10;
    double tiny_gap = initial_gap * 0.1;
 
-   st.maj_h = high[0] + tiny_gap;
-   st.maj_l = low[0] - tiny_gap;
+   st.maj_h = _high[0] + tiny_gap;
+   st.maj_l = _low[0] - tiny_gap;
    st.maj_tr = st.min_tr;
    st.maj_st = 1;
    st.bos_i = 0;
    st.maj_h_i = 0;
    st.maj_l_i = 0;
 
-   st.mb_h = high[0];
-   st.mb_l = low[0];
+   st.mb_h = _high[0];
+   st.mb_l = _low[0];
    st.mb_i = 0;
 
    for(int i = 1; i < copied; i++)
      {
-      bool inside = (high[i] <= st.mb_h) && (low[i] >= st.mb_l);
+      bool inside = (_high[i] <= st.mb_h) && (_low[i] >= st.mb_l);
       if(!inside)
         {
          // Dışarı çıktı, yeni mother bar olabilir
-         if (high[i] > st.mb_h || low[i] < st.mb_l) {
-            st.mb_h = high[i];
-            st.mb_l = low[i];
+         if (_high[i] > st.mb_h || _low[i] < st.mb_l) {
+            st.mb_h = _high[i];
+            st.mb_l = _low[i];
             st.mb_i = i;
          }
          if(i == copied - 1)
            {
             double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-            close[i] = bid;
-            if(bid > high[i]) high[i] = bid;
-            if(bid < low[i]) low[i] = bid;
+            _close[i] = bid;
+            if(bid > _high[i]) _high[i] = bid;
+            if(bid < _low[i]) _low[i] = bid;
            }
 
-         ProcessBar(i, open, high, low, close, time, st, true, false);
+         ProcessBar(i, _open, _high, _low, _close, _time, st, true, false);
         }
      }
 
