@@ -962,10 +962,10 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    double c_lvl_h1=0, c_lvl_m30=0, c_lvl_m15=0, c_lvl_m5=0;
    datetime c_t_h1=0, c_t_m30=0, c_t_m15=0, c_t_m5=0;
 
-   GetMTFChochDetails(PERIOD_H1, t, c_dir_h1, c_lvl_h1, c_t_h1);
-   GetMTFChochDetails(PERIOD_M30, t, c_dir_m30, c_lvl_m30, c_t_m30);
-   GetMTFChochDetails(PERIOD_M15, t, c_dir_m15, c_lvl_m15, c_t_m15);
-   GetMTFChochDetails(PERIOD_M5, t, c_dir_m5, c_lvl_m5, c_t_m5);
+   GetMTFChochDetails(PERIOD_H1, TimeCurrent(), c_dir_h1, c_lvl_h1, c_t_h1);
+   GetMTFChochDetails(PERIOD_M30, TimeCurrent(), c_dir_m30, c_lvl_m30, c_t_m30);
+   GetMTFChochDetails(PERIOD_M15, TimeCurrent(), c_dir_m15, c_lvl_m15, c_t_m15);
+   GetMTFChochDetails(PERIOD_M5, TimeCurrent(), c_dir_m5, c_lvl_m5, c_t_m5);
 
    int h1_sup_points=0, m30_sup_points=0, m15_sup_points=0, m5_sup_points=0;
    string h1_sup_text="", m30_sup_text="", m15_sup_text="", m5_sup_text="";
