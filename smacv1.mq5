@@ -52,7 +52,9 @@ input color  InpColorBear = clrRed;
 
 //--- Alert Settings ---
 input bool   InpEnableAlertTrendChange = true;       // Ana Trend (Kapanış) Dönüş Bildirimini Aç
+
 input bool   InpEnableAlertCHoCHBase   = true;       // Temel CHoCH (Kırılım) Bildirimini Aç
+input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Puanları Hesapla ve Bildir
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
 //--- Globals ---
@@ -728,7 +730,7 @@ string GenerateMTFString(string tf_name, int trend, double h, double l, double p
 }
 
 
-void BroadcastTradeSignal(string symbol, int direction, double entry, double sl, double tp, bool is_strong, int score) {
+void BroadcastTradeSignal(string symbol, int direction, double entry, double sl, double tp, bool is_strong, int score, bool is_test) {
     if (!InpEnableTradeExecution) return;
 
     string filename = "SMC_SIGNAL_" + symbol + ".json";
@@ -740,7 +742,7 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
 
     string dir_str = (direction == 1) ? "BUY" : "SELL";
     string is_strong_str = is_strong ? "true" : "false";
-    string is_test_str = "false";
+    string is_test_str = is_test ? "true" : "false";
 
     string json = "{\n";
     json += "  \"symbol\": \"" + symbol + "\",\n";
@@ -772,7 +774,7 @@ struct SMTFReport {
 
 
 
-void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, int maj_extreme_i)
+void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, int maj_extreme_i, bool is_test = false)
   {
    int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
    double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
@@ -1056,8 +1058,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        order_details += "Kâr Al (TP 3R): " + DoubleToString(tp_price, _Digits) + " (" + DoubleToString(tp_dist/_Point, 0) + " points)\n";
 
        static int last_broadcast_maj_extreme_i = -1;
-       if (maj_extreme_i != last_broadcast_maj_extreme_i || maj_extreme_i == 0) {
-           BroadcastTradeSignal(Symbol(), trigger_dir, entry_price, sl_price, tp_price, is_strong, total_points);
+       if (maj_extreme_i != last_broadcast_maj_extreme_i || is_test || maj_extreme_i == 0) {
+           BroadcastTradeSignal(Symbol(), trigger_dir, entry_price, sl_price, tp_price, is_strong, total_points, is_test);
            last_broadcast_maj_extreme_i = maj_extreme_i;
        } else {
            order_details += "\n⚠️ UYARI: Bu dalgada zaten işleme girildi, tekrar girilmiyor! Sadece bildirim.";
@@ -1069,7 +1071,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string dir_str = (trigger_dir == 1) ? "⬆️ YUKARI (BUY)" : "⬇️ AŞAĞI (SELL)";
 
    string msg = "";
-   msg = "🚨 [" + Symbol() + "] YENİ İŞLEM FIRSATI [" + lvl_text + "] 🚨\n";
+   if (is_test) msg = "🧪 [" + Symbol() + "] YENİ İŞLEM FIRSATI [" + lvl_text + "] 🚨\n";
+   else msg = "🚨 [" + Symbol() + "] YENİ İŞLEM FIRSATI [" + lvl_text + "] 🚨\n";
    msg += "Yön: " + dir_str + " \n";
    msg += "🔍 M1 KIRILIM KALİTESİ:\n" + m1_text + " ";
    msg += "📊 ZAMAN DİLİMİ ANALİZİ (Ana Yön H1: " + (t_h1==1?"⬆️":"⬇️") + "):\n";
@@ -1084,7 +1087,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    msg += "KARAR: " + verdict;
    msg += order_details;
 
-   if (total_points >= InpMinTradeScoreLimit || InpAlertRejectedTrades) {
+   if (total_points >= InpMinTradeScoreLimit || InpAlertRejectedTrades || is_test) {
        if(InpAlertPopup) Alert(msg);
        if(InpAlertPush) {
            string msg1 = "🚨 [" + Symbol() + "] YENİ İŞLEM (1/2)\n" + "🔍 M1 KIRILIM:\n" + m1_text + "\n📊 ZAMAN DİLİMİ ANALİZİ:\n" + h1_text + m30_text + m15_text + m5_text;
@@ -1103,6 +1106,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 //+------------------------------------------------------------------+
 int OnInit()
   {
+   EventSetTimer(1);
    IndicatorSetString(INDICATOR_SHORTNAME, "Structure");
    return(INIT_SUCCEEDED);
   }
@@ -1112,6 +1116,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
+   EventKillTimer();
    ObjectsDeleteAll(0, "Structure_");
    ObjectsDeleteAll(0, "Minor_");
    ObjectsDeleteAll(0, "Major_");
@@ -1895,6 +1900,7 @@ int OnCalculate(const int rates_total,
       g_state_hist.maj_l_i = start_idx;
 
 
+
       limit = start_idx + 1;
      }
    else
@@ -2007,3 +2013,22 @@ int OnCalculate(const int rates_total,
 
    return(rates_total);
 }
+
+//+------------------------------------------------------------------+
+//| Timer function                                                   |
+//+------------------------------------------------------------------+
+void OnTimer()
+  {
+   static bool last_test_state = false;
+   if (InpTestTradeExecution && !last_test_state) {
+       int live_tr = 0; double live_pct = 0; double mp_pct = 0;
+       double dh, dl; datetime dth, dtl;
+       GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
+
+       int test_dir = (live_tr != 0) ? live_tr : 1;
+
+       double dummy_ext = (test_dir == 1) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) - 50*Point() : SymbolInfoDouble(Symbol(), SYMBOL_BID) + 50*Point();
+       EvaluateTradeSignal(0, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, dummy_ext, 0, true);
+   }
+   last_test_state = InpTestTradeExecution;
+  }
