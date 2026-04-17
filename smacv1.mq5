@@ -453,7 +453,8 @@ void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, d
    datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
 
    int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
-   if(copied < 2) return;
+   if(copied < 2) { copied = CopyRates(Symbol(), tf, 0, 5000, rates); } // Try downloading latest 5000 bars
+   if(copied < 2) { Print("MTF Choch Details: Yetersiz Veri. TF: ", EnumToString(tf)); return; }
 
    double _open[], _high[], _low[], _close[];
    datetime _time[];
@@ -530,7 +531,8 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
 
    int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
-   if(copied < 2) return false;
+   if(copied < 2) { copied = CopyRates(Symbol(), tf, 0, 5000, rates); }
+   if(copied < 2) { Print("MTF Pullback: Yetersiz Veri. TF: ", EnumToString(tf)); return false; }
 
    double _open[], _high[], _low[], _close[];
    datetime _time[];
@@ -903,10 +905,10 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    double c_lvl_h1=0, c_lvl_m30=0, c_lvl_m15=0, c_lvl_m5=0;
    datetime c_t_h1=0, c_t_m30=0, c_t_m15=0, c_t_m5=0;
 
-   GetMTFChochDetails(PERIOD_H1, t, c_dir_h1, c_lvl_h1, c_t_h1);
-   GetMTFChochDetails(PERIOD_M30, t, c_dir_m30, c_lvl_m30, c_t_m30);
-   GetMTFChochDetails(PERIOD_M15, t, c_dir_m15, c_lvl_m15, c_t_m15);
-   GetMTFChochDetails(PERIOD_M5, t, c_dir_m5, c_lvl_m5, c_t_m5);
+   GetMTFChochDetails(PERIOD_H1, is_test ? TimeCurrent() : t, c_dir_h1, c_lvl_h1, c_t_h1);
+   GetMTFChochDetails(PERIOD_M30, is_test ? TimeCurrent() : t, c_dir_m30, c_lvl_m30, c_t_m30);
+   GetMTFChochDetails(PERIOD_M15, is_test ? TimeCurrent() : t, c_dir_m15, c_lvl_m15, c_t_m15);
+   GetMTFChochDetails(PERIOD_M5, is_test ? TimeCurrent() : t, c_dir_m5, c_lvl_m5, c_t_m5);
 
    int h1_sup_points=0, m30_sup_points=0, m15_sup_points=0, m5_sup_points=0;
    string h1_sup_text="", m30_sup_text="", m15_sup_text="", m5_sup_text="";
@@ -2023,12 +2025,13 @@ void OnTimer()
    if (InpTestTradeExecution && !last_test_state) {
        int live_tr = 0; double live_pct = 0; double mp_pct = 0;
        double dh, dl; datetime dth, dtl;
-       GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
+       datetime test_time = TimeCurrent();
+       GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, test_time, dh, dl, dth, dtl);
 
        int test_dir = (live_tr != 0) ? live_tr : 1;
 
        double dummy_ext = (test_dir == 1) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) - 50*Point() : SymbolInfoDouble(Symbol(), SYMBOL_BID) + 50*Point();
-       EvaluateTradeSignal(0, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, dummy_ext, 0, true);
+       EvaluateTradeSignal(0, test_time, SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, dummy_ext, 0, true);
    }
    last_test_state = InpTestTradeExecution;
   }
