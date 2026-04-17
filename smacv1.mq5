@@ -1994,8 +1994,8 @@ int OnCalculate(const int rates_total,
             g_last_alert_maj_l = g_state_hist.maj_l;
             g_last_alert_trend = g_state_hist.maj_tr;
            }
-
-
+        }
+     }
 
 
    static uint last_dash_update = 0;
@@ -2006,6 +2006,4 @@ int OnCalculate(const int rates_total,
    }
 
    return(rates_total);
-}
-}
 }
