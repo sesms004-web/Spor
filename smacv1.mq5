@@ -779,14 +779,6 @@ struct SMTFReport {
 
 
 
-struct SMTFReport {
-    ENUM_TIMEFRAMES tf;
-    string tf_name;
-    int dir;
-    double level;
-    datetime time;
-    string text;
-};
 
 void GenerateMTFChochReport() {
     SMTFReport reports[4];
