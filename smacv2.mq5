@@ -2129,7 +2129,7 @@ int OnCalculate(const int rates_total,
          leg_i = g_state_curr.min_l_i;
          leg_p = g_state_curr.min_l;
         }
-      if (draw_ui && g_state_curr.lp_i >= 0 && g_state_curr.lp_i < ArraySize(time) && leg_i >= 0 && leg_i < ArraySize(time)) DrawLine("LiveLeg", time[g_state_curr.lp_i], g_state_curr.lp_p, time[leg_i], leg_p, InpColorMin, 1, STYLE_DOT);
+      if (g_state_curr.lp_i >= 0 && g_state_curr.lp_i < ArraySize(time) && leg_i >= 0 && leg_i < ArraySize(time)) DrawLine("LiveLeg", time[g_state_curr.lp_i], g_state_curr.lp_p, time[leg_i], leg_p, InpColorMin, 1, STYLE_DOT);
      }
 
    if(last_idx > 0 && (Period() == PERIOD_M1 || InpTestMode))
