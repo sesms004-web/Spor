@@ -55,9 +55,6 @@ input color  InpColorBear = clrRed;
 input bool   InpEnableAlertTrendChange = true;       // Ana Trend (Kapanış) Dönüş Bildirimini Aç
 input bool   InpEnableAlertCHoCHBase   = true;       // Temel CHoCH (Kırılım) Bildirimini Aç
 input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Puanları Hesapla ve Bildir
-input double InpGoodPullbackPct  = 40.0;
-input double InpMomentumMinPeak  = 30.0;
-input double InpMomentumMinBounce= 20.0;
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
 //--- Globals ---
@@ -454,10 +451,12 @@ void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, d
    ArraySetAsSeries(rates, false);
    double tf_days = GetDaysForTF(tf);
    datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
-
    int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
-   if(copied < 2) { copied = CopyRates(Symbol(), tf, 0, 5000, rates); }
+   if(copied < 2) {
+       copied = CopyRates(Symbol(), tf, 0, 5000, rates);
+   }
    if(copied < 2) return;
+
 
    double _open[], _high[], _low[], _close[];
    datetime _time[];
@@ -532,10 +531,12 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
 
    double tf_days = GetDaysForTF(tf);
    datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
-
    int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
-   if(copied < 2) { copied = CopyRates(Symbol(), tf, 0, 5000, rates); }
+   if(copied < 2) {
+       copied = CopyRates(Symbol(), tf, 0, 5000, rates);
+   }
    if(copied < 2) return false;
+
 
    double _open[], _high[], _low[], _close[];
    datetime _time[];
@@ -735,7 +736,7 @@ string GenerateMTFString(string tf_name, int trend, double h, double l, double p
 }
 
 
-void BroadcastTradeSignal(string symbol, int direction, double entry, double sl, double tp, bool is_strong, int score, bool is_test) {
+void BroadcastTradeSignal(string symbol, int direction, double entry, double sl, double tp, bool is_strong, int score) {
     if (!InpEnableTradeExecution) return;
 
     string filename = "SMC_SIGNAL_" + symbol + ".json";
@@ -747,7 +748,7 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
 
     string dir_str = (direction == 1) ? "BUY" : "SELL";
     string is_strong_str = is_strong ? "true" : "false";
-    string is_test_str = is_test ? "true" : "false";
+    string is_test_str = "false";
 
     string json = "{\n";
     json += "  \"symbol\": \"" + symbol + "\",\n";
@@ -806,10 +807,7 @@ void GenerateMTFChochReport() {
     double live_price = SymbolInfoDouble(Symbol(), SYMBOL_BID);
 
     for(int i=0; i<4; i++) {
-        if (reports[i].time == 0) {
-            msg += IntegerToString(i+1) + ". " + reports[i].tf_name + ": ⚪ YENİ TREND OLUŞTU (CHoCH BEKLENİYOR)\n";
-            continue;
-        }
+        if (reports[i].time == 0) continue;
 
         string dir_str = (reports[i].dir == 1) ? "🟢 YUKARI" : ((reports[i].dir == -1) ? "🔴 AŞAĞI " : "BİLİNMİYOR");
         string age_str = GetTimeAgoString(reports[i].time, t);
@@ -832,357 +830,36 @@ void GenerateMTFChochReport() {
     if(InpAlertPush) SendNotification(msg);
 }
 
-void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, int maj_extreme_i, bool is_test = false)
+
+void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, int maj_extreme_i)
   {
-   int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
-   double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
-   double mp_m1=0, mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
-   double h_m1=0, l_m1=0, h_m3=0, l_m3=0, h_m5=0, l_m5=0, h_m15=0, l_m15=0, h_m30=0, l_m30=0, h_h1=0, l_h1=0;
-   datetime dmy_th, dmy_tl, th_m15, tl_m15, th_m30, tl_m30;
+   // SADECE M1 CHoCH SİNYALİNİ BİLDİR
+   string dir_str = (trigger_dir == 1) ? "⬆️ YUKARI (BUY)" : "⬇️ AŞAĞI (SELL)";
+   string strong_str = is_strong ? "🔥 GÜÇLÜ (Likidite Alındı)" : "⚠️ ZAYIF (Sıradan Kırılım)";
 
-   // We need MTF data to evaluate the matrix
-   GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, dmy_th, dmy_tl);
-   GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, h_m3, l_m3, dmy_th, dmy_tl);
-   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, h_m5, l_m5, dmy_th, dmy_tl);
-   GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, th_m15, tl_m15);
-   GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, th_m30, tl_m30);
-   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, h_h1, l_h1, dmy_th, dmy_tl);
+   string msg = "🚨 [" + Symbol() + "] M1 CHoCH (KIRILIM) 🚨\n";
+   msg += "Yön: " + dir_str + " \n";
+   msg += "Kalite: " + strong_str + " \n";
+   msg += "Giriş: " + DoubleToString(live_price, _Digits) + " \n";
+   msg += "Zarar Durdur (SL): " + DoubleToString(minor_extreme_sl, _Digits) + " \n";
 
-   int total_points = 0;
-   string h1_text = "";
-   string m30_text = "";
-   string m15_text = "";
-   string m5_text = "";
-   string m1_text = "";
+   if(InpAlertPopup) Alert(msg);
+   if(InpAlertPush) SendNotification(msg);
 
-   // --- YENİ 100 PUANLIK MATRİS SİSTEMİ ---
-
-   // --- M1 (Tetikleyici) - Maks 5 Puan ---
-   int m1_points = is_strong ? 5 : 0;
-   total_points += m1_points;
-   m1_text = GenerateMTFString("M1", t_m1, h_m1, l_m1, p_m1, mp_m1);
-   if(is_strong) m1_text += "🔥 Likidite Temizlendi -> [+5 Puan]\n";
-   else          m1_text += "⚠️ Likidite Alınmadı -> [+0 Puan]\n";
-
-   // --- H1 (Makro Trend) - Maks 35 Puan ---
-   int h1_points = 0;
-   double h1_mom = mp_h1 - p_h1;
-   bool is_h1_aligned = (t_h1 == trigger_dir);
-
-   if (h1_mom >= 15.0) {
-       if (is_h1_aligned) {
-           if (h1_mom >= 20.0) { h1_points = 35; h1_text = "🚀 Uyumlu, Çok Sert Momentum -> [+35 Puan]\n"; }
-           else                { h1_points = 30; h1_text = "⚡ Uyumlu, Sert Momentum -> [+30 Puan]\n"; }
-       } else {
-           h1_points = 0; h1_text = "🛑 Ters Yönlü Sert Momentum -> [0 Puan]\n";
-       }
-   } else {
-       if (is_h1_aligned) {
-           if (p_h1 >= 50.0) { h1_points = 30; h1_text = "🎯 Uyumlu, Momentum Yok Ama %50 İdeal -> [+30 Puan]\n"; }
-           else              { h1_points = 10; h1_text = "📉 Uyumlu, Momentum Yok Ve Şişkin -> [+10 Puan]\n"; }
-       } else {
-           if (p_h1 >= 50.0) { h1_points = 20; h1_text = "🔄 Ters Yönlü Ama %50 İdeal -> [+20 Puan]\n"; }
-           else              { h1_points = 30; h1_text = "⏳ Ters Yönlü Ve Şişkin -> [+30 Puan]\n"; }
-       }
-   }
-   h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + h1_text;
-   total_points += h1_points;
-
-   // --- M30 (Makro Trend 2) - Maks 25 Puan ---
-   int m30_points = 0;
-   double m30_mom = mp_m30 - p_m30;
-   bool is_m30_aligned = (t_m30 == trigger_dir);
-   bool clone_m30_h1 = (MathAbs(h_m30 - h_h1) < Point() * 5 && MathAbs(l_m30 - l_h1) < Point() * 5);
-
-   if (clone_m30_h1) {
-       m30_points = 0; m30_text = "👯 H1 İle Aynı Yapı Es Geçildi -> [0 Puan]\n";
-   } else {
-       if (!is_m30_aligned) {
-           if (m30_mom >= 15.0) { m30_points = 0;  m30_text = "🛑 Bize Karşı Sert Tepki -> [0 Puan]\n"; }
-           else                 { m30_points = 10; m30_text = "😴 Ters Yönlü Ama Sakin -> [+10 Puan]\n"; }
-       } else {
-           if (m30_mom >= 20.0)      { m30_points = 25; m30_text = "🚀 Uyumlu, Çok Sert Dönüş -> [+25 Puan]\n"; }
-           else if (m30_mom >= 15.0) { m30_points = 20; m30_text = "⚡ Uyumlu, Sert Dönüş -> [+20 Puan]\n"; }
-           else if (p_m30 >= 50.0)   { m30_points = 15; m30_text = "🎯 Uyumlu, Tepki Yok Ama %50 İdeal -> [+15 Puan]\n"; }
-           else                      { m30_points = 5;  m30_text = "📉 Uyumlu, Tepki Yok Ve Şişkin -> [+5 Puan]\n"; }
-       }
-   }
-   m30_text = GenerateMTFString("M30", t_m30, h_m30, l_m30, p_m30, mp_m30) + m30_text;
-   total_points += m30_points;
-
-   // --- M15 (Makro Yapı) - Maks 20 Puan ---
-   int m15_points = 0;
-   double m15_mom = mp_m15 - p_m15;
-   bool is_m15_aligned = (t_m15 == trigger_dir);
-   bool clone_m15_m30 = (MathAbs(h_m15 - h_m30) < Point() * 5 && MathAbs(l_m15 - l_m30) < Point() * 5);
-
-   if (clone_m15_m30) {
-       m15_points = 0; m15_text = "👯 M30 İle Aynı Yapı Es Geçildi -> [0 Puan]\n";
-   } else {
-       if (!is_m15_aligned) {
-           if (m15_mom >= 15.0) { m15_points = 0; m15_text = "🛑 Bize Karşı Sert Tepki -> [0 Puan]\n"; }
-           else                 { m15_points = 5; m15_text = "😴 Ters Yönlü Ama Sakin -> [+5 Puan]\n"; }
-       } else {
-           if (m15_mom >= 20.0)      { m15_points = 20; m15_text = "🚀 Uyumlu, Çok Sert Dönüş -> [+20 Puan]\n"; }
-           else if (m15_mom >= 15.0) { m15_points = 15; m15_text = "⚡ Uyumlu, Sert Dönüş -> [+15 Puan]\n"; }
-           else if (p_m15 >= 50.0)   { m15_points = 15; m15_text = "🎯 Uyumlu, Tepki Yok Ama %50 İdeal -> [+15 Puan]\n"; }
-           else                      { m15_points = 5;  m15_text = "📉 Uyumlu, Tepki Yok Ve Şişkin -> [+5 Puan]\n"; }
-       }
-   }
-   m15_text = GenerateMTFString("M15", t_m15, h_m15, l_m15, p_m15, mp_m15) + m15_text;
-   total_points += m15_points;
-
-   // --- M5 (Mikro Filtre) - Maks 15 Puan ---
-   int m5_points = 0;
-   double m5_mom = mp_m5 - p_m5;
-   bool is_m5_aligned = (t_m5 == trigger_dir);
-   bool clone_m5_m15 = (MathAbs(h_m5 - h_m15) < Point() * 5 && MathAbs(l_m5 - l_m15) < Point() * 5);
-
-   if (clone_m5_m15) {
-       m5_points = 0; m5_text = "👯 M15 İle Aynı Yapı Es Geçildi -> [0 Puan]\n";
-   } else {
-       if (!is_m5_aligned) {
-           if (m5_mom >= 15.0) { m5_points = 0; m5_text = "🛑 Bize Karşı Sert Tepki -> [0 Puan]\n"; }
-           else                { m5_points = 5; m5_text = "😴 Ters Yönlü Ama Sakin -> [+5 Puan]\n"; }
-       } else {
-           if (m5_mom >= 20.0)      { m5_points = 15; m5_text = "🚀 Uyumlu, Çok Sert Dönüş -> [+15 Puan]\n"; }
-           else if (m5_mom >= 15.0) { m5_points = 10; m5_text = "⚡ Uyumlu, Sert Dönüş -> [+10 Puan]\n"; }
-           else if (p_m5 >= 50.0)   { m5_points = 10; m5_text = "🎯 Uyumlu, Tepki Yok Ama %50 İdeal -> [+10 Puan]\n"; }
-           else                     { m5_points = 5;  m5_text = "📉 Uyumlu, Tepki Yok Ve Şişkin -> [+5 Puan]\n"; }
-       }
-   }
-   m5_text = GenerateMTFString("M5 ", t_m5, h_m5, l_m5, p_m5, mp_m5) + m5_text;
-
-   total_points += m5_points;
-
-   // --- YENİ DESTEKLEYİCİ CHOCH FAKEOUT (TUZAK) MATRİS SİSTEMİ ---
-
-   int c_dir_h1=0, c_dir_m30=0, c_dir_m15=0, c_dir_m5=0;
-   double c_lvl_h1=0, c_lvl_m30=0, c_lvl_m15=0, c_lvl_m5=0;
-   datetime c_t_h1=0, c_t_m30=0, c_t_m15=0, c_t_m5=0;
-
-   GetMTFChochDetails(PERIOD_H1, TimeCurrent(), c_dir_h1, c_lvl_h1, c_t_h1);
-   GetMTFChochDetails(PERIOD_M30, TimeCurrent(), c_dir_m30, c_lvl_m30, c_t_m30);
-   GetMTFChochDetails(PERIOD_M15, TimeCurrent(), c_dir_m15, c_lvl_m15, c_t_m15);
-   GetMTFChochDetails(PERIOD_M5, TimeCurrent(), c_dir_m5, c_lvl_m5, c_t_m5);
-
-   int h1_sup_points=0, m30_sup_points=0, m15_sup_points=0, m5_sup_points=0;
-   string h1_sup_text="", m30_sup_text="", m15_sup_text="", m5_sup_text="";
-
-   bool valid_h1 = (c_dir_h1 == 1 && live_price > c_lvl_h1) || (c_dir_h1 == -1 && live_price < c_lvl_h1);
-   bool valid_m30 = (c_dir_m30 == 1 && live_price > c_lvl_m30) || (c_dir_m30 == -1 && live_price < c_lvl_m30);
-   bool valid_m15 = (c_dir_m15 == 1 && live_price > c_lvl_m15) || (c_dir_m15 == -1 && live_price < c_lvl_m15);
-   bool valid_m5 = (c_dir_m5 == 1 && live_price > c_lvl_m5) || (c_dir_m5 == -1 && live_price < c_lvl_m5);
-
-   if (trigger_dir == 1) { // M1 BUY
-       if (c_dir_h1 == 1 && valid_h1) { h1_sup_points = 20; h1_sup_text = "🟢 H1 Yukarı + Geçerli -> [+20 Puan]\n"; }
-       else if (c_dir_h1 == 1 && !valid_h1) { h1_sup_points = -20; h1_sup_text = "🔴 H1 Yukarı + Geçersiz (Tuzak) -> [-20 Puan]\n"; }
-       else if (c_dir_h1 == -1 && valid_h1) { h1_sup_points = -20; h1_sup_text = "🔴 H1 Aşağı + Geçerli -> [-20 Puan]\n"; }
-       else if (c_dir_h1 == -1 && !valid_h1) { h1_sup_points = 20; h1_sup_text = "🟢 H1 Aşağı + Geçersiz (Tuzak) -> [+20 Puan]\n"; }
-       else { h1_sup_text = "⚪ YENİ TREND OLUŞTU (CHoCH BEKLENİYOR) -> [0 Puan]\n"; }
-
-       if (c_dir_m30 == 1 && valid_m30) { m30_sup_points = 15; m30_sup_text = "🟢 M30 Yukarı + Geçerli -> [+15 Puan]\n"; }
-       else if (c_dir_m30 == 1 && !valid_m30) { m30_sup_points = -15; m30_sup_text = "🔴 M30 Yukarı + Geçersiz (Tuzak) -> [-15 Puan]\n"; }
-       else if (c_dir_m30 == -1 && valid_m30) { m30_sup_points = -15; m30_sup_text = "🔴 M30 Aşağı + Geçerli -> [-15 Puan]\n"; }
-       else if (c_dir_m30 == -1 && !valid_m30) { m30_sup_points = 15; m30_sup_text = "🟢 M30 Aşağı + Geçersiz (Tuzak) -> [+15 Puan]\n"; }
-       else { m30_sup_text = "⚪ YENİ TREND OLUŞTU (CHoCH BEKLENİYOR) -> [0 Puan]\n"; }
-
-       if (c_dir_m15 == 1 && valid_m15) { m15_sup_points = 10; m15_sup_text = "🟢 M15 Yukarı + Geçerli -> [+10 Puan]\n"; }
-       else if (c_dir_m15 == 1 && !valid_m15) { m15_sup_points = -10; m15_sup_text = "🔴 M15 Yukarı + Geçersiz (Tuzak) -> [-10 Puan]\n"; }
-       else if (c_dir_m15 == -1 && valid_m15) { m15_sup_points = -10; m15_sup_text = "🔴 M15 Aşağı + Geçerli -> [-10 Puan]\n"; }
-       else if (c_dir_m15 == -1 && !valid_m15) { m15_sup_points = 10; m15_sup_text = "🟢 M15 Aşağı + Geçersiz (Tuzak) -> [+10 Puan]\n"; }
-       else { m15_sup_text = "⚪ YENİ TREND OLUŞTU (CHoCH BEKLENİYOR) -> [0 Puan]\n"; }
-
-       if (c_dir_m5 == 1 && valid_m5) { m5_sup_points = 5; m5_sup_text = "🟢 M5 Yukarı + Geçerli -> [+5 Puan]\n"; }
-       else if (c_dir_m5 == 1 && !valid_m5) { m5_sup_points = -5; m5_sup_text = "🔴 M5 Yukarı + Geçersiz (Tuzak) -> [-5 Puan]\n"; }
-       else if (c_dir_m5 == -1 && valid_m5) { m5_sup_points = -5; m5_sup_text = "🔴 M5 Aşağı + Geçerli -> [-5 Puan]\n"; }
-       else if (c_dir_m5 == -1 && !valid_m5) { m5_sup_points = 5; m5_sup_text = "🟢 M5 Aşağı + Geçersiz (Tuzak) -> [+5 Puan]\n"; }
-       else { m5_sup_text = "⚪ YENİ TREND OLUŞTU (CHoCH BEKLENİYOR) -> [0 Puan]\n"; }
-   } else { // M1 SELL
-       if (c_dir_h1 == -1 && valid_h1) { h1_sup_points = 20; h1_sup_text = "🔴 H1 Aşağı + Geçerli -> [+20 Puan]\n"; }
-       else if (c_dir_h1 == -1 && !valid_h1) { h1_sup_points = -20; h1_sup_text = "🟢 H1 Aşağı + Geçersiz (Tuzak) -> [-20 Puan]\n"; }
-       else if (c_dir_h1 == 1 && valid_h1) { h1_sup_points = -20; h1_sup_text = "🟢 H1 Yukarı + Geçerli -> [-20 Puan]\n"; }
-       else if (c_dir_h1 == 1 && !valid_h1) { h1_sup_points = 20; h1_sup_text = "🔴 H1 Yukarı + Geçersiz (Tuzak) -> [+20 Puan]\n"; }
-       else { h1_sup_text = "⚪ YENİ TREND OLUŞTU (CHoCH BEKLENİYOR) -> [0 Puan]\n"; }
-
-       if (c_dir_m30 == -1 && valid_m30) { m30_sup_points = 15; m30_sup_text = "🔴 M30 Aşağı + Geçerli -> [+15 Puan]\n"; }
-       else if (c_dir_m30 == -1 && !valid_m30) { m30_sup_points = -15; m30_sup_text = "🟢 M30 Aşağı + Geçersiz (Tuzak) -> [-15 Puan]\n"; }
-       else if (c_dir_m30 == 1 && valid_m30) { m30_sup_points = -15; m30_sup_text = "🟢 M30 Yukarı + Geçerli -> [-15 Puan]\n"; }
-       else if (c_dir_m30 == 1 && !valid_m30) { m30_sup_points = 15; m30_sup_text = "🔴 M30 Yukarı + Geçersiz (Tuzak) -> [+15 Puan]\n"; }
-       else { m30_sup_text = "⚪ YENİ TREND OLUŞTU (CHoCH BEKLENİYOR) -> [0 Puan]\n"; }
-
-       if (c_dir_m15 == -1 && valid_m15) { m15_sup_points = 10; m15_sup_text = "🔴 M15 Aşağı + Geçerli -> [+10 Puan]\n"; }
-       else if (c_dir_m15 == -1 && !valid_m15) { m15_sup_points = -10; m15_sup_text = "🟢 M15 Aşağı + Geçersiz (Tuzak) -> [-10 Puan]\n"; }
-       else if (c_dir_m15 == 1 && valid_m15) { m15_sup_points = -10; m15_sup_text = "🟢 M15 Yukarı + Geçerli -> [-10 Puan]\n"; }
-       else if (c_dir_m15 == 1 && !valid_m15) { m15_sup_points = 10; m15_sup_text = "🔴 M15 Yukarı + Geçersiz (Tuzak) -> [+10 Puan]\n"; }
-       else { m15_sup_text = "⚪ YENİ TREND OLUŞTU (CHoCH BEKLENİYOR) -> [0 Puan]\n"; }
-
-       if (c_dir_m5 == -1 && valid_m5) { m5_sup_points = 5; m5_sup_text = "🔴 M5 Aşağı + Geçerli -> [+5 Puan]\n"; }
-       else if (c_dir_m5 == -1 && !valid_m5) { m5_sup_points = -5; m5_sup_text = "🟢 M5 Aşağı + Geçersiz (Tuzak) -> [-5 Puan]\n"; }
-       else if (c_dir_m5 == 1 && valid_m5) { m5_sup_points = -5; m5_sup_text = "🟢 M5 Yukarı + Geçerli -> [-5 Puan]\n"; }
-       else if (c_dir_m5 == 1 && !valid_m5) { m5_sup_points = 5; m5_sup_text = "🔴 M5 Yukarı + Geçersiz (Tuzak) -> [+5 Puan]\n"; }
-       else { m5_sup_text = "⚪ YENİ TREND OLUŞTU (CHoCH BEKLENİYOR) -> [0 Puan]\n"; }
-   }
-
-   total_points += h1_sup_points + m30_sup_points + m15_sup_points + m5_sup_points;
-
-   // TIME PENALTY LOGIC (4. Sırada H1 ise -15, değilse -10)
-   SMTFReport treps[4];
-   treps[0].time = c_t_h1; treps[0].tf = PERIOD_H1; treps[0].tf_name = "H1";
-   treps[1].time = c_t_m30; treps[1].tf = PERIOD_M30; treps[1].tf_name = "M30";
-   treps[2].time = c_t_m15; treps[2].tf = PERIOD_M15; treps[2].tf_name = "M15";
-   treps[3].time = c_t_m5; treps[3].tf = PERIOD_M5; treps[3].tf_name = "M5";
-
-   for(int i=0; i<3; i++) {
-       for(int j=0; j<3-i; j++) {
-           if(treps[j].time < treps[j+1].time) {
-               SMTFReport temp = treps[j];
-               treps[j] = treps[j+1];
-               treps[j+1] = temp;
-           }
-       }
-   }
-
-   int penalty = 0;
-   string penalty_text = "";
-
-   // Sadece 4. En Eskiye Ceza Var (index 3)
-   if (treps[3].time != 0) {
-       int pen_4 = (treps[3].tf == PERIOD_H1) ? -15 : -10;
-       penalty += pen_4;
-       penalty_text += "4. En Eski (" + treps[3].tf_name + "): [" + IntegerToString(pen_4) + " Puan]\n";
-   }
-
-   total_points += penalty;
-
-   string sup_text = "\n🛡️ DESTEKLEYİCİ YAPILAR & CEZALAR:\n";
-   sup_text += h1_sup_text + m30_sup_text + m15_sup_text + m5_sup_text;
-   if (penalty != 0) {
-       sup_text += "⏱️ ZAMAN CEZALARI:\n" + penalty_text;
-   }
-
-
-   string order_details = "";
-   // sup_text is ready above.
-   // --- M1 vs M3 RANGE EXPECTATION ---
-   string range_text = (t_m1 == t_m3) ? "🚀 BEKLENTİ: UZUN MENZİL (Trend Takibi)" : "⚠️ BEKLENTİ: KISA SÜRECEK (Scalp/Tepki)";
-
-   // --- BREAKOUT LEVEL PHASING ---
-   string lvl_text = "BİLİNMİYOR";
-   if (p_pct >= 40.0 && p_pct < 60.0) lvl_text = "KIRILIM 1 (Erken Seviye)";
-   if (p_pct >= 60.0) lvl_text = "KIRILIM 2 (Ana Seviye)";
-
-   // --- FINAL VERDICT ---
-   string verdict = "";
-
-
-   if (total_points >= InpMinTradeScoreLimit) {
-       verdict = "✅ İŞLEME GİRİLEBİLİR (Yüksek Olasılıklı Kurulum)";
-
-       double sl_price = minor_extreme_sl;
-       double entry_price = live_price;
-       double sl_dist = MathAbs(entry_price - minor_extreme_sl);
-
-       // Apply Weak/Strong SL multipliers
+   // İşlemi Köprüden Gönder
+   static int last_broadcast_maj_extreme_i = -1;
+   if (maj_extreme_i != last_broadcast_maj_extreme_i || maj_extreme_i == 0) {
+       double sl_dist = MathAbs(live_price - minor_extreme_sl);
        if (is_strong) sl_dist *= InpStrongSLMultiplier;
        else           sl_dist *= InpWeakSLMultiplier;
 
-       // YENİ KURAL: Ana Dalga Yüzdesine Göre Dinamik SL Kısıtlaması (Fren/Gaz)
-       string sl_note = "";
-       if (InpEnableSLPctLimit && h_m1 != 0 && l_m1 != 0) {
-           double swing_range = MathAbs(h_m1 - l_m1);
-           if (swing_range > 0) {
-               double sl_pct = (sl_dist / swing_range) * 100.0;
-               if (sl_pct > InpMaxSLPct) {
-                   sl_dist = swing_range * (InpMaxSLPct / 100.0);
-                   sl_note = " 🛑 (Çok Geniş SL Daraltıldı: %" + DoubleToString(InpMaxSLPct, 1) + ")";
-               } else if (sl_pct < InpMinSLPct) {
-                   sl_dist = swing_range * (InpMinSLPct / 100.0);
-                   sl_note = " 🚀 (Çok Dar SL Genişletildi: %" + DoubleToString(InpMinSLPct, 1) + ")";
-               }
-           }
-       }
+       double sl_price = (trigger_dir == 1) ? (live_price - sl_dist) : (live_price + sl_dist);
+       double tp_dist = sl_dist * 3.0; // 3R hedefleniyor
+       double tp_price = (trigger_dir == 1) ? (live_price + tp_dist) : (live_price - tp_dist);
 
-       if (trigger_dir == 1) sl_price = entry_price - sl_dist;
-       else                  sl_price = entry_price + sl_dist;
-
-       // TP at 3R
-       double tp_dist = sl_dist * 3.0;
-       double tp_price = (trigger_dir == 1) ? (entry_price + tp_dist) : (entry_price - tp_dist);
-
-
-       order_details = "   📊 HESAPLANAN HEDEFLER (Sinyal Köprüsü):\n";
-       order_details += "Giriş: " + DoubleToString(entry_price, _Digits) + " ";
-       order_details += "Zarar Durdur (SL): " + DoubleToString(sl_price, _Digits) + " (" + DoubleToString(sl_dist/_Point, 0) + " points)" + sl_note + " ";
-       order_details += "Kâr Al (TP 3R): " + DoubleToString(tp_price, _Digits) + " (" + DoubleToString(tp_dist/_Point, 0) + " points)\n";
-
-       static int last_broadcast_maj_extreme_i = -1;
-       if (maj_extreme_i != last_broadcast_maj_extreme_i || is_test || maj_extreme_i == 0) {
-           BroadcastTradeSignal(Symbol(), trigger_dir, entry_price, sl_price, tp_price, is_strong, total_points, is_test);
-           last_broadcast_maj_extreme_i = maj_extreme_i;
-       } else {
-           order_details += "\n⚠️ UYARI: Bu dalgada zaten işleme girildi, tekrar girilmiyor! Sadece bildirim.";
-       }
+       BroadcastTradeSignal(Symbol(), trigger_dir, live_price, sl_price, tp_price, is_strong, 100);
+       last_broadcast_maj_extreme_i = maj_extreme_i;
    }
-   else verdict = "❌ RİSKLİ! İŞLEME GİRİLMEZ (Puan Yetersiz)";
-
-
-   string dir_str = (trigger_dir == 1) ? "⬆️ YUKARI (BUY)" : "⬇️ AŞAĞI (SELL)";
-
-   string msg = "";
-   if (is_test) msg = "🧪 [" + Symbol() + "] TEST ANALİZ RAPORU (Şu Anki Durum)\n";
-   else msg = "🚨 [" + Symbol() + "] YENİ İŞLEM FIRSATI [" + lvl_text + "] 🚨\n";
-   msg += "Yön: " + dir_str + " \n";
-   msg += "🔍 M1 KIRILIM KALİTESİ:\n" + m1_text + " ";
-   msg += "📊 ZAMAN DİLİMİ ANALİZİ (Ana Yön H1: " + (t_h1==1?"⬆️":"⬇️") + "):\n";
-   msg += "* " + h1_text;
-   msg += "* " + m30_text;
-   msg += "* " + m15_text;
-   msg += "* " + m5_text + " ";
-   msg += "🎯 İŞLEM MENZİLİ (M1 ve M3 Uyumu):\n" + range_text + " \n";
-   msg += sup_text + "\n";
-   msg += sup_text + "\n";
-   msg += "📈 TOPLAM İŞLEM SKORU:\n";
-   msg += "Hesaplanan: " + IntegerToString(total_points) + " Puan (Gerekli Baraj: " + IntegerToString(InpMinTradeScoreLimit) + " Puan)\n";
-   msg += "KARAR: " + verdict;
-   msg += order_details;
-
-   if (total_points >= InpMinTradeScoreLimit || InpAlertRejectedTrades) {
-       if(InpAlertPopup) Alert(msg);
-       if(InpAlertPush) {
-           string msg1 = "🚨 [" + Symbol() + "] YENİ İŞLEM (1/2)\n" + "🔍 M1 KIRILIM:\n" + m1_text + "\n📊 ZAMAN DİLİMİ ANALİZİ:\n" + h1_text + m30_text + m15_text + m5_text;
-           string msg2 = "🚨 [" + Symbol() + "] (2/2)\n" + sup_text + "\n📈 SKOR: " + IntegerToString(total_points) + " Puan\n" + verdict;
-           SendNotification(msg1);
-           Sleep(100); // Prevent spam block
-           SendNotification(msg2);
-       }
-   }
-  }
-
-
-//+------------------------------------------------------------------+
-//| Custom indicator initialization function                         |
-//+------------------------------------------------------------------+
-int OnInit()
-  {
-   IndicatorSetString(INDICATOR_SHORTNAME, "Structure");
-   return(INIT_SUCCEEDED);
-  }
-
-//+------------------------------------------------------------------+
-//| Custom indicator deinitialization function                       |
-//+------------------------------------------------------------------+
-void OnDeinit(const int reason)
-  {
-   ObjectsDeleteAll(0, "Structure_");
-   ObjectsDeleteAll(0, "Minor_");
-   ObjectsDeleteAll(0, "Major_");
-   ObjectsDeleteAll(0, "HLine_");
-   ObjectsDeleteAll(0, "LiveLeg_");
-   ObjectsDeleteAll(0, "CHoCH_Bear_");
-   ObjectsDeleteAll(0, "CHoCH_Bull_");
-   ObjectsDeleteAll(0, "CHoCH_Path_");
-   ObjectsDeleteAll(0, "CHoCH_Signal_");
   }
 
 //+------------------------------------------------------------------+
@@ -1254,7 +931,7 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
          if(draw_ui && InpShowMin)
            {
             string name = GetUniqueName(prefix + "Minor_");
-            DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_h_i], state.min_h, InpColorMin, 1, STYLE_SOLID);
+            if ((state.lp_i >= 0 && state.lp_i < rates_total) && (state.min_h_i >= 0 && state.min_h_i < rates_total)) DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_h_i], state.min_h, InpColorMin, 1, STYLE_SOLID);
            }
          state.st_h.Push(state.min_h, state.min_h_i);
 
@@ -1321,7 +998,7 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
          if(draw_ui && InpShowMin)
            {
             string name = GetUniqueName(prefix + "Minor_");
-            DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_l_i], state.min_l, InpColorMin, 1, STYLE_SOLID);
+            if ((state.lp_i >= 0 && state.lp_i < rates_total) && (state.min_l_i >= 0 && state.min_l_i < rates_total)) DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_l_i], state.min_l, InpColorMin, 1, STYLE_SOLID);
            }
          state.st_l.Push(state.min_l, state.min_l_i);
 
@@ -1427,13 +1104,13 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
 
               // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
               string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              if (state.t1_i >= 0 && state.t1_i < rates_total && state.d1_i >= 0 && state.d1_i < rates_total) DrawLine(path_1, time[state.t1_i], state.t1_h, time[state.d1_i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+              if ((state.t1_i >= 0 && state.t1_i < rates_total) && (state.d1_i >= 0 && state.d1_i < rates_total)) DrawLine(path_1, time[state.t1_i], state.t1_h, time[state.d1_i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              if (state.d1_i >= 0 && state.d1_i < rates_total && state.t2_i >= 0 && state.t2_i < rates_total) DrawLine(path_2, time[state.d1_i], state.d1_l, time[state.t2_i], state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
+              if ((state.d1_i >= 0 && state.d1_i < rates_total) && (state.t2_i >= 0 && state.t2_i < rates_total)) DrawLine(path_2, time[state.d1_i], state.d1_l, time[state.t2_i], state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              if (state.t2_i >= 0 && state.t2_i < rates_total && i >= 0 && i < rates_total) DrawLine(path_3, time[state.t2_i], state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+              if ((state.t2_i >= 0 && state.t2_i < rates_total)) DrawLine(path_3, time[state.t2_i], state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
@@ -1493,13 +1170,13 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
 
               // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
               string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              if (state.t1_i >= 0 && state.t1_i < rates_total && state.d1_i >= 0 && state.d1_i < rates_total) DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+              if ((state.t1_i >= 0 && state.t1_i < rates_total) && (state.d1_i >= 0 && state.d1_i < rates_total)) DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              if (state.d1_i >= 0 && state.d1_i < rates_total && state.t2_i >= 0 && state.t2_i < rates_total) DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
+              if ((state.d1_i >= 0 && state.d1_i < rates_total) && (state.t2_i >= 0 && state.t2_i < rates_total)) DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              if (state.t2_i >= 0 && state.t2_i < rates_total && i >= 0 && i < rates_total) DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+              if ((state.t2_i >= 0 && state.t2_i < rates_total)) DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
@@ -1536,7 +1213,7 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBull, 2, STYLE_SOLID);
+               if ((state.anc_i >= 0 && state.anc_i < rates_total) && (state.tmp_h_i >= 0 && state.tmp_h_i < rates_total)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1553,12 +1230,12 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
             if(draw_ui && InpShowMaj)
               {
                state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
-               DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBull, 1, STYLE_DASH, true);
+               if ((state.maj_h_i >= 0 && state.maj_h_i < rates_total)) DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBull, 1, STYLE_DASH, true);
 
                if(state.maj_l != EMPTY_VALUE && state.maj_l != 0)
                  {
                   state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
-                  DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBull, 1, STYLE_DASH, true);
+                  if ((state.maj_l_i >= 0 && state.maj_l_i < rates_total)) DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBull, 1, STYLE_DASH, true);
                  }
               }
            }
@@ -1578,7 +1255,7 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
+               if ((state.anc_i >= 0 && state.anc_i < rates_total) && (state.tmp_h_i >= 0 && state.tmp_h_i < rates_total)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1618,7 +1295,7 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBull, 2, STYLE_SOLID);
+               if ((state.anc_i >= 0 && state.anc_i < rates_total) && (state.tmp_l_i >= 0 && state.tmp_l_i < rates_total)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_h.Clear();
@@ -1649,7 +1326,7 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
+               if ((state.anc_i >= 0 && state.anc_i < rates_total) && (state.tmp_h_i >= 0 && state.tmp_h_i < rates_total)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1685,7 +1362,7 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBear, 2, STYLE_SOLID);
+               if ((state.anc_i >= 0 && state.anc_i < rates_total) && (state.tmp_l_i >= 0 && state.tmp_l_i < rates_total)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBear, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1702,12 +1379,12 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
             if(draw_ui && InpShowMaj)
               {
                state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
-               DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBear, 1, STYLE_DASH, true);
+               if ((state.maj_l_i >= 0 && state.maj_l_i < rates_total)) DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBear, 1, STYLE_DASH, true);
 
                if(state.maj_h != EMPTY_VALUE && state.maj_h != 0)
                  {
                   state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
-                  DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBear, 1, STYLE_DASH, true);
+                  if ((state.maj_h_i >= 0 && state.maj_h_i < rates_total)) DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBear, 1, STYLE_DASH, true);
                  }
               }
            }
@@ -1727,7 +1404,7 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.tmp_l, InpColorBear, 2, STYLE_SOLID);
+               if ((state.anc_i >= 0 && state.anc_i < rates_total) && (state.tmp_l_i >= 0 && state.tmp_l_i < rates_total)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.tmp_l, InpColorBear, 2, STYLE_SOLID);
               }
 
             state.st_h.Clear();
@@ -1767,7 +1444,7 @@ void ProcessBar(int i, int rates_total, const double &open[], const double &high
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBear, 2, STYLE_SOLID);
+               if ((state.anc_i >= 0 && state.anc_i < rates_total) && (state.tmp_h_i >= 0 && state.tmp_h_i < rates_total)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBear, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1976,7 +1653,7 @@ int OnCalculate(const int rates_total,
 
           // EvaluateTradeSignal param format: current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, bool is_test
           double dummy_ext = (test_dir == 1) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) - 50*Point() : SymbolInfoDouble(Symbol(), SYMBOL_BID) + 50*Point();
-          EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, dummy_ext, 0, true);
+          EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, dummy_ext, 0);
       }
      }
    else
@@ -2038,7 +1715,7 @@ int OnCalculate(const int rates_total,
          leg_i = g_state_curr.min_l_i;
          leg_p = g_state_curr.min_l;
         }
-      DrawLine("LiveLeg", time[g_state_curr.lp_i], g_state_curr.lp_p, time[leg_i], leg_p, InpColorMin, 1, STYLE_DOT);
+      if ((g_state_curr.lp_i >= 0 && g_state_curr.lp_i < rates_total) && (leg_i >= 0 && leg_i < rates_total)) DrawLine("LiveLeg", time[g_state_curr.lp_i], g_state_curr.lp_p, time[leg_i], leg_p, InpColorMin, 1, STYLE_DOT);
      }
 
    if(last_idx > 0 && (Period() == PERIOD_M1 ))
@@ -2078,8 +1755,6 @@ int OnCalculate(const int rates_total,
            }
         }
      }
-
-
 
 
    static uint last_dash_update = 0;
