@@ -719,7 +719,7 @@ string PctToText(double pct, double max_pct, datetime swing_time, datetime curre
       if(max_pct <= 10.0) return " (Trend Şişkin, Düzeltme Bekleniyor)" + age;
       else return base_str + " - Kırılıma Hazırlanıyor)" + age;
      }
-   if(pct >= InpGoodPullbackPct && pct <= 75.0) return base_str + " - İdeal Düzeltme)" + age;
+   if(pct >= 40.0 && pct <= 75.0) return base_str + " - İdeal Düzeltme)" + age;
    if(pct > 85.0) return base_str + " - Dönüş Riski)" + age;
    return base_str + ")" + age;
   }
