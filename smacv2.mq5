@@ -92,7 +92,7 @@ datetime GetTimeSafe(const datetime &time_array[], int idx) {
     return 0; // Gecersiz bar
 }
 
-void SafeDrawLine(bool draw_ui, int size, string name, datetime t1, double v1, datetime t2, double v2, color clr, int width, int style=STYLE_SOLID, bool ray=false) {
+void SafeDrawLine(bool draw_ui, int size, string name, datetime t1, double v1, datetime t2, double v2, color clr, int width, ENUM_LINE_STYLE style=STYLE_SOLID, bool ray=false) {
     if(!draw_ui || size == 0 || t1 == 0 || t2 == 0) return;
     DrawLine(name, t1, v1, t2, v2, clr, width, style, ray);
 }
