@@ -22,7 +22,6 @@ input double InpDaysD1   = 1500.0;
 //--- CHoCH Settings ---
 input group "--- TRADE EXECUTION & RISK ---"
 input bool   InpEnableTradeExecution   = true;        // Master->Slave Sinyal Köprüsü Aktif
-input bool   InpTestMTFChochReport     = false;       // 🧪 Üst Zaman Dilimi (MTF) CHoCH Raporunu Tetikle
 input bool   InpAlertRejectedTrades    = false;       // ❌ Reddedilen (Puanı Yetersiz) İşlemleri Bildir
 input bool   InpWaitRetest             = false;       // 🎯 Gelişmiş Retest (Pusu) Modu Aktif
 input int    InpRetestMaxBars          = 15;          // ⏳ Pusu Modunda Beklenecek Maksimum Mum
@@ -53,7 +52,7 @@ input double InpMomentumMinPeak  = 30.0;
 input double InpMomentumMinBounce= 20.0;
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
-input bool   InpTestMode         = false;
+
 
 //--- Globals ---
 int g_counter = 0;
@@ -812,7 +811,6 @@ void SendMTFAnalysisAlert(datetime t, int trigger_dir, bool is_strong, bool is_t
        string msg1 = "📊 [" + Symbol() + "] MTF ANALİZ (1/2)\n" + h1_text + m30_text;
        string msg2 = "📊 [" + Symbol() + "] MTF ANALİZ (2/2)\n" + m15_text + m5_text + "\n🏆 TOPLAM SKOR: " + IntegerToString(total_points);
        SendNotification(msg1);
-       Sleep(100);
        SendNotification(msg2);
    }
 }
@@ -1567,11 +1565,7 @@ int OnCalculate(const int rates_total,
        virtual_prev = rates_total - 1; // Hafıza Koruması (Wipe Bug Fix)
    }
 
-   static bool last_test_state = false;
-   if (InpTestMTFChochReport && !last_test_state) {
-       GenerateMTFChochReport();
-   }
-   last_test_state = InpTestMTFChochReport;
+
 
    if(virtual_prev == 0)
      {
