@@ -680,6 +680,7 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
 }
 
 
+;
 
 
 
@@ -830,7 +831,6 @@ void ExecuteTradeSignal(double live_price, int trigger_dir, bool is_strong, doub
        last_broadcast_maj_extreme_i = maj_extreme_i;
    }
 }
-
 
 
 //+------------------------------------------------------------------+
@@ -1105,16 +1105,11 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           if (InpShowChoch) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
-
-
               int r_total_t = ArraySize(time);
-              if (state.t1_i >= 0 && state.t1_i < r_total_t &&
-                  state.d1_i >= 0 && state.d1_i < r_total_t &&
-                  state.t2_i >= 0 && state.t2_i < r_total_t &&
-                  i >= 0 && i < r_total_t) {
-                  // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
+              if (state.t1_i >= 0 && state.t1_i < r_total_t && state.d1_i >= 0 && state.d1_i < r_total_t && state.t2_i >= 0 && state.t2_i < r_total_t && i >= 0 && i < r_total_t) {
 
 
+              // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
               string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
               DrawLine(path_1, time[state.t1_i], state.t1_h, time[state.d1_i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
@@ -1124,16 +1119,11 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
               DrawLine(path_3, time[state.t2_i], state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
-
-
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
               DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
-              }
-
-              }
-
           }
+                        }
           state.choch_dir = 0; // Reset after trigger
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
@@ -1187,16 +1177,11 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           if (InpShowChoch) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
-
-
               int r_total_t = ArraySize(time);
-              if (state.t1_i >= 0 && state.t1_i < r_total_t &&
-                  state.d1_i >= 0 && state.d1_i < r_total_t &&
-                  state.t2_i >= 0 && state.t2_i < r_total_t &&
-                  i >= 0 && i < r_total_t) {
-                  // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
+              if (state.t1_i >= 0 && state.t1_i < r_total_t && state.d1_i >= 0 && state.d1_i < r_total_t && state.t2_i >= 0 && state.t2_i < r_total_t && i >= 0 && i < r_total_t) {
 
 
+              // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
               string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
               DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
@@ -1206,14 +1191,11 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
               DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
-
-
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
               DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
-              }
-              }
           }
+                        }
           state.choch_dir = 0; // Reset after trigger
       }
    }
