@@ -26,6 +26,7 @@ input bool   InpAlertRejectedTrades    = false;       // ❌ Reddedilen (Puanı 
 input bool   InpWaitRetest             = false;       // 🎯 Gelişmiş Retest (Pusu) Modu Aktif
 input int    InpRetestMaxBars          = 15;          // ⏳ Pusu Modunda Beklenecek Maksimum Mum
 input double InpRetestDepthPct         = 0.0;         // 📉 Kırılım Çizgisine Göre Ucuzluk Beklentisi (%0=%100 Çizgisi)
+input double InpMinPullbackPct = 40.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
 input double InpRiskUSD                = 50.0;        // İşlem Başına Dolar Riski
 input double InpStrongSLMultiplier     = 1.0;         // Güçlü Kırılım SL Genişletme Çarpanı
 input double InpWeakSLMultiplier       = 1.5;         // Zayıf Kırılım SL Genişletme Çarpanı
@@ -687,6 +688,88 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
 
 
 
+void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, double &c_level, datetime &c_time) {
+   MqlRates rates[];
+   ArraySetAsSeries(rates, false);
+   double tf_days = GetDaysForTF(tf);
+   datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
+
+   int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
+   if(copied < 2) return;
+
+   double _open[], _high[], _low[], _close[];
+   datetime _time[];
+   ArrayResize(_open, copied);
+   ArrayResize(_high, copied);
+   ArrayResize(_low, copied);
+   ArrayResize(_close, copied);
+   ArrayResize(_time, copied);
+
+   for(int i=0; i<copied; i++) {
+      _open[i]  = rates[i].open;
+      _high[i]  = rates[i].high;
+      _low[i]   = rates[i].low;
+      _close[i] = rates[i].close;
+      _time[i]  = rates[i].time;
+   }
+
+   SState st;
+   st.min_h   = _high[0]; st.min_h_i = 0; st.min_l   = _low[0]; st.min_l_i = 0;
+   st.trig_h  = _high[0]; st.trig_l  = _low[0];
+   st.tmp_h   = _high[0]; st.tmp_h_i = 0; st.tmp_l   = _low[0]; st.tmp_l_i = 0;
+   st.min_tr  = (_close[0] > rates[0].open) ? 1 : -1;
+
+   double initial_gap = (_high[0] - _low[0]);
+   if(initial_gap == 0) initial_gap = Point() * 10;
+   double tiny_gap = initial_gap * 0.1;
+
+   st.maj_h = _high[0] + tiny_gap;
+   st.maj_l = _low[0] - tiny_gap;
+   st.maj_tr = st.min_tr;
+   st.maj_st = 1;
+   st.bos_i = 0;
+   st.maj_h_i = 0;
+   st.maj_l_i = 0;
+   st.mb_h = _high[0];
+   st.mb_l = _low[0];
+   st.mb_i = 0;
+
+   st.last_choch_dir = 0;
+   st.last_choch_level = 0;
+   st.last_choch_time = 0;
+
+   for(int i = 1; i < copied; i++) {
+      bool inside = (_high[i] <= st.mb_h) && (_low[i] >= st.mb_l);
+      if(!inside) {
+         if (_high[i] > st.mb_h || _low[i] < st.mb_l) {
+            st.mb_h = _high[i];
+            st.mb_l = _low[i];
+            st.mb_i = i;
+         }
+         if(i == copied - 1) {
+            double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+            _close[i] = bid;
+            if(bid > _high[i]) _high[i] = bid;
+            if(bid < _low[i]) _low[i] = bid;
+         }
+         ProcessBar(i, _open, _high, _low, _close, _time, st, true, false);
+      }
+   }
+
+   c_dir = st.last_choch_dir;
+   c_level = st.last_choch_level;
+   c_time = st.last_choch_time;
+}
+
+struct SMTFReport {
+    ENUM_TIMEFRAMES tf;
+    string tf_name;
+    int dir;
+    double level;
+    datetime time;
+    string text;
+};
+
 void SendMTFAnalysisAlert(datetime t, int trigger_dir, bool is_strong, bool is_test = false)
 {
    int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
@@ -797,6 +880,113 @@ void SendMTFAnalysisAlert(datetime t, int trigger_dir, bool is_strong, bool is_t
    m5_text = GenerateMTFString("M5 ", t_m5, h_m5, l_m5, p_m5, mp_m5) + m5_text;
    total_points += m5_points;
 
+
+   // --- YENİ DESTEKLEYİCİ CHOCH FAKEOUT (TUZAK) MATRİS SİSTEMİ ---
+
+   int c_dir_h1=0, c_dir_m30=0, c_dir_m15=0, c_dir_m5=0;
+   double c_lvl_h1=0, c_lvl_m30=0, c_lvl_m15=0, c_lvl_m5=0;
+   datetime c_t_h1=0, c_t_m30=0, c_t_m15=0, c_t_m5=0;
+
+   GetMTFChochDetails(PERIOD_H1, TimeCurrent(), c_dir_h1, c_lvl_h1, c_t_h1);
+   GetMTFChochDetails(PERIOD_M30, TimeCurrent(), c_dir_m30, c_lvl_m30, c_t_m30);
+   GetMTFChochDetails(PERIOD_M15, TimeCurrent(), c_dir_m15, c_lvl_m15, c_t_m15);
+   GetMTFChochDetails(PERIOD_M5, TimeCurrent(), c_dir_m5, c_lvl_m5, c_t_m5);
+
+   int h1_sup_points=0, m30_sup_points=0, m15_sup_points=0, m5_sup_points=0;
+   string h1_sup_text="", m30_sup_text="", m15_sup_text="", m5_sup_text="";
+
+   double live_price = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+
+   bool valid_h1 = (c_dir_h1 == 1 && live_price > c_lvl_h1) || (c_dir_h1 == -1 && live_price < c_lvl_h1);
+   bool valid_m30 = (c_dir_m30 == 1 && live_price > c_lvl_m30) || (c_dir_m30 == -1 && live_price < c_lvl_m30);
+   bool valid_m15 = (c_dir_m15 == 1 && live_price > c_lvl_m15) || (c_dir_m15 == -1 && live_price < c_lvl_m15);
+   bool valid_m5 = (c_dir_m5 == 1 && live_price > c_lvl_m5) || (c_dir_m5 == -1 && live_price < c_lvl_m5);
+
+   if (trigger_dir == 1) { // M1 BUY
+       if (c_dir_h1 == 1 && valid_h1) { h1_sup_points = 20; h1_sup_text = "🟢 H1 Yukarı + Geçerli -> [+20 Puan]\n"; }
+       else if (c_dir_h1 == 1 && !valid_h1) { h1_sup_points = -20; h1_sup_text = "🔴 H1 Yukarı + Geçersiz (Tuzak) -> [-20 Puan]\n"; }
+       else if (c_dir_h1 == -1 && valid_h1) { h1_sup_points = -20; h1_sup_text = "🔴 H1 Aşağı + Geçerli -> [-20 Puan]\n"; }
+       else if (c_dir_h1 == -1 && !valid_h1) { h1_sup_points = 20; h1_sup_text = "🟢 H1 Aşağı + Geçersiz (Tuzak) -> [+20 Puan]\n"; }
+       else { h1_sup_text = "⚪ H1 Veri Bekleniyor... -> [0 Puan]\n"; }
+
+       if (c_dir_m30 == 1 && valid_m30) { m30_sup_points = 15; m30_sup_text = "🟢 M30 Yukarı + Geçerli -> [+15 Puan]\n"; }
+       else if (c_dir_m30 == 1 && !valid_m30) { m30_sup_points = -15; m30_sup_text = "🔴 M30 Yukarı + Geçersiz (Tuzak) -> [-15 Puan]\n"; }
+       else if (c_dir_m30 == -1 && valid_m30) { m30_sup_points = -15; m30_sup_text = "🔴 M30 Aşağı + Geçerli -> [-15 Puan]\n"; }
+       else if (c_dir_m30 == -1 && !valid_m30) { m30_sup_points = 15; m30_sup_text = "🟢 M30 Aşağı + Geçersiz (Tuzak) -> [+15 Puan]\n"; }
+       else { m30_sup_text = "⚪ M30 Veri Bekleniyor... -> [0 Puan]\n"; }
+
+       if (c_dir_m15 == 1 && valid_m15) { m15_sup_points = 10; m15_sup_text = "🟢 M15 Yukarı + Geçerli -> [+10 Puan]\n"; }
+       else if (c_dir_m15 == 1 && !valid_m15) { m15_sup_points = -10; m15_sup_text = "🔴 M15 Yukarı + Geçersiz (Tuzak) -> [-10 Puan]\n"; }
+       else if (c_dir_m15 == -1 && valid_m15) { m15_sup_points = -10; m15_sup_text = "🔴 M15 Aşağı + Geçerli -> [-10 Puan]\n"; }
+       else if (c_dir_m15 == -1 && !valid_m15) { m15_sup_points = 10; m15_sup_text = "🟢 M15 Aşağı + Geçersiz (Tuzak) -> [+10 Puan]\n"; }
+       else { m15_sup_text = "⚪ M15 Veri Bekleniyor... -> [0 Puan]\n"; }
+
+       if (c_dir_m5 == 1 && valid_m5) { m5_sup_points = 5; m5_sup_text = "🟢 M5 Yukarı + Geçerli -> [+5 Puan]\n"; }
+       else if (c_dir_m5 == 1 && !valid_m5) { m5_sup_points = -5; m5_sup_text = "🔴 M5 Yukarı + Geçersiz (Tuzak) -> [-5 Puan]\n"; }
+       else if (c_dir_m5 == -1 && valid_m5) { m5_sup_points = -5; m5_sup_text = "🔴 M5 Aşağı + Geçerli -> [-5 Puan]\n"; }
+       else if (c_dir_m5 == -1 && !valid_m5) { m5_sup_points = 5; m5_sup_text = "🟢 M5 Aşağı + Geçersiz (Tuzak) -> [+5 Puan]\n"; }
+       else { m5_sup_text = "⚪ M5 Veri Bekleniyor... -> [0 Puan]\n"; }
+   } else { // M1 SELL
+       if (c_dir_h1 == -1 && valid_h1) { h1_sup_points = 20; h1_sup_text = "🔴 H1 Aşağı + Geçerli -> [+20 Puan]\n"; }
+       else if (c_dir_h1 == -1 && !valid_h1) { h1_sup_points = -20; h1_sup_text = "🟢 H1 Aşağı + Geçersiz (Tuzak) -> [-20 Puan]\n"; }
+       else if (c_dir_h1 == 1 && valid_h1) { h1_sup_points = -20; h1_sup_text = "🟢 H1 Yukarı + Geçerli -> [-20 Puan]\n"; }
+       else if (c_dir_h1 == 1 && !valid_h1) { h1_sup_points = 20; h1_sup_text = "🔴 H1 Yukarı + Geçersiz (Tuzak) -> [+20 Puan]\n"; }
+       else { h1_sup_text = "⚪ H1 Veri Bekleniyor... -> [0 Puan]\n"; }
+
+       if (c_dir_m30 == -1 && valid_m30) { m30_sup_points = 15; m30_sup_text = "🔴 M30 Aşağı + Geçerli -> [+15 Puan]\n"; }
+       else if (c_dir_m30 == -1 && !valid_m30) { m30_sup_points = -15; m30_sup_text = "🟢 M30 Aşağı + Geçersiz (Tuzak) -> [-15 Puan]\n"; }
+       else if (c_dir_m30 == 1 && valid_m30) { m30_sup_points = -15; m30_sup_text = "🟢 M30 Yukarı + Geçerli -> [-15 Puan]\n"; }
+       else if (c_dir_m30 == 1 && !valid_m30) { m30_sup_points = 15; m30_sup_text = "🔴 M30 Yukarı + Geçersiz (Tuzak) -> [+15 Puan]\n"; }
+       else { m30_sup_text = "⚪ M30 Veri Bekleniyor... -> [0 Puan]\n"; }
+
+       if (c_dir_m15 == -1 && valid_m15) { m15_sup_points = 10; m15_sup_text = "🔴 M15 Aşağı + Geçerli -> [+10 Puan]\n"; }
+       else if (c_dir_m15 == -1 && !valid_m15) { m15_sup_points = -10; m15_sup_text = "🟢 M15 Aşağı + Geçersiz (Tuzak) -> [-10 Puan]\n"; }
+       else if (c_dir_m15 == 1 && valid_m15) { m15_sup_points = -10; m15_sup_text = "🟢 M15 Yukarı + Geçerli -> [-10 Puan]\n"; }
+       else if (c_dir_m15 == 1 && !valid_m15) { m15_sup_points = 10; m15_sup_text = "🔴 M15 Yukarı + Geçersiz (Tuzak) -> [+10 Puan]\n"; }
+       else { m15_sup_text = "⚪ M15 Veri Bekleniyor... -> [0 Puan]\n"; }
+
+       if (c_dir_m5 == -1 && valid_m5) { m5_sup_points = 5; m5_sup_text = "🔴 M5 Aşağı + Geçerli -> [+5 Puan]\n"; }
+       else if (c_dir_m5 == -1 && !valid_m5) { m5_sup_points = -5; m5_sup_text = "🟢 M5 Aşağı + Geçersiz (Tuzak) -> [-5 Puan]\n"; }
+       else if (c_dir_m5 == 1 && valid_m5) { m5_sup_points = -5; m5_sup_text = "🟢 M5 Yukarı + Geçerli -> [-5 Puan]\n"; }
+       else if (c_dir_m5 == 1 && !valid_m5) { m5_sup_points = 5; m5_sup_text = "🔴 M5 Yukarı + Geçersiz (Tuzak) -> [+5 Puan]\n"; }
+       else { m5_sup_text = "⚪ M5 Veri Bekleniyor... -> [0 Puan]\n"; }
+   }
+
+   total_points += h1_sup_points + m30_sup_points + m15_sup_points + m5_sup_points;
+
+   SMTFReport treps[4];
+   treps[0].time = c_t_h1; treps[0].tf = PERIOD_H1; treps[0].tf_name = "H1";
+   treps[1].time = c_t_m30; treps[1].tf = PERIOD_M30; treps[1].tf_name = "M30";
+   treps[2].time = c_t_m15; treps[2].tf = PERIOD_M15; treps[2].tf_name = "M15";
+   treps[3].time = c_t_m5; treps[3].tf = PERIOD_M5; treps[3].tf_name = "M5";
+
+   for(int i=0; i<3; i++) {
+       for(int j=0; j<3-i; j++) {
+           if(treps[j].time < treps[j+1].time) {
+               SMTFReport temp = treps[j];
+               treps[j] = treps[j+1];
+               treps[j+1] = temp;
+           }
+       }
+   }
+
+   string penalty_text = "";
+   int penalty = 0;
+
+   if (treps[3].time != 0) {
+       int pen_4 = (treps[3].tf == PERIOD_H1) ? -15 : -10;
+       penalty += pen_4;
+       penalty_text += "4. En Eski (" + treps[3].tf_name + "): [" + IntegerToString(pen_4) + " Puan]\n";
+   }
+
+   total_points += penalty;
+
+   string sup_text = "\n🛡️ DESTEKLEYİCİ YAPILAR & CEZALAR:\n";
+   sup_text += h1_sup_text + m30_sup_text + m15_sup_text + m5_sup_text;
+   if (penalty != 0) {
+       sup_text += "⏱️ ZAMAN CEZALARI:\n" + penalty_text;
+   }
+
    string msg = (is_test ? "🧪 [TEST] " : "📊 [") + Symbol() + "] MTF ANALİZ ŞABLONU 📊\n";
    msg += "🔍 M1 KIRILIM KALİTESİ:\n" + m1_text + "\n";
    msg += "📈 ZAMAN DİLİMİ PUANLARI:\n";
@@ -804,12 +994,12 @@ void SendMTFAnalysisAlert(datetime t, int trigger_dir, bool is_strong, bool is_t
    msg += m30_text;
    msg += m15_text;
    msg += m5_text;
-   msg += "\n🏆 TOPLAM İŞLEM SKORU: " + IntegerToString(total_points) + " Puan\n";
+   msg += sup_text + "\n🏆 TOPLAM İŞLEM SKORU: " + IntegerToString(total_points) + " Puan\n";
 
    if(InpAlertPopup) Alert(msg);
    if(InpAlertPush && !is_test) {
        string msg1 = "📊 [" + Symbol() + "] MTF ANALİZ (1/2)\n" + h1_text + m30_text;
-       string msg2 = "📊 [" + Symbol() + "] MTF ANALİZ (2/2)\n" + m15_text + m5_text + "\n🏆 TOPLAM SKOR: " + IntegerToString(total_points);
+       string msg2 = "📊 [" + Symbol() + "] MTF ANALİZ (2/2)\n" + m15_text + m5_text + sup_text + "\n🏆 TOPLAM SKOR: " + IntegerToString(total_points);
        SendNotification(msg1);
        SendNotification(msg2);
    }
@@ -1059,7 +1249,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
             double range = state.maj_h - state.maj_l;
       double t2_pct = (range != 0) ? ((state.t2_h - state.maj_l) / range) * 100.0 : 0;
-      bool t2_valid = true;
+      bool t2_valid = (t2_pct >= InpMinPullbackPct);
 
       int r_total = ArraySize(close);
       bool is_live_bar = (i == r_total - 1);
@@ -1130,7 +1320,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
             double range = state.maj_h - state.maj_l;
       double t2_pct = (range != 0) ? ((state.maj_h - state.t2_l) / range) * 100.0 : 0;
-      bool t2_valid = true;
+      bool t2_valid = (t2_pct >= InpMinPullbackPct);
 
       int r_total = ArraySize(close);
       bool is_live_bar = (i == r_total - 1);
