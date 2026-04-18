@@ -22,6 +22,7 @@ input double InpDaysD1   = 1500.0;
 //--- CHoCH Settings ---
 input group "--- TRADE EXECUTION & RISK ---"
 input bool   InpEnableTradeExecution   = true;        // Master->Slave Sinyal Köprüsü Aktif
+input bool   InpTestMTFChochReport     = false;       // 🧪 Üst Zaman Dilimi (MTF) CHoCH Raporunu Tetikle
 input bool   InpAlertRejectedTrades    = false;       // ❌ Reddedilen (Puanı Yetersiz) İşlemleri Bildir
 input bool   InpWaitRetest             = false;       // 🎯 Gelişmiş Retest (Pusu) Modu Aktif
 input int    InpRetestMaxBars          = 15;          // ⏳ Pusu Modunda Beklenecek Maksimum Mum
@@ -46,11 +47,13 @@ input color  InpColorBear = clrRed;
 
 //--- Alert Settings ---
 input bool   InpEnableAlertCHoCHBase   = true;       // Temel CHoCH (Kırılım) Bildirimini Aç
+input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Puanları Hesapla ve Bildir
 input double InpGoodPullbackPct  = 40.0;
 input double InpMomentumMinPeak  = 30.0;
 input double InpMomentumMinBounce= 20.0;
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
+input bool   InpTestMode         = false;
 
 //--- Globals ---
 int g_counter = 0;
@@ -685,7 +688,7 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
 
 
 
-void SendMTFAnalysisAlert(datetime t, int trigger_dir, bool is_strong)
+void SendMTFAnalysisAlert(datetime t, int trigger_dir, bool is_strong, bool is_test = false)
 {
    int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
    double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
@@ -795,7 +798,7 @@ void SendMTFAnalysisAlert(datetime t, int trigger_dir, bool is_strong)
    m5_text = GenerateMTFString("M5 ", t_m5, h_m5, l_m5, p_m5, mp_m5) + m5_text;
    total_points += m5_points;
 
-   string msg = "📊 [" + Symbol() + "] MTF ANALİZ ŞABLONU 📊\n";
+   string msg = (is_test ? "🧪 [TEST] " : "📊 [") + Symbol() + "] MTF ANALİZ ŞABLONU 📊\n";
    msg += "🔍 M1 KIRILIM KALİTESİ:\n" + m1_text + "\n";
    msg += "📈 ZAMAN DİLİMİ PUANLARI:\n";
    msg += h1_text;
@@ -805,7 +808,7 @@ void SendMTFAnalysisAlert(datetime t, int trigger_dir, bool is_strong)
    msg += "\n🏆 TOPLAM İŞLEM SKORU: " + IntegerToString(total_points) + " Puan\n";
 
    if(InpAlertPopup) Alert(msg);
-   if(InpAlertPush) {
+   if(InpAlertPush && !is_test) {
        string msg1 = "📊 [" + Symbol() + "] MTF ANALİZ (1/2)\n" + h1_text + m30_text;
        string msg2 = "📊 [" + Symbol() + "] MTF ANALİZ (2/2)\n" + m15_text + m5_text + "\n🏆 TOPLAM SKOR: " + IntegerToString(total_points);
        SendNotification(msg1);
@@ -814,7 +817,7 @@ void SendMTFAnalysisAlert(datetime t, int trigger_dir, bool is_strong)
    }
 }
 
-void ExecuteTradeSignal(double live_price, int trigger_dir, bool is_strong, double minor_extreme_sl, int maj_extreme_i)
+void ExecuteTradeSignal(double live_price, int trigger_dir, bool is_strong, double minor_extreme_sl, int maj_extreme_i, bool is_test = false)
 {
    double sl_dist = MathAbs(live_price - minor_extreme_sl);
 
@@ -826,9 +829,9 @@ void ExecuteTradeSignal(double live_price, int trigger_dir, bool is_strong, doub
    double tp_price = (trigger_dir == 1) ? (live_price + tp_dist) : (live_price - tp_dist);
 
    static int last_broadcast_maj_extreme_i = -1;
-   if (maj_extreme_i != last_broadcast_maj_extreme_i || maj_extreme_i == 0) {
-       BroadcastTradeSignal(Symbol(), trigger_dir, live_price, sl_price, tp_price, is_strong, 100, false);
-       last_broadcast_maj_extreme_i = maj_extreme_i;
+   if (maj_extreme_i != last_broadcast_maj_extreme_i || maj_extreme_i == 0 || is_test) {
+       BroadcastTradeSignal(Symbol(), trigger_dir, live_price, sl_price, tp_price, is_strong, 100, is_test);
+       if(!is_test) last_broadcast_maj_extreme_i = maj_extreme_i;
    }
 }
 
@@ -1105,25 +1108,24 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           if (InpShowChoch) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
-              int r_total_t = ArraySize(time);
-              if (state.t1_i >= 0 && state.t1_i < r_total_t && state.d1_i >= 0 && state.d1_i < r_total_t && state.t2_i >= 0 && state.t2_i < r_total_t && i >= 0 && i < r_total_t) {
 
 
-              // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
-              string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_1, time[state.t1_i], state.t1_h, time[state.d1_i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+              int r_t = ArraySize(time);
+              if (state.t1_i >= 0 && state.t1_i < r_t && state.d1_i >= 0 && state.d1_i < r_t && state.t2_i >= 0 && state.t2_i < r_t && i >= 0 && i < r_t) {
+                  string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_1, time[state.t1_i], state.t1_h, time[state.d1_i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
-              string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_2, time[state.d1_i], state.d1_l, time[state.t2_i], state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
+                  string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_2, time[state.d1_i], state.d1_l, time[state.t2_i], state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
 
-              string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_3, time[state.t2_i], state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+                  string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_3, time[state.t2_i], state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
-              // 2. Draw the short, thick signal marker at breakout level
-              string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
-              DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
+                  string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
+                  DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
+              }
+
           }
-                        }
           state.choch_dir = 0; // Reset after trigger
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
@@ -1177,25 +1179,24 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           if (InpShowChoch) {
               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
-              int r_total_t = ArraySize(time);
-              if (state.t1_i >= 0 && state.t1_i < r_total_t && state.d1_i >= 0 && state.d1_i < r_total_t && state.t2_i >= 0 && state.t2_i < r_total_t && i >= 0 && i < r_total_t) {
 
 
-              // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
-              string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+              int r_t = ArraySize(time);
+              if (state.t1_i >= 0 && state.t1_i < r_t && state.d1_i >= 0 && state.d1_i < r_t && state.t2_i >= 0 && state.t2_i < r_t && i >= 0 && i < r_t) {
+                  string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
-              string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
+                  string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
 
-              string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+                  string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
+                  DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
-              // 2. Draw the short, thick signal marker at breakout level
-              string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
-              DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
+                  string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
+                  DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
+              }
+
           }
-                        }
           state.choch_dir = 0; // Reset after trigger
       }
    }
@@ -1566,7 +1567,11 @@ int OnCalculate(const int rates_total,
        virtual_prev = rates_total - 1; // Hafıza Koruması (Wipe Bug Fix)
    }
 
-
+   static bool last_test_state = false;
+   if (InpTestMTFChochReport && !last_test_state) {
+       GenerateMTFChochReport();
+   }
+   last_test_state = InpTestMTFChochReport;
 
    if(virtual_prev == 0)
      {
@@ -1643,7 +1648,21 @@ int OnCalculate(const int rates_total,
 
       limit = start_idx + 1;
 
+      // TEST TRIGGER
+      if (InpTestTradeExecution) {
+          int live_tr = 0; double live_pct = 0; double mp_pct = 0;
+          double dh, dl; datetime dth, dtl;
+          GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
 
+          // Test varsayımı: Ana yön H1'in trend yönüne (g_state_hist.maj_tr) göre bir kırılım (CHoCH) geldiğini farz ediyoruz.
+          int test_dir = (live_tr != 0) ? live_tr : 1; // Default to buy if unknown
+
+
+          // EvaluateTradeSignal param format: current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, bool is_test
+          double dummy_ext = (test_dir == 1) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) - 50*Point() : SymbolInfoDouble(Symbol(), SYMBOL_BID) + 50*Point();
+          SendMTFAnalysisAlert(TimeCurrent(), test_dir, true, true);
+          ExecuteTradeSignal(SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, true, dummy_ext, 0, true);
+      }
      }
    else
      {
