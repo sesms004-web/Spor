@@ -464,11 +464,24 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
 void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, double &c_level, datetime &c_time) {
    MqlRates rates[];
    ArraySetAsSeries(rates, false);
-   double tf_days = GetDaysForTF(tf);
-   datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
 
-   int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
+   // MT5'te veri senkronizasyonu hatasini asmak (Veri Bekleniyor)
+   // Sayet current_time belirtilen sureyi gecmisse, bar sayisiyla sondan 5000 cekelim ki bos gelmesin.
+   int copied = CopyRates(Symbol(), tf, 0, 5000, rates);
    if(copied < 2) return;
+
+   // Eger history testindeysek, current_time'dan sonrasini sil (kopya sayisini azalt)
+   int valid_count = copied;
+   for(int i=copied-1; i>=0; i--) {
+       if (rates[i].time > current_time) {
+           valid_count--;
+       } else {
+           break;
+       }
+   }
+   copied = valid_count;
+   if(copied < 2) return;
+
 
    double _open[], _high[], _low[], _close[];
    datetime _time[];
@@ -541,11 +554,20 @@ bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct
    MqlRates rates[];
    ArraySetAsSeries(rates, false);
 
-   double tf_days = GetDaysForTF(tf);
-   datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
-
-   int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
+   int copied = CopyRates(Symbol(), tf, 0, 5000, rates);
    if(copied < 2) return false;
+
+   int valid_count = copied;
+   for(int i=copied-1; i>=0; i--) {
+       if (rates[i].time > current_time) {
+           valid_count--;
+       } else {
+           break;
+       }
+   }
+   copied = valid_count;
+   if(copied < 2) return false;
+
 
    double _open[], _high[], _low[], _close[];
    datetime _time[];
