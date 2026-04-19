@@ -83,24 +83,6 @@ bool g_level2_triggered = false;
 bool g_level1_missed = false;
 bool g_level2_missed = false;
 
-
-//+------------------------------------------------------------------+
-//| GUVENLI ZAMAN GETIRICI VE CIZICI (ARRAY OUT OF RANGE KORUMASI)
-//+------------------------------------------------------------------+
-datetime GetTimeSafe(const datetime &time_array[], int idx) {
-    if(idx >= 0 && idx < ArraySize(time_array)) return time_array[idx];
-    return 0; // Gecersiz bar
-}
-
-void SafeDrawLine(bool draw_ui, int size, string name, datetime t1, double v1, datetime t2, double v2, color clr, int width, ENUM_LINE_STYLE style=STYLE_SOLID, bool ray=false) {
-    if(!draw_ui || size == 0 || t1 == 0 || t2 == 0) return;
-    DrawLine(name, t1, v1, t2, v2, clr, width, style, ray);
-}
-
-void SafeCutLine(bool draw_ui, int size, string name, datetime t2) {
-    if(!draw_ui || size == 0 || t2 == 0) return;
-    CutLine(name, t2);
-}
 void DrawLine(string name, datetime time1, double price1, datetime time2, double price2, color clr, int width, ENUM_LINE_STYLE style, bool ray_right=false)
   {
    if(ObjectFind(0, name) < 0)
@@ -388,7 +370,7 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
            {
             state.last_choch_dir = -1;
             state.last_choch_level = state.maj_l;
-            state.last_choch_time = GetTimeSafe(time, i);
+            state.last_choch_time = time[i];
 
             state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
             state.st_l.Clear(); state.tmp_l = val_l; state.tmp_l_i = i;
@@ -403,7 +385,7 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
            {
             state.last_choch_dir = 1;
             state.last_choch_level = state.maj_h;
-            state.last_choch_time = GetTimeSafe(time, i);
+            state.last_choch_time = time[i];
             state.last_choch_i = i;
 
             state.bos_i = i; state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
@@ -414,7 +396,7 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
            {
             state.last_choch_dir = -1;
             state.last_choch_level = state.maj_l;
-            state.last_choch_time = GetTimeSafe(time, i);
+            state.last_choch_time = time[i];
 
             state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
             state.st_l.Clear(); state.tmp_l = val_l; state.tmp_l_i = i;
@@ -439,7 +421,7 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
            {
             state.last_choch_dir = 1;
             state.last_choch_level = state.maj_h;
-            state.last_choch_time = GetTimeSafe(time, i);
+            state.last_choch_time = time[i];
 
             state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
             state.st_h.Clear(); state.tmp_h = val_h; state.tmp_h_i = i;
@@ -454,7 +436,7 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
            {
             state.last_choch_dir = -1;
             state.last_choch_level = state.maj_l;
-            state.last_choch_time = GetTimeSafe(time, i);
+            state.last_choch_time = time[i];
             state.last_choch_i = i;
 
             state.maj_h = state.tmp_h; state.bos_i = i; state.maj_h_i = state.tmp_h_i;
@@ -465,7 +447,7 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
            {
             state.last_choch_dir = 1;
             state.last_choch_level = state.maj_h;
-            state.last_choch_time = GetTimeSafe(time, i);
+            state.last_choch_time = time[i];
 
             state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
             state.st_h.Clear(); state.tmp_h = val_h; state.tmp_h_i = i;
@@ -479,9 +461,6 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
 void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, double &c_level, datetime &c_time) {
    c_dir = 0; c_level = 0; c_time = 0;
 
-   // FARKLI YONTEM: MT5'in ic struct array looplari backtestte/M1 chartlarinda cogu zaman 0 donuyor.
-   // CHoCH'u bulmak icin basit Swing Price Action (Tepe/Dip kirilimi) mantigi kullaniyoruz.
-
    if(SeriesInfoInteger(Symbol(), tf, SERIES_SYNCHRONIZED) == false) {
        datetime dummy = iTime(Symbol(), tf, 100);
    }
@@ -492,10 +471,12 @@ void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, d
    if (bars_to_check < 50) return;
 
    MqlRates rates[];
-   ArraySetAsSeries(rates, true); // En yeni bar 0. index
+   ArraySetAsSeries(rates, true);
 
-   // current_time itibariyle kopyala
-   int copied = CopyRates(Symbol(), tf, current_time, bars_to_check, rates);
+   int start_idx = iBarShift(Symbol(), tf, current_time);
+   if (start_idx < 0) return;
+
+   int copied = CopyRates(Symbol(), tf, start_idx, bars_to_check, rates);
    if(copied < 50) return;
 
    double maj_h = 0; int maj_h_i = -1;
@@ -509,15 +490,15 @@ void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, d
 
    if (maj_h_i == -1 || maj_l_i == -1) return;
 
-   if (maj_l_i < maj_h_i) { // YUKSELIS (Fiyat dipten donuyor)
+   if (maj_l_i < maj_h_i) { // YUKSELIS
        double minor_h = 0; int minor_h_i = -1;
-       for (int i = maj_l_i + 1; i <= maj_h_i; i++) {
-           bool is_swing = true;
+       for (int i = maj_l_i; i <= maj_h_i; i++) {
+           bool is_swing_high = true;
            for (int j = 1; j <= 3; j++) {
-               if (i-j >= 0 && rates[i-j].high > rates[i].high) is_swing = false;
-               if (i+j < copied && rates[i+j].high > rates[i].high) is_swing = false;
+               if (i-j >= 0 && rates[i-j].high > rates[i].high) is_swing_high = false;
+               if (i+j < copied && rates[i+j].high > rates[i].high) is_swing_high = false;
            }
-           if (is_swing) {
+           if (is_swing_high) {
                minor_h = rates[i].high;
                minor_h_i = i;
                break;
@@ -528,22 +509,23 @@ void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, d
            c_level = minor_h;
            c_dir = 1;
            c_time = rates[minor_h_i].time;
+
            for (int i = maj_l_i - 1; i >= 0; i--) {
                if (rates[i].close > c_level) {
-                   c_time = rates[i].time; // Kirilim ani
+                   c_time = rates[i].time;
                    break;
                }
            }
        }
-   } else { // DUSUS (Fiyat tepeden donuyor)
+   } else { // DUSUS
        double minor_l = 999999; int minor_l_i = -1;
-       for (int i = maj_h_i + 1; i <= maj_l_i; i++) {
-           bool is_swing = true;
+       for (int i = maj_h_i; i <= maj_l_i; i++) {
+           bool is_swing_low = true;
            for (int j = 1; j <= 3; j++) {
-               if (i-j >= 0 && rates[i-j].low < rates[i].low) is_swing = false;
-               if (i+j < copied && rates[i+j].low < rates[i].low) is_swing = false;
+               if (i-j >= 0 && rates[i-j].low < rates[i].low) is_swing_low = false;
+               if (i+j < copied && rates[i+j].low < rates[i].low) is_swing_low = false;
            }
-           if (is_swing) {
+           if (is_swing_low) {
                minor_l = rates[i].low;
                minor_l_i = i;
                break;
@@ -554,15 +536,17 @@ void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, d
            c_level = minor_l;
            c_dir = -1;
            c_time = rates[minor_l_i].time;
+
            for (int i = maj_h_i - 1; i >= 0; i--) {
                if (rates[i].close < c_level) {
-                   c_time = rates[i].time; // Kirilim ani
+                   c_time = rates[i].time;
                    break;
                }
            }
        }
    }
 }
+
 
 
 bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct, datetime current_time,
@@ -1319,7 +1303,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
            if (g_pending_dir == -1 && val_h >= g_pending_entry) executed = true;
 
            if (executed) {
-               EvaluateTradeSignal(i, GetTimeSafe(time, i), g_pending_entry, g_pending_dir, g_pending_p_pct, g_pending_is_strong, g_pending_sl, g_pending_maj_extreme_i);
+               EvaluateTradeSignal(i, time[i], g_pending_entry, g_pending_dir, g_pending_p_pct, g_pending_is_strong, g_pending_sl, g_pending_maj_extreme_i);
                g_pending_active = false; // Pusu tamamlandı, emir gönderildi.
            }
        }
@@ -1365,7 +1349,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          if(draw_ui && InpShowMin)
            {
             string name = GetUniqueName(prefix + "Minor_");
-            SafeDrawLine(draw_ui, ArraySize(time), name, GetTimeSafe(time, state.lp_i), state.lp_p, GetTimeSafe(time, state.min_h_i), state.min_h, InpColorMin, 1, STYLE_SOLID);
+            if (draw_ui && state.lp_i >= 0 && state.lp_i < ArraySize(time) && state.min_h_i >= 0 && state.min_h_i < ArraySize(time)) DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_h_i], state.min_h, InpColorMin, 1, STYLE_SOLID);
            }
          state.st_h.Push(state.min_h, state.min_h_i);
 
@@ -1432,7 +1416,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          if(draw_ui && InpShowMin)
            {
             string name = GetUniqueName(prefix + "Minor_");
-            SafeDrawLine(draw_ui, ArraySize(time), name, GetTimeSafe(time, state.lp_i), state.lp_p, GetTimeSafe(time, state.min_l_i), state.min_l, InpColorMin, 1, STYLE_SOLID);
+            if (draw_ui && state.lp_i >= 0 && state.lp_i < ArraySize(time) && state.min_l_i >= 0 && state.min_l_i < ArraySize(time)) DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_l_i], state.min_l, InpColorMin, 1, STYLE_SOLID);
            }
          state.st_l.Push(state.min_l, state.min_l_i);
 
@@ -1501,7 +1485,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           // Bearish CHoCH confirmed!
           state.last_choch_dir = -1;
           state.last_choch_level = state.d1_l;
-          state.last_choch_time = GetTimeSafe(time, i);
+          state.last_choch_time = time[i];
 
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
@@ -1512,7 +1496,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               if (state.d1_i != last_alert_d1_i_bear) {
 
                   if (!InpWaitRetest) {
-                      EvaluateTradeSignal(i, GetTimeSafe(time, i), val_c, -1, p_pct, is_strong, state.t2_h, state.maj_h_i);
+                      EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, state.t2_h, state.maj_h_i);
                   } else {
                       // Retest Modu: İşlemi Pusuya Yatır
                       g_pending_active = true;
@@ -1538,17 +1522,17 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
               string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              SafeDrawLine(draw_ui, ArraySize(time), path_1, GetTimeSafe(time, state.t1_i), state.t1_h, GetTimeSafe(time, state.d1_i), state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+              if (draw_ui && state.t1_i >= 0 && state.t1_i < ArraySize(time) && state.d1_i >= 0 && state.d1_i < ArraySize(time)) DrawLine(path_1, time[state.t1_i], state.t1_h, time[state.d1_i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              SafeDrawLine(draw_ui, ArraySize(time), path_2, GetTimeSafe(time, state.d1_i), state.d1_l, GetTimeSafe(time, state.t2_i), state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
+              if (draw_ui && state.d1_i >= 0 && state.d1_i < ArraySize(time) && state.t2_i >= 0 && state.t2_i < ArraySize(time)) DrawLine(path_2, time[state.d1_i], state.d1_l, time[state.t2_i], state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              SafeDrawLine(draw_ui, ArraySize(time), path_3, GetTimeSafe(time, state.t2_i), state.t2_h, GetTimeSafe(time, i), state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+              if (draw_ui && state.t2_i >= 0 && state.t2_i < ArraySize(time) && i >= 0 && i < ArraySize(time)) DrawLine(path_3, time[state.t2_i], state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
-              SafeDrawLine(draw_ui, ArraySize(time), choch_name, GetTimeSafe(time, i), state.d1_l, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
+              if (draw_ui && i >= 0 && i < ArraySize(time)) DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
           }
           state.choch_dir = 0; // Reset after trigger
       }
@@ -1567,7 +1551,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           // Bullish CHoCH confirmed!
           state.last_choch_dir = 1;
           state.last_choch_level = state.d1_h;
-          state.last_choch_time = GetTimeSafe(time, i);
+          state.last_choch_time = time[i];
 
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
@@ -1578,7 +1562,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               if (state.d1_i != last_alert_d1_i_bull) {
 
                   if (!InpWaitRetest) {
-                      EvaluateTradeSignal(i, GetTimeSafe(time, i), val_c, 1, p_pct, is_strong, state.t2_l, state.maj_l_i);
+                      EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, state.t2_l, state.maj_l_i);
                   } else {
                       // Retest Modu: İşlemi Pusuya Yatır
                       g_pending_active = true;
@@ -1604,17 +1588,17 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
               string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              SafeDrawLine(draw_ui, ArraySize(time), path_1, GetTimeSafe(time, state.t1_i), state.t1_l, GetTimeSafe(time, state.d1_i), state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+              if (draw_ui && state.t1_i >= 0 && state.t1_i < ArraySize(time) && state.d1_i >= 0 && state.d1_i < ArraySize(time)) DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              SafeDrawLine(draw_ui, ArraySize(time), path_2, GetTimeSafe(time, state.d1_i), state.d1_h, GetTimeSafe(time, state.t2_i), state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
+              if (draw_ui && state.d1_i >= 0 && state.d1_i < ArraySize(time) && state.t2_i >= 0 && state.t2_i < ArraySize(time)) DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              SafeDrawLine(draw_ui, ArraySize(time), path_3, GetTimeSafe(time, state.t2_i), state.t2_l, GetTimeSafe(time, i), state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+              if (draw_ui && state.t2_i >= 0 && state.t2_i < ArraySize(time) && i >= 0 && i < ArraySize(time)) DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
-              SafeDrawLine(draw_ui, ArraySize(time), choch_name, GetTimeSafe(time, i), state.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
+              if (draw_ui && i >= 0 && i < ArraySize(time)) DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
           }
           state.choch_dir = 0; // Reset after trigger
       }
@@ -1647,7 +1631,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               SafeDrawLine(draw_ui, ArraySize(time), name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_h_i), state.maj_h, InpColorBull, 2, STYLE_SOLID);
+               if (draw_ui && state.anc_i >= 0 && state.anc_i < ArraySize(time) && state.tmp_h_i >= 0 && state.tmp_h_i < ArraySize(time)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1658,18 +1642,18 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.tmp_l = val_l;
             state.tmp_l_i = i;
 
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_top_line, GetTimeSafe(time, i));
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_bot_line, GetTimeSafe(time, i));
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_top_line, time[i]);
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_bot_line, time[i]);
 
             if(draw_ui && InpShowMaj)
               {
                state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
-               SafeDrawLine(draw_ui, ArraySize(time), state.cur_top_line, GetTimeSafe(time, state.maj_h_i), state.maj_h, GetTimeSafe(time, i) + PeriodSeconds(), state.maj_h, InpColorBull, 1, STYLE_DASH, true);
+               if (draw_ui && state.maj_h_i >= 0 && state.maj_h_i < ArraySize(time) && i >= 0 && i < ArraySize(time)) DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBull, 1, STYLE_DASH, true);
 
                if(state.maj_l != EMPTY_VALUE && state.maj_l != 0)
                  {
                   state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
-                  SafeDrawLine(draw_ui, ArraySize(time), state.cur_bot_line, GetTimeSafe(time, state.maj_l_i), state.maj_l, GetTimeSafe(time, i) + PeriodSeconds(), state.maj_l, InpColorBull, 1, STYLE_DASH, true);
+                  if (draw_ui && state.maj_l_i >= 0 && state.maj_l_i < ArraySize(time) && i >= 0 && i < ArraySize(time)) DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBull, 1, STYLE_DASH, true);
                  }
               }
            }
@@ -1689,7 +1673,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               SafeDrawLine(draw_ui, ArraySize(time), name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_h_i), state.tmp_h, InpColorBull, 2, STYLE_SOLID);
+               if (draw_ui && state.anc_i >= 0 && state.anc_i < ArraySize(time) && state.tmp_h_i >= 0 && state.tmp_h_i < ArraySize(time)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1700,8 +1684,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.maj_h = state.tmp_h;
             state.maj_h_i = state.tmp_h_i;
 
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_top_line, GetTimeSafe(time, i));
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_bot_line, GetTimeSafe(time, i));
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_top_line, time[i]);
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_bot_line, time[i]);
             state.cur_top_line = "";
             state.cur_bot_line = "";
            }
@@ -1729,7 +1713,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               SafeDrawLine(draw_ui, ArraySize(time), name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_l_i), state.maj_l, InpColorBull, 2, STYLE_SOLID);
+               if (draw_ui && state.anc_i >= 0 && state.anc_i < ArraySize(time) && state.tmp_l_i >= 0 && state.tmp_l_i < ArraySize(time)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_h.Clear();
@@ -1739,8 +1723,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.tmp_h = val_h;
             state.tmp_h_i = i;
 
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_top_line, GetTimeSafe(time, i));
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_bot_line, GetTimeSafe(time, i));
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_top_line, time[i]);
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_bot_line, time[i]);
             state.cur_top_line = "";
             state.cur_bot_line = "";
            }
@@ -1760,7 +1744,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               SafeDrawLine(draw_ui, ArraySize(time), name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_h_i), state.tmp_h, InpColorBull, 2, STYLE_SOLID);
+               if (draw_ui && state.anc_i >= 0 && state.anc_i < ArraySize(time) && state.tmp_h_i >= 0 && state.tmp_h_i < ArraySize(time)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1771,8 +1755,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.maj_h = state.tmp_h;
             state.maj_h_i = state.tmp_h_i;
 
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_top_line, GetTimeSafe(time, i));
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_bot_line, GetTimeSafe(time, i));
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_top_line, time[i]);
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_bot_line, time[i]);
             state.cur_top_line = "";
             state.cur_bot_line = "";
            }
@@ -1796,7 +1780,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               SafeDrawLine(draw_ui, ArraySize(time), name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_l_i), state.maj_l, InpColorBear, 2, STYLE_SOLID);
+               if (draw_ui && state.anc_i >= 0 && state.anc_i < ArraySize(time) && state.tmp_l_i >= 0 && state.tmp_l_i < ArraySize(time)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBear, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1807,18 +1791,18 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.tmp_h = val_h;
             state.tmp_h_i = i;
 
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_top_line, GetTimeSafe(time, i));
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_bot_line, GetTimeSafe(time, i));
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_top_line, time[i]);
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_bot_line, time[i]);
 
             if(draw_ui && InpShowMaj)
               {
                state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
-               SafeDrawLine(draw_ui, ArraySize(time), state.cur_bot_line, GetTimeSafe(time, state.maj_l_i), state.maj_l, GetTimeSafe(time, i) + PeriodSeconds(), state.maj_l, InpColorBear, 1, STYLE_DASH, true);
+               if (draw_ui && state.maj_l_i >= 0 && state.maj_l_i < ArraySize(time) && i >= 0 && i < ArraySize(time)) DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBear, 1, STYLE_DASH, true);
 
                if(state.maj_h != EMPTY_VALUE && state.maj_h != 0)
                  {
                   state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
-                  SafeDrawLine(draw_ui, ArraySize(time), state.cur_top_line, GetTimeSafe(time, state.maj_h_i), state.maj_h, GetTimeSafe(time, i) + PeriodSeconds(), state.maj_h, InpColorBear, 1, STYLE_DASH, true);
+                  if (draw_ui && state.maj_h_i >= 0 && state.maj_h_i < ArraySize(time) && i >= 0 && i < ArraySize(time)) DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBear, 1, STYLE_DASH, true);
                  }
               }
            }
@@ -1838,7 +1822,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               SafeDrawLine(draw_ui, ArraySize(time), name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_l_i), state.tmp_l, InpColorBear, 2, STYLE_SOLID);
+               if (draw_ui && state.anc_i >= 0 && state.anc_i < ArraySize(time) && state.tmp_l_i >= 0 && state.tmp_l_i < ArraySize(time)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.tmp_l, InpColorBear, 2, STYLE_SOLID);
               }
 
             state.st_h.Clear();
@@ -1849,8 +1833,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.maj_l = state.tmp_l;
             state.maj_l_i = state.tmp_l_i;
 
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_top_line, GetTimeSafe(time, i));
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_bot_line, GetTimeSafe(time, i));
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_top_line, time[i]);
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_bot_line, time[i]);
             state.cur_top_line = "";
             state.cur_bot_line = "";
            }
@@ -1878,7 +1862,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               SafeDrawLine(draw_ui, ArraySize(time), name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_h_i), state.maj_h, InpColorBear, 2, STYLE_SOLID);
+               if (draw_ui && state.anc_i >= 0 && state.anc_i < ArraySize(time) && state.tmp_h_i >= 0 && state.tmp_h_i < ArraySize(time)) DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBear, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1888,8 +1872,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             state.tmp_l = val_l;
             state.tmp_l_i = i;
 
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_top_line, GetTimeSafe(time, i));
-            SafeCutLine(draw_ui, ArraySize(time), state.cur_bot_line, GetTimeSafe(time, i));
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_top_line, time[i]);
+            if (draw_ui && i >= 0 && i < ArraySize(time)) CutLine(state.cur_bot_line, time[i]);
             state.cur_top_line = "";
             state.cur_bot_line = "";
            }
@@ -1971,7 +1955,20 @@ int OnCalculate(const int rates_total,
                 const long &volume[],
                 const int &spread[])
   {
-   if(rates_total < 2) return(0);
+   if(rates_total < 50) return(0);
+   int c_dir; double c_level; datetime c_time;
+   GetMTFChochDetails(PERIOD_CURRENT, TimeCurrent(), c_dir, c_level, c_time);
+   static datetime last_alerted_choch = 0;
+
+   if (c_dir != 0 && c_time != last_alerted_choch) {
+       last_alerted_choch = c_time;
+       if (InpShowChoch) {
+           ObjectsDeleteAll(0, "Live_CHoCH_Signal");
+           DrawLine("Live_CHoCH_Signal", c_time, c_level, TimeCurrent() + PeriodSeconds()*5, c_level, c_dir == 1 ? InpColorChochStrong : InpColorChochWeak, 3, STYLE_SOLID, false);
+       }
+       EvaluateTradeSignal(rates_total-1, c_time, close[rates_total-1], c_dir, 50.0, true, c_level, rates_total-1);
+   }
+
 
    int limit;
 
@@ -2149,7 +2146,7 @@ int OnCalculate(const int rates_total,
          leg_i = g_state_curr.min_l_i;
          leg_p = g_state_curr.min_l;
         }
-      SafeDrawLine(true, ArraySize(time), "LiveLeg", GetTimeSafe(time, g_state_curr.lp_i), g_state_curr.lp_p, GetTimeSafe(time, leg_i), leg_p, InpColorMin, 1, STYLE_DOT);
+      if (g_state_curr.lp_i >= 0 && g_state_curr.lp_i < ArraySize(time) && leg_i >= 0 && leg_i < ArraySize(time)) DrawLine("LiveLeg", time[g_state_curr.lp_i], g_state_curr.lp_p, time[leg_i], leg_p, InpColorMin, 1, STYLE_DOT);
      }
 
    if(last_idx > 0 && (Period() == PERIOD_M1 || InpTestMode))
