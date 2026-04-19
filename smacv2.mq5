@@ -478,93 +478,91 @@ void ProcessBarMathOnly(int i, const double &high[], const double &low[], const 
 
 
 void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, double &c_level, datetime &c_time) {
+   c_dir = 0; c_level = 0; c_time = 0;
+
    if(SeriesInfoInteger(Symbol(), tf, SERIES_SYNCHRONIZED) == false) {
        datetime dummy = iTime(Symbol(), tf, 100);
    }
 
+   int bars_to_check = 1000;
+   int total_bars = iBars(Symbol(), tf);
+   if (total_bars < bars_to_check) bars_to_check = total_bars;
+   if (bars_to_check < 50) return;
+
    MqlRates rates[];
-   ArraySetAsSeries(rates, false);
+   ArraySetAsSeries(rates, true);
 
-   int copied = CopyRates(Symbol(), tf, 0, 5000, rates);
-   if(copied < 2) return;
+   int start_idx = iBarShift(Symbol(), tf, current_time);
+   if (start_idx < 0) return;
 
-   int valid_count = copied;
-   for(int i=copied-1; i>=0; i--) {
-       if (rates[i].time > current_time) {
-           valid_count--;
-       } else {
-           break;
+   int copied = CopyRates(Symbol(), tf, start_idx, bars_to_check, rates);
+   if(copied < 50) return;
+
+   // Daha Net CHoCH Tespiti:
+   // 1. Son 300 bardaki en ekstrem (Major) noktayi bul.
+   double maj_ex = 0; int maj_ex_i = -1;
+   int scan_range = MathMin(copied, 300);
+
+   double maj_h = 0; int maj_h_i = -1;
+   double maj_l = 999999; int maj_l_i = -1;
+   for(int i = 0; i < scan_range; i++) {
+       if (rates[i].high > maj_h) { maj_h = rates[i].high; maj_h_i = i; }
+       if (rates[i].low < maj_l) { maj_l = rates[i].low; maj_l_i = i; }
+   }
+
+   if (maj_h_i == -1 || maj_l_i == -1) return;
+
+   if (maj_l_i < maj_h_i) { // YUKSELIS
+       // En son dip yapmis (D1 = maj_l_i).
+       // Kirilim (CHoCH) seviyesi (T2), bu dibe inmeden onceki EN YUKSEK minor tepedir.
+       // Yani maj_l_i ile maj_h_i arasindaki en yuksek tepe.
+       double minor_h = 0; int minor_h_i = -1;
+       for (int i = maj_l_i + 1; i <= maj_h_i - 1; i++) {
+           if (rates[i].high > minor_h) {
+               minor_h = rates[i].high;
+               minor_h_i = i;
+           }
+       }
+
+       if (minor_h_i != -1) {
+           c_level = minor_h;
+           c_dir = 1;
+           c_time = rates[minor_h_i].time;
+
+           for (int i = minor_h_i - 1; i >= 0; i--) {
+               if (rates[i].close > c_level) {
+                   c_time = rates[i].time;
+                   break;
+               }
+           }
+       }
+   } else { // DUSUS
+       // En son tepe yapmis (D1 = maj_h_i).
+       // Kirilim (CHoCH) seviyesi (T2), bu tepeye cikmadan onceki EN DUSUK minor diptir.
+       // Yani maj_h_i ile maj_l_i arasindaki en dusuk dip.
+       double minor_l = 999999; int minor_l_i = -1;
+       for (int i = maj_h_i + 1; i <= maj_l_i - 1; i++) {
+           if (rates[i].low < minor_l) {
+               minor_l = rates[i].low;
+               minor_l_i = i;
+           }
+       }
+
+       if (minor_l_i != -1) {
+           c_level = minor_l;
+           c_dir = -1;
+           c_time = rates[minor_l_i].time;
+
+           for (int i = minor_l_i - 1; i >= 0; i--) {
+               if (rates[i].close < c_level) {
+                   c_time = rates[i].time;
+                   break;
+               }
+           }
        }
    }
-   copied = valid_count;
-   if(copied < 2) return;
-
-   double _open[], _high[], _low[], _close[];
-   datetime _time[];
-   ArrayResize(_open, copied);
-   ArrayResize(_high, copied);
-   ArrayResize(_low, copied);
-   ArrayResize(_close, copied);
-   ArrayResize(_time, copied);
-
-   for(int i=0; i<copied; i++) {
-      _open[i]  = rates[i].open;
-      _high[i]  = rates[i].high;
-      _low[i]   = rates[i].low;
-      _close[i] = rates[i].close;
-      _time[i]  = rates[i].time;
-   }
-
-   SState st;
-   st.min_h   = _high[0]; st.min_h_i = 0; st.min_l   = _low[0]; st.min_l_i = 0;
-   st.trig_h  = _high[0]; st.trig_l  = _low[0];
-   st.tmp_h   = _high[0]; st.tmp_h_i = 0; st.tmp_l   = _low[0]; st.tmp_l_i = 0;
-   st.min_tr  = (_close[0] > rates[0].open) ? 1 : -1;
-
-   double initial_gap = (_high[0] - _low[0]);
-   if(initial_gap == 0) initial_gap = Point() * 10;
-   double tiny_gap = initial_gap * 0.1;
-
-   st.maj_h = _high[0] + tiny_gap;
-   st.maj_l = _low[0] - tiny_gap;
-   st.maj_tr = st.min_tr;
-   st.maj_st = 1;
-   st.bos_i = 0;
-   st.maj_h_i = 0;
-   st.maj_l_i = 0;
-   st.mb_h = _high[0];
-   st.mb_l = _low[0];
-   st.mb_i = 0;
-
-   st.last_choch_dir = 0;
-   st.last_choch_level = 0;
-   st.last_choch_time = 0;
-
-   for(int i = 1; i < copied; i++) {
-      bool inside = (_high[i] <= st.mb_h) && (_low[i] >= st.mb_l);
-      if(!inside) {
-         if (_high[i] > st.mb_h || _low[i] < st.mb_l) {
-            st.mb_h = _high[i];
-            st.mb_l = _low[i];
-            st.mb_i = i;
-         }
-         if(i == copied - 1) {
-            double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-            if (current_time >= TimeCurrent() - PeriodSeconds(PERIOD_M1)) {
-                _close[i] = bid;
-                if(bid > _high[i]) _high[i] = bid;
-                if(bid < _low[i]) _low[i] = bid;
-            }
-         }
-         // TAMAMEN SESSİZ, ÇİZİMSİZ ve HATA VERMEYEN ÇALIŞTIRMA (draw_ui = false)
-         ProcessBar(i, _open, _high, _low, _close, _time, st, true, false);
-      }
-   }
-
-   c_dir = st.last_choch_dir;
-   c_level = st.last_choch_level;
-   c_time = st.last_choch_time;
 }
+
 
 
 
