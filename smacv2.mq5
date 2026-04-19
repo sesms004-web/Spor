@@ -880,15 +880,15 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
    double mp_m1=0, mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
    double h_m1=0, l_m1=0, h_m3=0, l_m3=0, h_m5=0, l_m5=0, h_m15=0, l_m15=0, h_m30=0, l_m30=0, h_h1=0, l_h1=0;
-   datetime dmy_th, dmy_tl, th_m15, tl_m15, th_m30, tl_m30;
+   datetime dmy_th, dmy_tl, th_m1, tl_m1, th_m3, tl_m3, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
 
    // We need MTF data to evaluate the matrix
-   GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, dmy_th, dmy_tl);
-   GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, h_m3, l_m3, dmy_th, dmy_tl);
-   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, h_m5, l_m5, dmy_th, dmy_tl);
+   GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, th_m1, tl_m1);
+   GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, h_m3, l_m3, th_m3, tl_m3);
+   GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, h_m5, l_m5, th_m5, tl_m5);
    GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, h_m15, l_m15, th_m15, tl_m15);
    GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, h_m30, l_m30, th_m30, tl_m30);
-   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, h_h1, l_h1, dmy_th, dmy_tl);
+   GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, h_h1, l_h1, th_h1, tl_h1);
 
    int total_points = 0;
    string h1_text = "";
@@ -913,10 +913,11 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    if (h1_mom >= 15.0) {
        if (is_h1_aligned) {
-           if (h1_mom >= 20.0) { h1_points = 35; h1_text = "🚀 Uyumlu, Çok Sert Momentum -> [+35 Puan]\n"; }
-           else                { h1_points = 30; h1_text = "⚡ Uyumlu, Sert Momentum -> [+30 Puan]\n"; }
+           if (p_h1 >= 50.0) { h1_points = 35; h1_text = "🚀 Uyumlu, Çok Sert Dönüş ve İdeal -> [+35 Puan]\n"; }
+           else              { h1_points = 25; h1_text = "⚡ Uyumlu, Çok Sert Dönüş Ama Şişkin -> [+25 Puan]\n"; }
        } else {
-           h1_points = 0; h1_text = "🛑 Ters Yönlü Sert Momentum -> [0 Puan]\n";
+           if (p_h1 >= 50.0) { h1_points = 0;  h1_text = "🛑 Bize Karşı Sert Dönüş Ama %50 İdeal -> [0 Puan]\n"; }
+           else              { h1_points = 0;  h1_text = "🛑 Bize Karşı Sert Dönüş Ve Şişkin -> [0 Puan]\n"; }
        }
    } else {
        if (is_h1_aligned) {
@@ -927,8 +928,14 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            else              { h1_points = 30; h1_text = "⏳ Ters Yönlü Ve Şişkin -> [+30 Puan]\n"; }
        }
    }
-   h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + h1_text;
-   total_points += h1_points;
+
+   string h1_dur = "Bilinmiyor";
+   datetime h1_time = (t_h1 == 1) ? tl_h1 : ((t_h1 == -1) ? th_h1 : 0);
+   if (h1_time != 0) {
+       h1_dur = IntegerToString(iBarShift(Symbol(), PERIOD_H1, h1_time)) + " Saat Önce (" + IntegerToString(iBarShift(Symbol(), PERIOD_M1, h1_time)) + " Mum)";
+   }
+   h1_text = GenerateMTFString("H1", t_h1, h_h1, l_h1, p_h1, mp_h1) + (is_h1_aligned ? "🟢 Geçerli" : "🔴 Geçersiz (Tuzak)") + " | Oluşum: " + h1_dur + "\n" + h1_text;
+
 
    // --- M30 (Makro Trend 2) - Maks 25 Puan ---
    int m30_points = 0;
@@ -949,8 +956,12 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            else                      { m30_points = 5;  m30_text = "📉 Uyumlu, Tepki Yok Ve Şişkin -> [+5 Puan]\n"; }
        }
    }
-   m30_text = GenerateMTFString("M30", t_m30, h_m30, l_m30, p_m30, mp_m30) + m30_text;
-   total_points += m30_points;
+
+   string m30_dur = "Bilinmiyor";
+   datetime m30_time = (t_m30 == 1) ? tl_m30 : ((t_m30 == -1) ? th_m30 : 0);
+   if (m30_time != 0) m30_dur = IntegerToString(iBarShift(Symbol(), PERIOD_M30, m30_time)) + " Bar Önce (" + IntegerToString(iBarShift(Symbol(), PERIOD_M1, m30_time)) + " Mum)";
+   m30_text = GenerateMTFString("M30", t_m30, h_m30, l_m30, p_m30, mp_m30) + (is_m30_aligned ? "🟢 Geçerli" : "🔴 Geçersiz (Tuzak)") + " | Oluşum: " + m30_dur + "\n" + m30_text;
+
 
    // --- M15 (Makro Yapı) - Maks 20 Puan ---
    int m15_points = 0;
@@ -971,8 +982,12 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            else                      { m15_points = 5;  m15_text = "📉 Uyumlu, Tepki Yok Ve Şişkin -> [+5 Puan]\n"; }
        }
    }
-   m15_text = GenerateMTFString("M15", t_m15, h_m15, l_m15, p_m15, mp_m15) + m15_text;
-   total_points += m15_points;
+
+   string m15_dur = "Bilinmiyor";
+   datetime m15_time = (t_m15 == 1) ? tl_m15 : ((t_m15 == -1) ? th_m15 : 0);
+   if (m15_time != 0) m15_dur = IntegerToString(iBarShift(Symbol(), PERIOD_M15, m15_time)) + " Bar Önce (" + IntegerToString(iBarShift(Symbol(), PERIOD_M1, m15_time)) + " Mum)";
+   m15_text = GenerateMTFString("M15", t_m15, h_m15, l_m15, p_m15, mp_m15) + (is_m15_aligned ? "🟢 Geçerli" : "🔴 Geçersiz (Tuzak)") + " | Oluşum: " + m15_dur + "\n" + m15_text;
+
 
    // --- M5 (Mikro Filtre) - Maks 15 Puan ---
    int m5_points = 0;
@@ -993,7 +1008,11 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
            else                     { m5_points = 5;  m5_text = "📉 Uyumlu, Tepki Yok Ve Şişkin -> [+5 Puan]\n"; }
        }
    }
-   m5_text = GenerateMTFString("M5 ", t_m5, h_m5, l_m5, p_m5, mp_m5) + m5_text;
+
+   string m5_dur = "Bilinmiyor";
+   datetime m5_time = (t_m5 == 1) ? tl_m5 : ((t_m5 == -1) ? th_m5 : 0);
+   if (m5_time != 0) m5_dur = IntegerToString(iBarShift(Symbol(), PERIOD_M5, m5_time)) + " Bar Önce (" + IntegerToString(iBarShift(Symbol(), PERIOD_M1, m5_time)) + " Mum)";
+   m5_text = GenerateMTFString("M5 ", t_m5, h_m5, l_m5, p_m5, mp_m5) + (is_m5_aligned ? "🟢 Geçerli" : "🔴 Geçersiz (Tuzak)") + " | Oluşum: " + m5_dur + "\n" + m5_text;
 
    total_points += m5_points;
 
@@ -1002,6 +1021,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    string sup_text = "\n🛡️ TEST PUANLARI (MTF İVMESİ):\n" + h1_text + m30_text + m15_text + m5_text;
 
    string order_details = "";
+
+
 
    // --- M1 vs M3 RANGE EXPECTATION ---
    string range_text = (t_m1 == t_m3) ? "🚀 BEKLENTİ: UZUN MENZİL (Trend Takibi)" : "⚠️ BEKLENTİ: KISA SÜRECEK (Scalp/Tepki)";
@@ -1907,7 +1928,7 @@ void UpdateLiveDashboard()
    double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
    double mp_m1=0, mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
    double h_m1=0, l_m1=0, h_m3=0, l_m3=0, h_m5=0, l_m5=0, h_m15=0, l_m15=0, h_m30=0, l_m30=0, h_h1=0, l_h1=0;
-   datetime dmy_th, dmy_tl, th_m15, tl_m15, th_m30, tl_m30;
+   datetime dmy_th, dmy_tl, th_m1, tl_m1, th_m3, tl_m3, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
 
    GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, dmy_th, dmy_tl);
    GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, h_m3, l_m3, dmy_th, dmy_tl);
