@@ -1006,7 +1006,12 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    total_points += h1_sup_points;
 
-   string h1_duration = (c_t_h1 == 0) ? "Bilinmiyor" : IntegerToString(iBarShift(Symbol(), PERIOD_M1, c_t_h1)) + " Mum Önce";
+   string h1_duration = "Bilinmiyor";
+   if (c_t_h1 != 0) {
+       int h1_bars = iBarShift(Symbol(), PERIOD_H1, c_t_h1);
+       int m1_bars = iBarShift(Symbol(), PERIOD_M1, c_t_h1);
+       h1_duration = IntegerToString(h1_bars) + " Saat Önce (" + IntegerToString(m1_bars) + " Mum)";
+   }
 
    string sup_text = "\n🛡️ H1 CHOCH DEĞERLENDİRMESİ:\n";
    sup_text += h1_sup_text + " | Oluşum: " + h1_duration + " -> [" + IntegerToString(h1_sup_points) + " Puan]\n";
