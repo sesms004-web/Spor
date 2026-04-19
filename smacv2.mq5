@@ -515,7 +515,7 @@ void GetMTFChochDetails(ENUM_TIMEFRAMES tf, datetime current_time, int &c_dir, d
       _time[i]  = rates[i].time;
    }
 
-   SState st; st.Init();
+   SState st;
    st.min_h   = _high[0]; st.min_h_i = 0; st.min_l   = _low[0]; st.min_l_i = 0;
    st.trig_h  = _high[0]; st.trig_l  = _low[0];
    st.tmp_h   = _high[0]; st.tmp_h_i = 0; st.tmp_l   = _low[0]; st.tmp_l_i = 0;
