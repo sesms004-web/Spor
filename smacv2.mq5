@@ -22,7 +22,7 @@ input double InpDaysD1   = 1500.0;
 //--- CHoCH Settings ---
 input group "--- TRADE EXECUTION & RISK ---"
 input bool   InpEnableTradeExecution   = true;        // Master->Slave Sinyal Köprüsü Aktif
-input bool   InpTestMTFChochReport     = false;       // 🧪 Üst Zaman Dilimi (MTF) CHoCH Raporunu Tetikle
+input bool   InpEnableMTFChochReport   = false;       // 📊 Üst Zaman Dilimi (MTF) CHoCH Raporunu Tetikle
 input bool   InpAlertRejectedTrades    = false;       // ❌ Reddedilen (Puanı Yetersiz) İşlemleri Bildir
 input bool   InpWaitRetest             = false;       // 🎯 Gelişmiş Retest (Pusu) Modu Aktif
 input int    InpRetestMaxBars          = 15;          // ⏳ Pusu Modunda Beklenecek Maksimum Mum
@@ -817,6 +817,11 @@ void GenerateMTFChochReport() {
     string msg = "\n⏱️ ÜST ZAMAN DİLİMİ KIRILIM (CHoCH) RAPORU:\n\n";
     double live_price = SymbolInfoDouble(Symbol(), SYMBOL_BID);
 
+    int live_trend = 0; double dmy_pct=0, dmy_mpct=0;
+    double dmy_h=0, dmy_l=0; datetime dmy_th=0, dmy_tl=0;
+    GetMTFPullback(PERIOD_M1, live_trend, dmy_pct, dmy_mpct, t, dmy_h, dmy_l, dmy_th, dmy_tl);
+    int trigger_dir = (live_trend != 0) ? live_trend : 1;
+
     for(int i=0; i<4; i++) {
         if (reports[i].time == 0) continue;
 
@@ -825,7 +830,19 @@ void GenerateMTFChochReport() {
         int bars_ago = iBarShift(Symbol(), reports[i].tf, reports[i].time);
         age_str += ", " + IntegerToString(bars_ago) + " Mum Önce";
 
-        msg += IntegerToString(i+1) + ". " + reports[i].tf_name + ": " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(reports[i].level, _Digits) + "\n";
+        int pts = 0;
+        int base_pts = 0;
+        if (reports[i].tf == PERIOD_H1) base_pts = 20;
+        else if (reports[i].tf == PERIOD_M30) base_pts = 15;
+        else if (reports[i].tf == PERIOD_M15) base_pts = 10;
+        else if (reports[i].tf == PERIOD_M5) base_pts = 5;
+
+        if (reports[i].dir == trigger_dir) pts = base_pts;
+        else pts = -base_pts;
+
+        string pts_str = (pts > 0 ? "[+" : "[") + IntegerToString(pts) + " Puan]";
+
+        msg += IntegerToString(i+1) + ". " + reports[i].tf_name + ": " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(reports[i].level, _Digits) + " -> " + pts_str + "\n";
     }
 
     if(InpAlertPopup) Alert(msg);
@@ -969,39 +986,37 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    int h1_sup_points=0, m30_sup_points=0, m15_sup_points=0, m5_sup_points=0;
    string h1_sup_text="", m30_sup_text="", m15_sup_text="", m5_sup_text="";
 
-   if (trigger_dir == 1) { // M1 BUY
-       if (c_dir_h1 == 1) { h1_sup_points = 20; h1_sup_text = "🟢 H1 Yukarı -> [+20 Puan]\n"; }
-       else if (c_dir_h1 == -1) { h1_sup_points = -20; h1_sup_text = "🔴 H1 Aşağı -> [-20 Puan]\n"; }
-       else { h1_sup_text = "⚪ H1 Veri Bekleniyor... -> [0 Puan]\n"; }
+   if (c_dir_h1 != 0) {
+       h1_sup_points = (c_dir_h1 == trigger_dir) ? 20 : -20;
+       string dir_str = (c_dir_h1 == 1) ? "🟢 YUKARI" : "🔴 AŞAĞI ";
+       string age_str = GetTimeAgoString(c_t_h1, t) + ", " + IntegerToString(iBarShift(Symbol(), PERIOD_H1, c_t_h1)) + " Mum Önce";
+       string pts_str = (h1_sup_points > 0 ? "[+" : "[") + IntegerToString(h1_sup_points) + " Puan]";
+       h1_sup_text = "H1 : " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(c_lvl_h1, _Digits) + " -> " + pts_str + "\n";
+   } else { h1_sup_text = "H1 : ⚪ Veri Bekleniyor... -> [0 Puan]\n"; }
 
-       if (c_dir_m30 == 1) { m30_sup_points = 15; m30_sup_text = "🟢 M30 Yukarı -> [+15 Puan]\n"; }
-       else if (c_dir_m30 == -1) { m30_sup_points = -15; m30_sup_text = "🔴 M30 Aşağı -> [-15 Puan]\n"; }
-       else { m30_sup_text = "⚪ M30 Veri Bekleniyor... -> [0 Puan]\n"; }
+   if (c_dir_m30 != 0) {
+       m30_sup_points = (c_dir_m30 == trigger_dir) ? 15 : -15;
+       string dir_str = (c_dir_m30 == 1) ? "🟢 YUKARI" : "🔴 AŞAĞI ";
+       string age_str = GetTimeAgoString(c_t_m30, t) + ", " + IntegerToString(iBarShift(Symbol(), PERIOD_M30, c_t_m30)) + " Mum Önce";
+       string pts_str = (m30_sup_points > 0 ? "[+" : "[") + IntegerToString(m30_sup_points) + " Puan]";
+       m30_sup_text = "M30: " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(c_lvl_m30, _Digits) + " -> " + pts_str + "\n";
+   } else { m30_sup_text = "M30: ⚪ Veri Bekleniyor... -> [0 Puan]\n"; }
 
-       if (c_dir_m15 == 1) { m15_sup_points = 10; m15_sup_text = "🟢 M15 Yukarı -> [+10 Puan]\n"; }
-       else if (c_dir_m15 == -1) { m15_sup_points = -10; m15_sup_text = "🔴 M15 Aşağı -> [-10 Puan]\n"; }
-       else { m15_sup_text = "⚪ M15 Veri Bekleniyor... -> [0 Puan]\n"; }
+   if (c_dir_m15 != 0) {
+       m15_sup_points = (c_dir_m15 == trigger_dir) ? 10 : -10;
+       string dir_str = (c_dir_m15 == 1) ? "🟢 YUKARI" : "🔴 AŞAĞI ";
+       string age_str = GetTimeAgoString(c_t_m15, t) + ", " + IntegerToString(iBarShift(Symbol(), PERIOD_M15, c_t_m15)) + " Mum Önce";
+       string pts_str = (m15_sup_points > 0 ? "[+" : "[") + IntegerToString(m15_sup_points) + " Puan]";
+       m15_sup_text = "M15: " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(c_lvl_m15, _Digits) + " -> " + pts_str + "\n";
+   } else { m15_sup_text = "M15: ⚪ Veri Bekleniyor... -> [0 Puan]\n"; }
 
-       if (c_dir_m5 == 1) { m5_sup_points = 5; m5_sup_text = "🟢 M5 Yukarı -> [+5 Puan]\n"; }
-       else if (c_dir_m5 == -1) { m5_sup_points = -5; m5_sup_text = "🔴 M5 Aşağı -> [-5 Puan]\n"; }
-       else { m5_sup_text = "⚪ M5 Veri Bekleniyor... -> [0 Puan]\n"; }
-   } else { // M1 SELL
-       if (c_dir_h1 == -1) { h1_sup_points = 20; h1_sup_text = "🔴 H1 Aşağı -> [+20 Puan]\n"; }
-       else if (c_dir_h1 == 1) { h1_sup_points = -20; h1_sup_text = "🟢 H1 Yukarı -> [-20 Puan]\n"; }
-       else { h1_sup_text = "⚪ H1 Veri Bekleniyor... -> [0 Puan]\n"; }
-
-       if (c_dir_m30 == -1) { m30_sup_points = 15; m30_sup_text = "🔴 M30 Aşağı -> [+15 Puan]\n"; }
-       else if (c_dir_m30 == 1) { m30_sup_points = -15; m30_sup_text = "🟢 M30 Yukarı -> [-15 Puan]\n"; }
-       else { m30_sup_text = "⚪ M30 Veri Bekleniyor... -> [0 Puan]\n"; }
-
-       if (c_dir_m15 == -1) { m15_sup_points = 10; m15_sup_text = "🔴 M15 Aşağı -> [+10 Puan]\n"; }
-       else if (c_dir_m15 == 1) { m15_sup_points = -10; m15_sup_text = "🟢 M15 Yukarı -> [-10 Puan]\n"; }
-       else { m15_sup_text = "⚪ M15 Veri Bekleniyor... -> [0 Puan]\n"; }
-
-       if (c_dir_m5 == -1) { m5_sup_points = 5; m5_sup_text = "🔴 M5 Aşağı -> [+5 Puan]\n"; }
-       else if (c_dir_m5 == 1) { m5_sup_points = -5; m5_sup_text = "🟢 M5 Yukarı -> [-5 Puan]\n"; }
-       else { m5_sup_text = "⚪ M5 Veri Bekleniyor... -> [0 Puan]\n"; }
-   }
+   if (c_dir_m5 != 0) {
+       m5_sup_points = (c_dir_m5 == trigger_dir) ? 5 : -5;
+       string dir_str = (c_dir_m5 == 1) ? "🟢 YUKARI" : "🔴 AŞAĞI ";
+       string age_str = GetTimeAgoString(c_t_m5, t) + ", " + IntegerToString(iBarShift(Symbol(), PERIOD_M5, c_t_m5)) + " Mum Önce";
+       string pts_str = (m5_sup_points > 0 ? "[+" : "[") + IntegerToString(m5_sup_points) + " Puan]";
+       m5_sup_text = "M5 : " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(c_lvl_m5, _Digits) + " -> " + pts_str + "\n";
+   } else { m5_sup_text = "M5 : ⚪ Veri Bekleniyor... -> [0 Puan]\n"; }
 
    total_points += h1_sup_points + m30_sup_points + m15_sup_points + m5_sup_points;
 
@@ -2001,10 +2016,10 @@ int OnCalculate(const int rates_total,
    }
 
    static bool last_test_state = false;
-   if (InpTestMTFChochReport && !last_test_state) {
+   if (InpEnableMTFChochReport && !last_test_state) {
        GenerateMTFChochReport();
    }
-   last_test_state = InpTestMTFChochReport;
+   last_test_state = InpEnableMTFChochReport;
 
    if(virtual_prev == 0)
      {
