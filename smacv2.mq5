@@ -978,10 +978,10 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    double c_lvl_h1=0, c_lvl_m30=0, c_lvl_m15=0, c_lvl_m5=0;
    datetime c_t_h1=0, c_t_m30=0, c_t_m15=0, c_t_m5=0;
 
-   GetMTFChochDetails(PERIOD_H1, TimeCurrent(), c_dir_h1, c_lvl_h1, c_t_h1);
-   GetMTFChochDetails(PERIOD_M30, TimeCurrent(), c_dir_m30, c_lvl_m30, c_t_m30);
-   GetMTFChochDetails(PERIOD_M15, TimeCurrent(), c_dir_m15, c_lvl_m15, c_t_m15);
-   GetMTFChochDetails(PERIOD_M5, TimeCurrent(), c_dir_m5, c_lvl_m5, c_t_m5);
+   GetMTFChochDetails(PERIOD_H1, t, c_dir_h1, c_lvl_h1, c_t_h1);
+   GetMTFChochDetails(PERIOD_M30, t, c_dir_m30, c_lvl_m30, c_t_m30);
+   GetMTFChochDetails(PERIOD_M15, t, c_dir_m15, c_lvl_m15, c_t_m15);
+   GetMTFChochDetails(PERIOD_M5, t, c_dir_m5, c_lvl_m5, c_t_m5);
 
    int h1_sup_points = (c_dir_h1 != 0) ? ((c_dir_h1 == trigger_dir) ? 20 : -20) : 0;
    int m30_sup_points = (c_dir_m30 != 0) ? ((c_dir_m30 == trigger_dir) ? 15 : -15) : 0;
@@ -1008,10 +1008,12 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    }
 
    int penalty = 0;
+   string penalty_str = "";
    if (treps[3].time != 0) {
        penalty = (treps[3].tf == PERIOD_H1) ? -15 : -10;
+       penalty_str = "\n⏱️ ZAMAN CEZASI: 4. En Eski (" + treps[3].tf_name + ") -> [" + IntegerToString(penalty) + " Puan]\n";
+       total_points += penalty;
    }
-   total_points += penalty;
 
    string sup_text = "\n⏱️ ÜST ZAMAN DİLİMİ KIRILIM (CHoCH) RAPORU:\n\n";
 
@@ -1037,6 +1039,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
        sup_text += IntegerToString(i+1) + ". " + treps[i].tf_name + ": " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(treps[i].level, _Digits) + " -> " + pts_str + "\n";
    }
+
+   sup_text += penalty_str;
 
 
    string order_details = "";
