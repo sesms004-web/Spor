@@ -789,7 +789,7 @@ struct SMTFReport {
     string text;
 };
 
-string GenerateMTFChochReport(int trigger_dir, int &ref_points) {
+void GenerateMTFChochReport() {
     SMTFReport reports[4];
     reports[0].tf_name = "M5 ";
     reports[1].tf_name = "M15";
@@ -817,13 +817,10 @@ string GenerateMTFChochReport(int trigger_dir, int &ref_points) {
     string msg = "\n⏱️ ÜST ZAMAN DİLİMİ KIRILIM (CHoCH) RAPORU:\n\n";
     double live_price = SymbolInfoDouble(Symbol(), SYMBOL_BID);
 
-    // if trigger_dir is 0 (from dashboard test mode), we fallback to current trend
-    if(trigger_dir == 0) {
-        int live_trend = 0; double dmy_pct=0, dmy_mpct=0;
-        double dmy_h=0, dmy_l=0; datetime dmy_th=0, dmy_tl=0;
-        GetMTFPullback(PERIOD_M1, live_trend, dmy_pct, dmy_mpct, t, dmy_h, dmy_l, dmy_th, dmy_tl);
-        trigger_dir = (live_trend != 0) ? live_trend : 1;
-    }
+    int live_trend = 0; double dmy_pct=0, dmy_mpct=0;
+    double dmy_h=0, dmy_l=0; datetime dmy_th=0, dmy_tl=0;
+    GetMTFPullback(PERIOD_M1, live_trend, dmy_pct, dmy_mpct, t, dmy_h, dmy_l, dmy_th, dmy_tl);
+    int trigger_dir = (live_trend != 0) ? live_trend : 1;
 
     for(int i=0; i<4; i++) {
         if (reports[i].time == 0) continue;
@@ -843,21 +840,13 @@ string GenerateMTFChochReport(int trigger_dir, int &ref_points) {
         if (reports[i].dir == trigger_dir) pts = base_pts;
         else pts = -base_pts;
 
-        ref_points += pts;
         string pts_str = (pts > 0 ? "[+" : "[") + IntegerToString(pts) + " Puan]";
 
         msg += IntegerToString(i+1) + ". " + reports[i].tf_name + ": " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(reports[i].level, _Digits) + " -> " + pts_str + "\n";
     }
 
-    // Zaman Cezası Ekle (En eski olana göre)
-    int penalty = 0;
-    if (reports[3].time != 0) {
-        penalty = (reports[3].tf == PERIOD_H1) ? -15 : -10;
-        ref_points += penalty;
-        msg += "\n⏱️ ZAMAN CEZASI: 4. En Eski (" + reports[3].tf_name + ") -> [" + IntegerToString(penalty) + " Puan]\n";
-    }
-
-    return msg;
+    if(InpAlertPopup) Alert(msg);
+    if(InpAlertPush) SendNotification(msg);
 }
 
 void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, int maj_extreme_i, bool is_test = false)
@@ -985,8 +974,69 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    // --- YENİ DESTEKLEYİCİ CHOCH FAKEOUT (TUZAK) MATRİS SİSTEMİ ---
 
-   // MTF Raporunu dış fonksiyondan al ve total_points'e ekle
-   string sup_text = GenerateMTFChochReport(trigger_dir, total_points);
+   int c_dir_h1=0, c_dir_m30=0, c_dir_m15=0, c_dir_m5=0;
+   double c_lvl_h1=0, c_lvl_m30=0, c_lvl_m15=0, c_lvl_m5=0;
+   datetime c_t_h1=0, c_t_m30=0, c_t_m15=0, c_t_m5=0;
+
+   GetMTFChochDetails(PERIOD_H1, TimeCurrent(), c_dir_h1, c_lvl_h1, c_t_h1);
+   GetMTFChochDetails(PERIOD_M30, TimeCurrent(), c_dir_m30, c_lvl_m30, c_t_m30);
+   GetMTFChochDetails(PERIOD_M15, TimeCurrent(), c_dir_m15, c_lvl_m15, c_t_m15);
+   GetMTFChochDetails(PERIOD_M5, TimeCurrent(), c_dir_m5, c_lvl_m5, c_t_m5);
+
+   int h1_sup_points = (c_dir_h1 != 0) ? ((c_dir_h1 == trigger_dir) ? 20 : -20) : 0;
+   int m30_sup_points = (c_dir_m30 != 0) ? ((c_dir_m30 == trigger_dir) ? 15 : -15) : 0;
+   int m15_sup_points = (c_dir_m15 != 0) ? ((c_dir_m15 == trigger_dir) ? 10 : -10) : 0;
+   int m5_sup_points = (c_dir_m5 != 0) ? ((c_dir_m5 == trigger_dir) ? 5 : -5) : 0;
+
+   total_points += h1_sup_points + m30_sup_points + m15_sup_points + m5_sup_points;
+
+   // Zaman Cezaları kod olarak kalıyor ancak sup_text'e YAZILMIYOR
+   SMTFReport treps[4];
+   treps[0].time = c_t_h1; treps[0].tf = PERIOD_H1; treps[0].tf_name = "H1"; treps[0].dir = c_dir_h1; treps[0].level = c_lvl_h1;
+   treps[1].time = c_t_m30; treps[1].tf = PERIOD_M30; treps[1].tf_name = "M30"; treps[1].dir = c_dir_m30; treps[1].level = c_lvl_m30;
+   treps[2].time = c_t_m15; treps[2].tf = PERIOD_M15; treps[2].tf_name = "M15"; treps[2].dir = c_dir_m15; treps[2].level = c_lvl_m15;
+   treps[3].time = c_t_m5; treps[3].tf = PERIOD_M5; treps[3].tf_name = "M5"; treps[3].dir = c_dir_m5; treps[3].level = c_lvl_m5;
+
+   for(int i=0; i<3; i++) {
+       for(int j=0; j<3-i; j++) {
+           if(treps[j].time < treps[j+1].time) {
+               SMTFReport temp = treps[j];
+               treps[j] = treps[j+1];
+               treps[j+1] = temp;
+           }
+       }
+   }
+
+   int penalty = 0;
+   if (treps[3].time != 0) {
+       penalty = (treps[3].tf == PERIOD_H1) ? -15 : -10;
+   }
+   total_points += penalty;
+
+   string sup_text = "\n⏱️ ÜST ZAMAN DİLİMİ KIRILIM (CHoCH) RAPORU:\n\n";
+
+   for(int i=0; i<4; i++) {
+       if (treps[i].time == 0) continue;
+
+       string dir_str = (treps[i].dir == 1) ? "🟢 YUKARI" : ((treps[i].dir == -1) ? "🔴 AŞAĞI " : "BİLİNMİYOR");
+       string age_str = GetTimeAgoString(treps[i].time, t);
+       int bars_ago = iBarShift(Symbol(), treps[i].tf, treps[i].time);
+       age_str += ", " + IntegerToString(bars_ago) + " Mum Önce";
+
+       int pts = 0;
+       int base_pts = 0;
+       if (treps[i].tf == PERIOD_H1) base_pts = 20;
+       else if (treps[i].tf == PERIOD_M30) base_pts = 15;
+       else if (treps[i].tf == PERIOD_M15) base_pts = 10;
+       else if (treps[i].tf == PERIOD_M5) base_pts = 5;
+
+       if (treps[i].dir == trigger_dir) pts = base_pts;
+       else pts = -base_pts;
+
+       string pts_str = (pts > 0 ? "[+" : "[") + IntegerToString(pts) + " Puan]";
+
+       sup_text += IntegerToString(i+1) + ". " + treps[i].tf_name + ": " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(treps[i].level, _Digits) + " -> " + pts_str + "\n";
+   }
 
 
    string order_details = "";
@@ -1950,10 +2000,7 @@ int OnCalculate(const int rates_total,
 
    static bool last_test_state = false;
    if (InpEnableMTFChochReport && !last_test_state) {
-       int dummy_pts = 0;
-       string m_rep = GenerateMTFChochReport(0, dummy_pts);
-       if(InpAlertPopup) Alert(m_rep);
-       if(InpAlertPush) SendNotification(m_rep);
+       GenerateMTFChochReport();
    }
    last_test_state = InpEnableMTFChochReport;
 
