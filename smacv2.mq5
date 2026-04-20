@@ -983,49 +983,19 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    GetMTFChochDetails(PERIOD_M15, TimeCurrent(), c_dir_m15, c_lvl_m15, c_t_m15);
    GetMTFChochDetails(PERIOD_M5, TimeCurrent(), c_dir_m5, c_lvl_m5, c_t_m5);
 
-   int h1_sup_points=0, m30_sup_points=0, m15_sup_points=0, m5_sup_points=0;
-   string h1_sup_text="", m30_sup_text="", m15_sup_text="", m5_sup_text="";
-
-   if (c_dir_h1 != 0) {
-       h1_sup_points = (c_dir_h1 == trigger_dir) ? 20 : -20;
-       string dir_str = (c_dir_h1 == 1) ? "🟢 YUKARI" : "🔴 AŞAĞI ";
-       string age_str = GetTimeAgoString(c_t_h1, t) + ", " + IntegerToString(iBarShift(Symbol(), PERIOD_H1, c_t_h1)) + " Mum Önce";
-       string pts_str = (h1_sup_points > 0 ? "[+" : "[") + IntegerToString(h1_sup_points) + " Puan]";
-       h1_sup_text = "H1 : " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(c_lvl_h1, _Digits) + " -> " + pts_str + "\n";
-   } else { h1_sup_text = "H1 : ⚪ Veri Bekleniyor... -> [0 Puan]\n"; }
-
-   if (c_dir_m30 != 0) {
-       m30_sup_points = (c_dir_m30 == trigger_dir) ? 15 : -15;
-       string dir_str = (c_dir_m30 == 1) ? "🟢 YUKARI" : "🔴 AŞAĞI ";
-       string age_str = GetTimeAgoString(c_t_m30, t) + ", " + IntegerToString(iBarShift(Symbol(), PERIOD_M30, c_t_m30)) + " Mum Önce";
-       string pts_str = (m30_sup_points > 0 ? "[+" : "[") + IntegerToString(m30_sup_points) + " Puan]";
-       m30_sup_text = "M30: " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(c_lvl_m30, _Digits) + " -> " + pts_str + "\n";
-   } else { m30_sup_text = "M30: ⚪ Veri Bekleniyor... -> [0 Puan]\n"; }
-
-   if (c_dir_m15 != 0) {
-       m15_sup_points = (c_dir_m15 == trigger_dir) ? 10 : -10;
-       string dir_str = (c_dir_m15 == 1) ? "🟢 YUKARI" : "🔴 AŞAĞI ";
-       string age_str = GetTimeAgoString(c_t_m15, t) + ", " + IntegerToString(iBarShift(Symbol(), PERIOD_M15, c_t_m15)) + " Mum Önce";
-       string pts_str = (m15_sup_points > 0 ? "[+" : "[") + IntegerToString(m15_sup_points) + " Puan]";
-       m15_sup_text = "M15: " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(c_lvl_m15, _Digits) + " -> " + pts_str + "\n";
-   } else { m15_sup_text = "M15: ⚪ Veri Bekleniyor... -> [0 Puan]\n"; }
-
-   if (c_dir_m5 != 0) {
-       m5_sup_points = (c_dir_m5 == trigger_dir) ? 5 : -5;
-       string dir_str = (c_dir_m5 == 1) ? "🟢 YUKARI" : "🔴 AŞAĞI ";
-       string age_str = GetTimeAgoString(c_t_m5, t) + ", " + IntegerToString(iBarShift(Symbol(), PERIOD_M5, c_t_m5)) + " Mum Önce";
-       string pts_str = (m5_sup_points > 0 ? "[+" : "[") + IntegerToString(m5_sup_points) + " Puan]";
-       m5_sup_text = "M5 : " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(c_lvl_m5, _Digits) + " -> " + pts_str + "\n";
-   } else { m5_sup_text = "M5 : ⚪ Veri Bekleniyor... -> [0 Puan]\n"; }
+   int h1_sup_points = (c_dir_h1 != 0) ? ((c_dir_h1 == trigger_dir) ? 20 : -20) : 0;
+   int m30_sup_points = (c_dir_m30 != 0) ? ((c_dir_m30 == trigger_dir) ? 15 : -15) : 0;
+   int m15_sup_points = (c_dir_m15 != 0) ? ((c_dir_m15 == trigger_dir) ? 10 : -10) : 0;
+   int m5_sup_points = (c_dir_m5 != 0) ? ((c_dir_m5 == trigger_dir) ? 5 : -5) : 0;
 
    total_points += h1_sup_points + m30_sup_points + m15_sup_points + m5_sup_points;
 
-   // TIME PENALTY LOGIC (4. Sırada H1 ise -15, değilse -10)
+   // Zaman Cezaları kod olarak kalıyor ancak sup_text'e YAZILMIYOR
    SMTFReport treps[4];
-   treps[0].time = c_t_h1; treps[0].tf = PERIOD_H1; treps[0].tf_name = "H1";
-   treps[1].time = c_t_m30; treps[1].tf = PERIOD_M30; treps[1].tf_name = "M30";
-   treps[2].time = c_t_m15; treps[2].tf = PERIOD_M15; treps[2].tf_name = "M15";
-   treps[3].time = c_t_m5; treps[3].tf = PERIOD_M5; treps[3].tf_name = "M5";
+   treps[0].time = c_t_h1; treps[0].tf = PERIOD_H1; treps[0].tf_name = "H1"; treps[0].dir = c_dir_h1; treps[0].level = c_lvl_h1;
+   treps[1].time = c_t_m30; treps[1].tf = PERIOD_M30; treps[1].tf_name = "M30"; treps[1].dir = c_dir_m30; treps[1].level = c_lvl_m30;
+   treps[2].time = c_t_m15; treps[2].tf = PERIOD_M15; treps[2].tf_name = "M15"; treps[2].dir = c_dir_m15; treps[2].level = c_lvl_m15;
+   treps[3].time = c_t_m5; treps[3].tf = PERIOD_M5; treps[3].tf_name = "M5"; treps[3].dir = c_dir_m5; treps[3].level = c_lvl_m5;
 
    for(int i=0; i<3; i++) {
        for(int j=0; j<3-i; j++) {
@@ -1037,22 +1007,35 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        }
    }
 
-   string penalty_text = "";
    int penalty = 0;
-
-   // Sadece 4. En Eskiye Ceza Var (index 3)
    if (treps[3].time != 0) {
-       int pen_4 = (treps[3].tf == PERIOD_H1) ? -15 : -10;
-       penalty += pen_4;
-       penalty_text += "4. En Eski (" + treps[3].tf_name + "): [" + IntegerToString(pen_4) + " Puan]\n";
+       penalty = (treps[3].tf == PERIOD_H1) ? -15 : -10;
    }
-
    total_points += penalty;
 
-   string sup_text = "\n🛡️ DESTEKLEYİCİ YAPILAR & CEZALAR:\n";
-   sup_text += h1_sup_text + m30_sup_text + m15_sup_text + m5_sup_text;
-   if (penalty != 0) {
-       sup_text += "⏱️ ZAMAN CEZALARI:\n" + penalty_text;
+   string sup_text = "\n⏱️ ÜST ZAMAN DİLİMİ KIRILIM (CHoCH) RAPORU:\n\n";
+
+   for(int i=0; i<4; i++) {
+       if (treps[i].time == 0) continue;
+
+       string dir_str = (treps[i].dir == 1) ? "🟢 YUKARI" : ((treps[i].dir == -1) ? "🔴 AŞAĞI " : "BİLİNMİYOR");
+       string age_str = GetTimeAgoString(treps[i].time, t);
+       int bars_ago = iBarShift(Symbol(), treps[i].tf, treps[i].time);
+       age_str += ", " + IntegerToString(bars_ago) + " Mum Önce";
+
+       int pts = 0;
+       int base_pts = 0;
+       if (treps[i].tf == PERIOD_H1) base_pts = 20;
+       else if (treps[i].tf == PERIOD_M30) base_pts = 15;
+       else if (treps[i].tf == PERIOD_M15) base_pts = 10;
+       else if (treps[i].tf == PERIOD_M5) base_pts = 5;
+
+       if (treps[i].dir == trigger_dir) pts = base_pts;
+       else pts = -base_pts;
+
+       string pts_str = (pts > 0 ? "[+" : "[") + IntegerToString(pts) + " Puan]";
+
+       sup_text += IntegerToString(i+1) + ". " + treps[i].tf_name + ": " + dir_str + " (" + age_str + ") | Çizgi: " + DoubleToString(treps[i].level, _Digits) + " -> " + pts_str + "\n";
    }
 
 
