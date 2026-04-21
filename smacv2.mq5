@@ -9,8 +9,6 @@
 #property indicator_chart_window
 #property indicator_plots 0
 
-input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık CHoCH Sinyali Tetikle
-
 //--- Input Settings for Calculation Depth (Days Back) ---
 input double InpDaysM1   = 3.0;
 input double InpDaysM3   = 10.0;
@@ -24,6 +22,7 @@ input double InpDaysD1   = 1500.0;
 //--- CHoCH Settings ---
 input group "--- TRADE EXECUTION & RISK ---"
 input bool   InpEnableTradeExecution   = true;        // Master->Slave Sinyal Köprüsü Aktif
+input bool   InpTestMTFChochReport     = false;       // 🧪 Üst Zaman Dilimi (MTF) CHoCH Raporunu Tetikle
 input bool   InpAlertRejectedTrades    = false;       // ❌ Reddedilen (Puanı Yetersiz) İşlemleri Bildir
 input bool   InpWaitRetest             = false;       // 🎯 Gelişmiş Retest (Pusu) Modu Aktif
 input int    InpRetestMaxBars          = 15;          // ⏳ Pusu Modunda Beklenecek Maksimum Mum
@@ -37,7 +36,6 @@ input bool   InpEnableSLPctLimit       = true;        // Ana Dalga Boyuna Göre 
 input double InpMinSLPct               = 3.0;         // Min SL Uzaklığı (Ana Dalganın %'si)
 input double InpMaxSLPct               = 15.0;        // Maks SL Uzaklığı (Ana Dalganın %'si)
 
-input int    InpMinTradeScoreLimit = 40;       // İşlem İçin Min. Puan (100 Üzerinden)
 input double InpMinPullbackPct = 40.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
 input double InpMaxPullbackPct = 100.0;          // CHoCH Max Çekilme % (İşlem Yüzdeliği)
 input color  InpColorChochStrong = clrPurple;      // Güçlü CHoCH (Mor)
@@ -54,12 +52,18 @@ input color  InpColorBear = clrRed;
 
 //--- Alert Settings ---
 input bool   InpEnableAlertTrendChange = true;       // Ana Trend (Kapanış) Dönüş Bildirimini Aç
+input bool   InpEnableAlertMTFLevels   = true;       // %40/%60 MTF Analiz Bildirimini Aç (Bölüm 1/2)
 input bool   InpEnableAlertCHoCHBase   = true;       // Temel CHoCH (Kırılım) Bildirimini Aç
+input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık Puanları Hesapla ve Bildir
+input double InpTriggerLevel1    = 40.0;             // 1. Bildirim Çekilme % (örn. %40)
+input double InpTriggerLevel2    = 60.0;             // 2. Bildirim Çekilme % (örn. %60)
 input double InpGoodPullbackPct  = 40.0;
 input double InpMomentumMinPeak  = 30.0;
 input double InpMomentumMinBounce= 20.0;
 input bool   InpAlertPopup       = true;
 input bool   InpAlertPush        = false;
+input bool   InpNotificationFilter = false;          // Bildirim Filtresi (True: Sadece Swing İçi, False: Kırılımdan İtibaren)
+input bool   InpTestMode         = false;
 
 //--- Globals ---
 int g_counter = 0;
@@ -70,6 +74,10 @@ datetime g_anchor_time = 0;
 double g_last_alert_maj_h = 0;
 double g_last_alert_maj_l = 0;
 int g_last_alert_trend = 0;
+bool g_level1_triggered = false;
+bool g_level2_triggered = false;
+bool g_level1_missed = false;
+bool g_level2_missed = false;
 
 void DrawLine(string name, datetime time1, double price1, datetime time2, double price2, color clr, int width, ENUM_LINE_STYLE style, bool ray_right=false)
   {
@@ -742,13 +750,9 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
 
     string dir_str = (direction == 1) ? "BUY" : "SELL";
     string is_strong_str = is_strong ? "true" : "false";
-
-
-
     string is_test_str = is_test ? "true" : "false";
-    string json = "{\n";
-    json += "  \"is_test\": " + is_test_str + ",\n";
 
+    string json = "{\n";
     json += "  \"symbol\": \"" + symbol + "\",\n";
     json += "  \"direction\": \"" + dir_str + "\",\n";
     json += "  \"entry\": " + DoubleToString(entry, _Digits) + ",\n";
@@ -757,7 +761,7 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
     json += "  \"base_extreme\": " + DoubleToString(sl, _Digits) + ",\n"; // Keeping legacy format compatibility
     json += "  \"is_strong\": " + is_strong_str + ",\n";
     json += "  \"score\": " + IntegerToString(score) + ",\n";
-
+    json += "  \"is_test\": " + is_test_str + ",\n";
     json += "  \"risk_usd\": " + DoubleToString(InpRiskUSD, 2) + " ";
     json += "}";
 
@@ -830,11 +834,11 @@ void GenerateMTFChochReport() {
 
 void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, int maj_extreme_i, bool is_test = false)
   {
-   int total_points = 100;
+   int total_points = 100; // Puan hesaplamasi kapatildi, sabit puan gonderiliyor
 
    string dir_str = (trigger_dir == 1) ? "🟢 YÜKSELİŞ" : ((trigger_dir == -1) ? "🔴 DÜŞÜŞ" : "BİLİNMİYOR");
    string lvl_text = is_strong ? "Güçlü (Minor CHoCH)" : "Zayıf (Major CHoCH)";
-   string verdict = "✅ CHoCH ONAYLANDI (Tüm Yapı/Ceza Kontrolleri Kaldırıldı)";
+   string verdict = "✅ CHoCH ONAYLANDI (Yapı/Ceza İptal)";
 
    double entry_price = live_price;
    double sl_price = minor_extreme_sl;
@@ -1606,7 +1610,13 @@ int OnCalculate(const int rates_total,
        virtual_prev = rates_total - 1; // Hafıza Koruması (Wipe Bug Fix)
    }
 
-      if(virtual_prev == 0)
+   static bool last_test_state = false;
+   if (InpTestMTFChochReport && !last_test_state) {
+       GenerateMTFChochReport();
+   }
+   last_test_state = InpTestMTFChochReport;
+
+   if(virtual_prev == 0)
      {
       last_calc_time = time[rates_total - 1];
 
@@ -1617,6 +1627,10 @@ int OnCalculate(const int rates_total,
       g_last_alert_maj_h = 0;
       g_last_alert_maj_l = 0;
       g_last_alert_trend = 0;
+      g_level1_triggered = false;
+      g_level2_triggered = false;
+      g_level1_missed = false;
+      g_level2_missed = false;
 
       ObjectsDeleteAll(0, "Structure_");
       ObjectsDeleteAll(0, "Minor_");
@@ -1685,15 +1699,17 @@ int OnCalculate(const int rates_total,
 
       limit = start_idx + 1;
 
-
-
-      // TEST TRIGGER (Sadece CHoCH Testi)
+      // TEST TRIGGER
       if (InpTestTradeExecution) {
           int live_tr = 0; double live_pct = 0; double mp_pct = 0;
           double dh, dl; datetime dth, dtl;
           GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
 
-          int test_dir = (live_tr != 0) ? live_tr : 1;
+          // Test varsayımı: Ana yön H1'in trend yönüne (g_state_hist.maj_tr) göre bir kırılım (CHoCH) geldiğini farz ediyoruz.
+          int test_dir = (live_tr != 0) ? live_tr : 1; // Default to buy if unknown
+
+
+          // EvaluateTradeSignal param format: current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, bool is_test
           double dummy_ext = (test_dir == 1) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) - 50*Point() : SymbolInfoDouble(Symbol(), SYMBOL_BID) + 50*Point();
           EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, dummy_ext, 0, true);
       }
@@ -1760,7 +1776,7 @@ int OnCalculate(const int rates_total,
       DrawLine("LiveLeg", GetTimeSafe(time, g_state_curr.lp_i), g_state_curr.lp_p, GetTimeSafe(time, leg_i), leg_p, InpColorMin, 1, STYLE_DOT);
      }
 
-   if(last_idx > 0 && (Period() == PERIOD_M1))
+   if(last_idx > 0 && (Period() == PERIOD_M1 || InpTestMode))
      {
       int live_trend = 0;
       double live_pct = 0.0;
@@ -1787,15 +1803,19 @@ int OnCalculate(const int rates_total,
                    if(InpAlertPush)  SendNotification(trend_msg);
                }
               }
-                        g_last_alert_maj_h = g_state_hist.maj_h;
+            g_level1_triggered = false;
+            g_level2_triggered = false;
+            g_level1_missed = false;
+            g_level2_missed = false;
+            g_last_alert_maj_h = g_state_hist.maj_h;
             g_last_alert_maj_l = g_state_hist.maj_l;
             g_last_alert_trend = g_state_hist.maj_tr;
            }
 
-
-
-
-
+         bool trig1 = false;
+         bool trig2 = false;
+         bool is_revisit_1 = false;
+         bool is_revisit_2 = false;
 
          // "100'e gelince bildirim atıyor onu kökten çöz"
          // live_pct >= 98.0 demek artık trendin sınırında olması demektir. Bu durumda %100 veya %99 pull back
@@ -1809,17 +1829,34 @@ int OnCalculate(const int rates_total,
             // tekrar kesinlikle bildirim atabilsin.
 
             // Eğer fiyat tolerans bandını çoktan geçmişse (örn: 80'deyse) ve bildirim atmadıysa "missed" bayrağı kalkar.
+            if(live_pct > InpTriggerLevel1 + 10.0 && !g_level1_triggered) g_level1_missed = true;
+            if(live_pct > InpTriggerLevel2 + 10.0 && !g_level2_triggered) g_level2_missed = true;
 
+            if (InpNotificationFilter)
+              {
+               trig1 = (live_pct >= InpTriggerLevel1 && live_pct < InpTriggerLevel2 && !g_level1_triggered);
+               trig2 = (live_pct >= InpTriggerLevel2 && live_pct < 100.0 && !g_level2_triggered);
+              }
+            else
+              {
+               trig1 = (live_pct >= InpTriggerLevel1 && live_pct <= InpTriggerLevel1 + 10.0 && !g_level1_triggered);
+               trig2 = (live_pct >= InpTriggerLevel2 && live_pct <= InpTriggerLevel2 + 10.0 && !g_level2_triggered);
+              }
 
-
-
-
-
-
-
+            if(trig1 && g_level1_missed) is_revisit_1 = true;
+            if(trig2 && g_level2_missed) is_revisit_2 = true;
            }
 
-
+         if(false)
+           {
+            int trigger_lvl = trig2 ? 2 : 1;
+            bool is_revisit = (trigger_lvl == 2) ? is_revisit_2 : is_revisit_1;
+            bool success = TriggerMTFAlert(last_idx, GetTimeSafe(time, last_idx), close[last_idx], trigger_lvl, is_revisit);
+            if(success && !InpTestMode) {
+               if(trig1) { g_level1_triggered = true; g_level1_missed = false; }
+               if(trig2) { g_level2_triggered = true; g_level2_missed = false; }
+            }
+           }
         }
      }
 
