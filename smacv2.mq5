@@ -9,6 +9,8 @@
 #property indicator_chart_window
 #property indicator_plots 0
 
+input bool   InpTestTradeExecution     = false;      // 🧪 [TEST] Anlık CHoCH Sinyali Tetikle
+
 //--- Input Settings for Calculation Depth (Days Back) ---
 input double InpDaysM1   = 3.0;
 input double InpDaysM3   = 10.0;
@@ -728,7 +730,7 @@ string GenerateMTFString(string tf_name, int trend, double h, double l, double p
 }
 
 
-void BroadcastTradeSignal(string symbol, int direction, double entry, double sl, double tp, bool is_strong, int score) {
+void BroadcastTradeSignal(string symbol, int direction, double entry, double sl, double tp, bool is_strong, int score, bool is_test) {
     if (!InpEnableTradeExecution) return;
 
     string filename = "SMC_SIGNAL_" + symbol + ".json";
@@ -742,7 +744,11 @@ void BroadcastTradeSignal(string symbol, int direction, double entry, double sl,
     string is_strong_str = is_strong ? "true" : "false";
 
 
+
+    string is_test_str = is_test ? "true" : "false";
     string json = "{\n";
+    json += "  \"is_test\": " + is_test_str + ",\n";
+
     json += "  \"symbol\": \"" + symbol + "\",\n";
     json += "  \"direction\": \"" + dir_str + "\",\n";
     json += "  \"entry\": " + DoubleToString(entry, _Digits) + ",\n";
@@ -822,7 +828,7 @@ void GenerateMTFChochReport() {
     if(InpAlertPush) SendNotification(msg);
 }
 
-void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, int maj_extreme_i)
+void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int trigger_dir, double p_pct, bool is_strong, double minor_extreme_sl, int maj_extreme_i, bool is_test = false)
   {
    int total_points = 100;
 
@@ -850,14 +856,16 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    order_details += "Kâr Al (TP 3R): " + DoubleToString(tp_price, _Digits) + " (" + DoubleToString(tp_dist/_Point, 0) + " points)\n";
 
    static int last_broadcast_maj_extreme_i = -1;
-   if (maj_extreme_i != last_broadcast_maj_extreme_i || maj_extreme_i == 0) {
-       BroadcastTradeSignal(Symbol(), trigger_dir, entry_price, sl_price, tp_price, is_strong, total_points);
+   if (maj_extreme_i != last_broadcast_maj_extreme_i || is_test || maj_extreme_i == 0) {
+       BroadcastTradeSignal(Symbol(), trigger_dir, entry_price, sl_price, tp_price, is_strong, total_points, is_test);
        last_broadcast_maj_extreme_i = maj_extreme_i;
    } else {
        order_details += "\n⚠️ UYARI: Bu dalgada zaten işleme girildi, tekrar girilmiyor! Sadece bildirim.";
    }
 
-   string msg = "🚨 [" + Symbol() + "] YENİ İŞLEM FIRSATI [" + lvl_text + "] 🚨\n";
+   string msg = "";
+   if (is_test) msg = "🧪 [" + Symbol() + "] TEST ANALİZ RAPORU (Şu Anki Durum)\n";
+   else msg = "🚨 [" + Symbol() + "] YENİ İŞLEM FIRSATI [" + lvl_text + "] 🚨\n";
    msg += "Yön: " + dir_str + " \n";
    msg += "KARAR: " + verdict;
    msg += order_details;
@@ -1678,6 +1686,17 @@ int OnCalculate(const int rates_total,
       limit = start_idx + 1;
 
 
+
+      // TEST TRIGGER (Sadece CHoCH Testi)
+      if (InpTestTradeExecution) {
+          int live_tr = 0; double live_pct = 0; double mp_pct = 0;
+          double dh, dl; datetime dth, dtl;
+          GetMTFPullback(PERIOD_M1, live_tr, live_pct, mp_pct, TimeCurrent(), dh, dl, dth, dtl);
+
+          int test_dir = (live_tr != 0) ? live_tr : 1;
+          double dummy_ext = (test_dir == 1) ? SymbolInfoDouble(Symbol(), SYMBOL_BID) - 50*Point() : SymbolInfoDouble(Symbol(), SYMBOL_BID) + 50*Point();
+          EvaluateTradeSignal(rates_total-1, TimeCurrent(), SymbolInfoDouble(Symbol(), SYMBOL_BID), test_dir, live_pct, true, dummy_ext, 0, true);
+      }
      }
    else
      {
