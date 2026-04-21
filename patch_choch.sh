@@ -1,0 +1,7 @@
+sed -i 's/GetMTFChochDetails(tf, TimeCurrent(), c_dir, c_level, c_time, bars_ago);/GetMTFChochDetails(tf, t, c_dir, c_level, c_time, bars_ago);/' denemevol00929.mq5
+sed -i 's/int CalcChochTFScore(ENUM_TIMEFRAMES tf, string tf_name, int trigger_dir, double live_price,/int CalcChochTFScore(ENUM_TIMEFRAMES tf, string tf_name, int trigger_dir, double live_price, datetime t,/' denemevol00929.mq5
+sed -i 's/int ch_h1_pts  = CalcChochTFScore(PERIOD_H1,  "H1 ", trigger_dir, live_price, 20, ch_h1_text);/int ch_h1_pts  = CalcChochTFScore(PERIOD_H1,  "H1 ", trigger_dir, live_price, t, 20, ch_h1_text);/' denemevol00929.mq5
+sed -i 's/int ch_m30_pts = CalcChochTFScore(PERIOD_M30, "M30", trigger_dir, live_price, 15, ch_m30_text);/int ch_m30_pts = CalcChochTFScore(PERIOD_M30, "M30", trigger_dir, live_price, t, 15, ch_m30_text);/' denemevol00929.mq5
+sed -i 's/int ch_m15_pts = CalcChochTFScore(PERIOD_M15, "M15", trigger_dir, live_price, 10, ch_m15_text);/int ch_m15_pts = CalcChochTFScore(PERIOD_M15, "M15", trigger_dir, live_price, t, 10, ch_m15_text);/' denemevol00929.mq5
+sed -i 's/int ch_m5_pts  = CalcChochTFScore(PERIOD_M5,  "M5 ", trigger_dir, live_price, 5,  ch_m5_text);/int ch_m5_pts  = CalcChochTFScore(PERIOD_M5,  "M5 ", trigger_dir, live_price, t, 5,  ch_m5_text);/' denemevol00929.mq5
+sed -i 's/string age     = GetTimeAgoString(c_time, TimeCurrent());/string age     = GetTimeAgoString(c_time, t);/' denemevol00929.mq5

@@ -1,0 +1,23 @@
+--- denemevol00929.mq5	2023-11-20
++++ denemevol00929.mq5	2023-11-20
+@@ -231,18 +231,18 @@
+ //| Tarih farkını insan okuyabilir formata çevirir (Age format)      |
+ //+------------------------------------------------------------------+
+ string GetTimeAgoString(datetime past_time, datetime current_time)
+ {
+    if(past_time == 0 || current_time == 0 || past_time >= current_time) return "Az Önce";
+
+    int diff = (int)(current_time - past_time);
+
+    int days = diff / 86400;
+    int hours = (diff % 86400) / 3600;
+    int mins = ((diff % 86400) % 3600) / 60;
+
+    string res = "";
+    if(days > 0) res += IntegerToString(days) + "g ";
+    if(hours > 0) res += IntegerToString(hours) + "s ";
+    if(mins > 0) res += IntegerToString(mins) + "d";
+
+    if(res == "") res = "Az Önce";
+    return res;
+ }

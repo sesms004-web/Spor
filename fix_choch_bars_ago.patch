@@ -1,0 +1,22 @@
+--- denemevol00929.mq5	2023-11-20
++++ denemevol00929.mq5	2023-11-20
+@@ -373,8 +373,20 @@
+       }
+    }
+
+    if(c_time > 0)
+-      c_bars_ago = iBarShift(Symbol(), tf, c_time);
++   {
++      int current_idx = -1;
++      int choch_idx = -1;
++      for(int k=0; k<copied; k++)
++      {
++         if(rates[k].time == current_time) current_idx = k;
++         if(rates[k].time == c_time) choch_idx = k;
++      }
++      if(current_idx != -1 && choch_idx != -1)
++         c_bars_ago = current_idx - choch_idx;
++      else
++         c_bars_ago = copied - 1 - choch_idx;
++   }
+ }

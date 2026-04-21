@@ -1,0 +1,18 @@
+--- denemevol00929.mq5	2023-11-20
++++ denemevol00929.mq5	2023-11-20
+@@ -620,6 +620,7 @@
+ //|  M15: ±10 Puan                                                   |
+ //|  M5:  ±5  Puan                                                   |
+ //+------------------------------------------------------------------+
+ int CalcChochTFScore(ENUM_TIMEFRAMES tf, string tf_name, int trigger_dir, double live_price, datetime t,
+                      int max_points, string &out_text)
+ {
+    int      c_dir = 0;
+@@ -639,7 +640,7 @@
+
+    string dir_str = (c_dir == 1) ? "🟢 YUKARI" : "🔴 AŞAĞI ";
+    string age     = GetTimeAgoString(c_time, t);
+-   string bars_s  = IntegerToString(bars_ago) + " Mum";
++   string bars_s  = IntegerToString(bars_ago) + " Mum (" + tf_name + ")";
+    string lvl_s   = DoubleToString(c_level, _Digits);
+    string val_s   = valid ? "✅ GEÇERLİ" : "❌ GEÇERSİZ (Tuzak)";

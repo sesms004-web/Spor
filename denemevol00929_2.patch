@@ -1,0 +1,9 @@
+--- denemevol00929.mq5	2023-11-20
++++ denemevol00929.mq5	2023-11-20
+@@ -625,7 +625,8 @@
+    datetime c_time = 0;
+    int      bars_ago = 0;
+
+-   GetMTFChochDetails(tf, TimeCurrent(), c_dir, c_level, c_time, bars_ago);
++   // Use t passed to EvaluateTradeSignal, but wait, CalcChochTFScore gets TimeCurrent().
++   // Let's modify CalcChochTFScore to take datetime t.

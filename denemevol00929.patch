@@ -1,0 +1,70 @@
+--- denemevol00929.mq5	2023-11-20
++++ denemevol00929.mq5	2023-11-20
+@@ -1145,18 +1145,21 @@
+             }
+          }
+
+-         if(InpShowChoch)
+-         {
+-            color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
+-            string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
+-            DrawLine(path_1, ST(time, state.t1_i), state.t1_h, ST(time, state.d1_i), state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+-            string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
+-            DrawLine(path_2, ST(time, state.d1_i), state.d1_l, ST(time, state.t2_i), state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
+-            string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
+-            DrawLine(path_3, ST(time, state.t2_i), state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+-            string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
+-            DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
+-         }
++         if(Period() == PERIOD_M1)
++         {
++            if(InpShowChoch)
++            {
++               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
++               string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
++               DrawLine(path_1, ST(time, state.t1_i), state.t1_h, ST(time, state.d1_i), state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
++               string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
++               DrawLine(path_2, ST(time, state.d1_i), state.d1_l, ST(time, state.t2_i), state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
++               string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
++               DrawLine(path_3, ST(time, state.t2_i), state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
++               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
++               DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
++            }
++         }
+          state.choch_dir = 0;
+       }
+    }
+@@ -1204,18 +1207,21 @@
+             }
+          }
+
+-         if(InpShowChoch)
+-         {
+-            color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
+-            string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
+-            DrawLine(path_1, ST(time, state.t1_i), state.t1_l, ST(time, state.d1_i), state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+-            string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
+-            DrawLine(path_2, ST(time, state.d1_i), state.d1_h, ST(time, state.t2_i), state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
+-            string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
+-            DrawLine(path_3, ST(time, state.t2_i), state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+-            string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
+-            DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
+-         }
++         if(Period() == PERIOD_M1)
++         {
++            if(InpShowChoch)
++            {
++               color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
++               string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
++               DrawLine(path_1, ST(time, state.t1_i), state.t1_l, ST(time, state.d1_i), state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
++               string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
++               DrawLine(path_2, ST(time, state.d1_i), state.d1_h, ST(time, state.t2_i), state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
++               string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
++               DrawLine(path_3, ST(time, state.t2_i), state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
++               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
++               DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
++            }
++         }
+          state.choch_dir = 0;
+       }
+    }
