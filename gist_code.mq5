@@ -9,13 +9,6 @@
 #property indicator_chart_window
 #property indicator_plots 0
 
-
-datetime GetTimeSafe(const datetime &time_array[], int idx) {
-    if (idx >= 0 && idx < ArraySize(time_array)) {
-        return time_array[idx];
-    }
-    return 0;
-}
 //--- Input Settings for Calculation Depth (Days Back) ---
 input double InpDaysM1   = 3.0;
 input double InpDaysM3   = 10.0;
@@ -1408,7 +1401,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          if(draw_ui && InpShowMin)
            {
             string name = GetUniqueName(prefix + "Minor_");
-            DrawLine(name, GetTimeSafe(time, state.lp_i), state.lp_p, GetTimeSafe(time, state.min_h_i), state.min_h, InpColorMin, 1, STYLE_SOLID);
+            DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_h_i], state.min_h, InpColorMin, 1, STYLE_SOLID);
            }
          state.st_h.Push(state.min_h, state.min_h_i);
 
@@ -1475,7 +1468,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          if(draw_ui && InpShowMin)
            {
             string name = GetUniqueName(prefix + "Minor_");
-            DrawLine(name, GetTimeSafe(time, state.lp_i), state.lp_p, GetTimeSafe(time, state.min_l_i), state.min_l, InpColorMin, 1, STYLE_SOLID);
+            DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_l_i], state.min_l, InpColorMin, 1, STYLE_SOLID);
            }
          state.st_l.Push(state.min_l, state.min_l_i);
 
@@ -1520,7 +1513,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          }
 
          state.min_tr = 1;
-                  state.lp_i = state.min_l_i;
+         state.lp_i = state.min_l_i;
          state.lp_p = state.min_l;
          state.min_h = val_h;
          state.min_h_i = i;
@@ -1530,46 +1523,49 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
    // CHoCH Trigger & Drawing Logic
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
-      if (val_c < state.d1_l && in_pullback_zone) {
+
+            double range = state.maj_h - state.maj_l;
+      double t2_pct = (range != 0) ? ((state.t2_h - state.maj_l) / range) * 100.0 : 0;
+      bool t2_valid = (t2_pct >= InpMinPullbackPct && t2_pct <= InpMaxPullbackPct);
+
+      int r_total = ArraySize(close);
+      bool is_live_bar = (i == r_total - 1);
+      bool is_just_closed = (i == r_total - 2);
+      bool should_eval_bear = (!InpWaitRetest) ? (val_c < state.d1_l) : (is_history && val_c < state.d1_l);
+
+      if (should_eval_bear && t2_valid) {
           // Bearish CHoCH confirmed!
           state.last_choch_dir = -1;
           state.last_choch_level = state.d1_l;
-          state.last_choch_time = GetTimeSafe(time, i);
+          state.last_choch_time = time[i];
 
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
-          if (!is_history) {
-              string msg = "🔴 [" + Symbol() + "] M1 Trend Döndü! (CHoCH)\n";
-              msg += "Yön: ⬇️ AŞAĞI\n";
-              if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Tepe likiditesi alındı.";
-              } else {
-                  msg += "Durum: ⚠️ ZAYIF! Tepe likiditesi alınamadı.";
-              }
-
+          if (draw_ui && (!is_history || (InpWaitRetest && is_just_closed))) {
               // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bear = 0;
+              static int last_alert_maj_i_bear = 0;
               if (state.d1_i != last_alert_d1_i_bear) {
-                  if (InpEnableAlertCHoCHBase) {
-                      if(InpAlertPopup) Alert(msg);
-                      if(InpAlertPush) SendNotification(msg);
+
+                  if (!InpWaitRetest) {
+                      EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, state.t2_h, state.maj_h_i);
+                  } else {
+                      // Retest Modu: İşlemi Pusuya Yatır
+                      g_pending_active = true;
+                      g_pending_dir = -1;
+                      g_pending_bar_i = i;
+                      g_pending_sl = state.t2_h;
+                      g_pending_is_strong = is_strong;
+                      g_pending_p_pct = p_pct;
+                      g_pending_maj_extreme_i = state.maj_h_i;
+
+                      // Entry = CHoCH Line + (SL - CHoCH Line) * Depth%
+                      double dist = state.t2_h - state.d1_l;
+                      g_pending_entry = state.d1_l + (dist * (InpRetestDepthPct / 100.0));
                   }
-                  if (InpEnableTradeExecution) {
-                      if (!InpWaitRetest) {
-                          EvaluateTradeSignal(i, GetTimeSafe(time, i), val_c, -1, p_pct, is_strong, state.t2_h, state.maj_h_i);
-                      } else {
-                          g_pending_active = true;
-                          g_pending_dir = -1;
-                          g_pending_bar_i = i;
-                          g_pending_sl = state.t2_h;
-                          g_pending_is_strong = is_strong;
-                          g_pending_p_pct = p_pct;
-                          g_pending_maj_extreme_i = state.maj_h_i;
-                          double dist = state.t2_h - state.d1_l;
-                          g_pending_entry = state.d1_l + (dist * (InpRetestDepthPct / 100.0));
-                      }
-                  }
+
                   last_alert_d1_i_bear = state.d1_i;
+                  last_alert_maj_i_bear = state.maj_h_i;
               }
           }
 
@@ -1578,61 +1574,64 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
               string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_1, GetTimeSafe(time, state.t1_i), state.t1_h, GetTimeSafe(time, state.d1_i), state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+              DrawLine(path_1, time[state.t1_i], state.t1_h, time[state.d1_i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_2, GetTimeSafe(time, state.d1_i), state.d1_l, GetTimeSafe(time, state.t2_i), state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
+              DrawLine(path_2, time[state.d1_i], state.d1_l, time[state.t2_i], state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_h, GetTimeSafe(time, i), state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+              DrawLine(path_3, time[state.t2_i], state.t2_h, time[i], state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
-              DrawLine(choch_name, GetTimeSafe(time, i), state.d1_l, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
+              DrawLine(choch_name, time[i], state.d1_l, time[i] + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
           }
           state.choch_dir = 0; // Reset after trigger
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
-      if (val_c > state.d1_h && in_pullback_zone) {
+
+            double range = state.maj_h - state.maj_l;
+      double t2_pct = (range != 0) ? ((state.maj_h - state.t2_l) / range) * 100.0 : 0;
+      bool t2_valid = (t2_pct >= InpMinPullbackPct && t2_pct <= InpMaxPullbackPct);
+
+      int r_total = ArraySize(close);
+      bool is_live_bar = (i == r_total - 1);
+      bool is_just_closed = (i == r_total - 2);
+      bool should_eval_bull = (!InpWaitRetest) ? (val_c > state.d1_h) : (is_history && val_c > state.d1_h);
+
+      if (should_eval_bull && t2_valid) {
           // Bullish CHoCH confirmed!
           state.last_choch_dir = 1;
           state.last_choch_level = state.d1_h;
-          state.last_choch_time = GetTimeSafe(time, i);
+          state.last_choch_time = time[i];
 
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
-          if (!is_history) {
-              string msg = "🟢 [" + Symbol() + "] M1 Trend Döndü! (CHoCH)\n";
-              msg += "Yön: ⬆️ YUKARI\n";
-              if (is_strong) {
-                  msg += "Durum: 🔥 GÜÇLÜ! Dip likiditesi alındı.";
-              } else {
-                  msg += "Durum: ⚠️ ZAYIF! Dip likiditesi alınamadı.";
-              }
-
+          if (draw_ui && (!is_history || (InpWaitRetest && is_just_closed))) {
               // Only alert if we haven't already alerted for THIS specific swing setup
               static int last_alert_d1_i_bull = 0;
+              static int last_alert_maj_i_bull = 0;
               if (state.d1_i != last_alert_d1_i_bull) {
-                  if (InpEnableAlertCHoCHBase) {
-                      if(InpAlertPopup) Alert(msg);
-                      if(InpAlertPush) SendNotification(msg);
+
+                  if (!InpWaitRetest) {
+                      EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, state.t2_l, state.maj_l_i);
+                  } else {
+                      // Retest Modu: İşlemi Pusuya Yatır
+                      g_pending_active = true;
+                      g_pending_dir = 1;
+                      g_pending_bar_i = i;
+                      g_pending_sl = state.t2_l;
+                      g_pending_is_strong = is_strong;
+                      g_pending_p_pct = p_pct;
+                      g_pending_maj_extreme_i = state.maj_l_i;
+
+                      // Entry = CHoCH Line - (CHoCH Line - SL) * Depth%
+                      double dist = state.d1_h - state.t2_l;
+                      g_pending_entry = state.d1_h - (dist * (InpRetestDepthPct / 100.0));
                   }
-                  if (InpEnableTradeExecution) {
-                      if (!InpWaitRetest) {
-                          EvaluateTradeSignal(i, GetTimeSafe(time, i), val_c, 1, p_pct, is_strong, state.t2_l, state.maj_l_i);
-                      } else {
-                          g_pending_active = true;
-                          g_pending_dir = 1;
-                          g_pending_bar_i = i;
-                          g_pending_sl = state.t2_l;
-                          g_pending_is_strong = is_strong;
-                          g_pending_p_pct = p_pct;
-                          g_pending_maj_extreme_i = state.maj_l_i;
-                          double dist = state.d1_h - state.t2_l;
-                          g_pending_entry = state.d1_h - (dist * (InpRetestDepthPct / 100.0));
-                      }
-                  }
+
                   last_alert_d1_i_bull = state.d1_i;
+                  last_alert_maj_i_bull = state.maj_l_i;
               }
           }
 
@@ -1641,23 +1640,17 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               // 1. Draw the minor structure path (T1 -> D1 -> T2 -> Signal Point)
               string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_1, GetTimeSafe(time, state.t1_i), state.t1_l, GetTimeSafe(time, state.d1_i), state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+              DrawLine(path_1, time[state.t1_i], state.t1_l, time[state.d1_i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_2, GetTimeSafe(time, state.d1_i), state.d1_h, GetTimeSafe(time, state.t2_i), state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
+              DrawLine(path_2, time[state.d1_i], state.d1_h, time[state.t2_i], state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
 
               string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-              DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_l, GetTimeSafe(time, i), state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+              DrawLine(path_3, time[state.t2_i], state.t2_l, time[i], state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
-              DrawLine(choch_name, GetTimeSafe(time, i), state.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
-          }
-          state.choch_dir = 0; // Reset after trigger
-      }
-   }
-
-ate.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
+              DrawLine(choch_name, time[i], state.d1_h, time[i] + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
           }
           state.choch_dir = 0; // Reset after trigger
       }
@@ -1690,7 +1683,7 @@ ate.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_h_i), state.maj_h, InpColorBull, 2, STYLE_SOLID);
+               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1707,12 +1700,12 @@ ate.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, 
             if(draw_ui && InpShowMaj)
               {
                state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
-               DrawLine(state.cur_top_line, GetTimeSafe(time, state.maj_h_i), state.maj_h, GetTimeSafe(time, i) + PeriodSeconds(), state.maj_h, InpColorBull, 1, STYLE_DASH, true);
+               DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBull, 1, STYLE_DASH, true);
 
                if(state.maj_l != EMPTY_VALUE && state.maj_l != 0)
                  {
                   state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
-                  DrawLine(state.cur_bot_line, GetTimeSafe(time, state.maj_l_i), state.maj_l, GetTimeSafe(time, i) + PeriodSeconds(), state.maj_l, InpColorBull, 1, STYLE_DASH, true);
+                  DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBull, 1, STYLE_DASH, true);
                  }
               }
            }
@@ -1732,7 +1725,7 @@ ate.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_h_i), state.tmp_h, InpColorBull, 2, STYLE_SOLID);
+               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1772,7 +1765,7 @@ ate.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_l_i), state.maj_l, InpColorBull, 2, STYLE_SOLID);
+               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_h.Clear();
@@ -1803,7 +1796,7 @@ ate.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_h_i), state.tmp_h, InpColorBull, 2, STYLE_SOLID);
+               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1839,7 +1832,7 @@ ate.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_l_i), state.maj_l, InpColorBear, 2, STYLE_SOLID);
+               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBear, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
@@ -1856,12 +1849,12 @@ ate.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, 
             if(draw_ui && InpShowMaj)
               {
                state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
-               DrawLine(state.cur_bot_line, GetTimeSafe(time, state.maj_l_i), state.maj_l, GetTimeSafe(time, i) + PeriodSeconds(), state.maj_l, InpColorBear, 1, STYLE_DASH, true);
+               DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBear, 1, STYLE_DASH, true);
 
                if(state.maj_h != EMPTY_VALUE && state.maj_h != 0)
                  {
                   state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
-                  DrawLine(state.cur_top_line, GetTimeSafe(time, state.maj_h_i), state.maj_h, GetTimeSafe(time, i) + PeriodSeconds(), state.maj_h, InpColorBear, 1, STYLE_DASH, true);
+                  DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBear, 1, STYLE_DASH, true);
                  }
               }
            }
@@ -1881,7 +1874,7 @@ ate.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_l_i), state.tmp_l, InpColorBear, 2, STYLE_SOLID);
+               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.tmp_l, InpColorBear, 2, STYLE_SOLID);
               }
 
             state.st_h.Clear();
@@ -1921,7 +1914,7 @@ ate.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, 
             if(draw_ui && InpShowMaj)
               {
                string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, GetTimeSafe(time, state.anc_i), state.anc_v, GetTimeSafe(time, state.tmp_h_i), state.maj_h, InpColorBear, 2, STYLE_SOLID);
+               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBear, 2, STYLE_SOLID);
               }
 
             state.st_l.Clear();
