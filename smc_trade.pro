@@ -1556,7 +1556,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       if(InpAlertPush) SendNotification(msg);
                   }
                   if (InpEnableTradeExecution) {
-                      EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong);
+                      EvaluateTradeSignal(i, GetTimeSafe(time, i), val_c, -1, p_pct, is_strong, state.t2_h, state.maj_h_i);
                   }
                   last_alert_d1_i_bear = state.d1_i;
               }
@@ -1603,7 +1603,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       if(InpAlertPush) SendNotification(msg);
                   }
                   if (InpEnableTradeExecution) {
-                      EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong);
+                      EvaluateTradeSignal(i, GetTimeSafe(time, i), val_c, 1, p_pct, is_strong, state.t2_l, state.maj_l_i);
                   }
                   last_alert_d1_i_bull = state.d1_i;
               }
