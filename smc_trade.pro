@@ -14,7 +14,7 @@ datetime GetTimeSafe(const datetime &time_array[], int idx) {
     if (idx >= 0 && idx < ArraySize(time_array)) {
         return time_array[idx];
     }
-    return 0; // Or handle as appropriate
+    return 0;
 }
 //--- Input Settings for Calculation Depth (Days Back) ---
 input double InpDaysM1   = 3.0;
@@ -1477,7 +1477,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
       if(val_h > old_trig)
         {
-         if(InpShowMin)
+         if(draw_ui && InpShowMin)
            {
             string name = GetUniqueName(prefix + "Minor_");
             DrawLine(name, GetTimeSafe(time, state.lp_i), state.lp_p, GetTimeSafe(time, state.min_l_i), state.min_l, InpColorMin, 1, STYLE_SOLID);
