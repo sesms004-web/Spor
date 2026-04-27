@@ -1659,44 +1659,44 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               if (InpExtraSecurity) {
                   string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_1, GetTimeSafe(time, state.t1_i), state.t1_h, GetTimeSafe(time, state.d1_i), state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
+                  DrawLine(path_1, GetTimeSafe(time, state.t1_i), state.t1_h, GetTimeSafe(time, state.d1_i), state.d1_l, clrBlack, 1, STYLE_SOLID, false);
 
                   string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_2, GetTimeSafe(time, state.d1_i), state.d1_l, GetTimeSafe(time, state.t2_i), state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
+                  DrawLine(path_2, GetTimeSafe(time, state.d1_i), state.d1_l, GetTimeSafe(time, state.t2_i), state.t2_h, clrBlack, 1, STYLE_SOLID, false);
 
                   string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_h, GetTimeSafe(time, state.d2_i), state.d2_l, InpColorChochPath, 1, STYLE_DOT, false);
+                  DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_h, GetTimeSafe(time, state.d2_i), state.d2_l, clrBlack, 1, STYLE_SOLID, false);
 
                   string path_4 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_4, GetTimeSafe(time, state.d2_i), state.d2_l, GetTimeSafe(time, state.t3_i), state.t3_h, InpColorChochPath, 1, STYLE_DOT, false);
+                  DrawLine(path_4, GetTimeSafe(time, state.d2_i), state.d2_l, GetTimeSafe(time, state.t3_i), state.t3_h, clrBlack, 1, STYLE_SOLID, false);
 
                   string path_5 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_5, GetTimeSafe(time, state.t3_i), state.t3_h, GetTimeSafe(time, i), state.d2_l, InpColorChochPath, 1, STYLE_DOT, false);
+                  DrawLine(path_5, GetTimeSafe(time, state.t3_i), state.t3_h, GetTimeSafe(time, i), state.d2_l, clrBlack, 1, STYLE_SOLID, false);
 
                   string t1_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, t1_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t1_i), state.t1_h);
                   ObjectSetString(0, t1_name, OBJPROP_TEXT, "T1");
-                  ObjectSetInteger(0, t1_name, OBJPROP_COLOR, clrWhite);
+                  ObjectSetInteger(0, t1_name, OBJPROP_COLOR, clrBlack);
 
                   string d1_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, d1_name, OBJ_TEXT, 0, GetTimeSafe(time, state.d1_i), state.d1_l);
                   ObjectSetString(0, d1_name, OBJPROP_TEXT, "D1");
-                  ObjectSetInteger(0, d1_name, OBJPROP_COLOR, clrWhite);
+                  ObjectSetInteger(0, d1_name, OBJPROP_COLOR, clrBlack);
 
                   string t2_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, t2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t2_i), state.t2_h);
                   ObjectSetString(0, t2_name, OBJPROP_TEXT, "T2");
-                  ObjectSetInteger(0, t2_name, OBJPROP_COLOR, clrWhite);
+                  ObjectSetInteger(0, t2_name, OBJPROP_COLOR, clrBlack);
 
                   string d2_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, d2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.d2_i), state.d2_l);
                   ObjectSetString(0, d2_name, OBJPROP_TEXT, "D2");
-                  ObjectSetInteger(0, d2_name, OBJPROP_COLOR, clrWhite);
+                  ObjectSetInteger(0, d2_name, OBJPROP_COLOR, clrBlack);
 
                   string t3_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, t3_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t3_i), state.t3_h);
                   ObjectSetString(0, t3_name, OBJPROP_TEXT, "T3");
-                  ObjectSetInteger(0, t3_name, OBJPROP_COLOR, clrWhite);
+                  ObjectSetInteger(0, t3_name, OBJPROP_COLOR, clrBlack);
 
               } else {
                   string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
@@ -1771,44 +1771,44 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
               if (InpExtraSecurity) {
                   string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_1, GetTimeSafe(time, state.t1_i), state.t1_l, GetTimeSafe(time, state.d1_i), state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
+                  DrawLine(path_1, GetTimeSafe(time, state.t1_i), state.t1_l, GetTimeSafe(time, state.d1_i), state.d1_h, clrBlack, 1, STYLE_SOLID, false);
 
                   string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_2, GetTimeSafe(time, state.d1_i), state.d1_h, GetTimeSafe(time, state.t2_i), state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
+                  DrawLine(path_2, GetTimeSafe(time, state.d1_i), state.d1_h, GetTimeSafe(time, state.t2_i), state.t2_l, clrBlack, 1, STYLE_SOLID, false);
 
                   string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_l, GetTimeSafe(time, state.d2_i), state.d2_h, InpColorChochPath, 1, STYLE_DOT, false);
+                  DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_l, GetTimeSafe(time, state.d2_i), state.d2_h, clrBlack, 1, STYLE_SOLID, false);
 
                   string path_4 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_4, GetTimeSafe(time, state.d2_i), state.d2_h, GetTimeSafe(time, state.t3_i), state.t3_l, InpColorChochPath, 1, STYLE_DOT, false);
+                  DrawLine(path_4, GetTimeSafe(time, state.d2_i), state.d2_h, GetTimeSafe(time, state.t3_i), state.t3_l, clrBlack, 1, STYLE_SOLID, false);
 
                   string path_5 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_5, GetTimeSafe(time, state.t3_i), state.t3_l, GetTimeSafe(time, i), state.d2_h, InpColorChochPath, 1, STYLE_DOT, false);
+                  DrawLine(path_5, GetTimeSafe(time, state.t3_i), state.t3_l, GetTimeSafe(time, i), state.d2_h, clrBlack, 1, STYLE_SOLID, false);
 
                   string t1_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, t1_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t1_i), state.t1_l);
                   ObjectSetString(0, t1_name, OBJPROP_TEXT, "T1");
-                  ObjectSetInteger(0, t1_name, OBJPROP_COLOR, clrWhite);
+                  ObjectSetInteger(0, t1_name, OBJPROP_COLOR, clrBlack);
 
                   string d1_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, d1_name, OBJ_TEXT, 0, GetTimeSafe(time, state.d1_i), state.d1_h);
                   ObjectSetString(0, d1_name, OBJPROP_TEXT, "D1");
-                  ObjectSetInteger(0, d1_name, OBJPROP_COLOR, clrWhite);
+                  ObjectSetInteger(0, d1_name, OBJPROP_COLOR, clrBlack);
 
                   string t2_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, t2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t2_i), state.t2_l);
                   ObjectSetString(0, t2_name, OBJPROP_TEXT, "T2");
-                  ObjectSetInteger(0, t2_name, OBJPROP_COLOR, clrWhite);
+                  ObjectSetInteger(0, t2_name, OBJPROP_COLOR, clrBlack);
 
                   string d2_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, d2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.d2_i), state.d2_h);
                   ObjectSetString(0, d2_name, OBJPROP_TEXT, "D2");
-                  ObjectSetInteger(0, d2_name, OBJPROP_COLOR, clrWhite);
+                  ObjectSetInteger(0, d2_name, OBJPROP_COLOR, clrBlack);
 
                   string t3_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, t3_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t3_i), state.t3_l);
                   ObjectSetString(0, t3_name, OBJPROP_TEXT, "T3");
-                  ObjectSetInteger(0, t3_name, OBJPROP_COLOR, clrWhite);
+                  ObjectSetInteger(0, t3_name, OBJPROP_COLOR, clrBlack);
 
               } else {
                   string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
