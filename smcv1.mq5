@@ -241,12 +241,10 @@ struct SState
    double            t2_h;
    double            t2_l;
    int               t2_i;
-   double            d2_h;
-   double            d2_l;
-   int               d2_i;
-   double            t3_h;
-   double            t3_l;
-   int               t3_i;
+   int               ex_dir;
+   double            ex_lvl1;
+   double            ex_lvl2;
+   bool              ex_swept;
    int               choch_dir; // 1 = Bullish, -1 = Bearish, 0 = None
 
    CStack            st_h;
@@ -296,12 +294,10 @@ struct SState
       t2_h           = source.t2_h;
       t2_l           = source.t2_l;
       t2_i           = source.t2_i;
-      d2_h           = source.d2_h;
-      d2_l           = source.d2_l;
-      d2_i           = source.d2_i;
-      t3_h           = source.t3_h;
-      t3_l           = source.t3_l;
-      t3_i           = source.t3_i;
+      ex_dir         = source.ex_dir;
+      ex_lvl1        = source.ex_lvl1;
+      ex_lvl2        = source.ex_lvl2;
+      ex_swept       = source.ex_swept;
       choch_dir      = source.choch_dir;
 
       st_h.CopyFrom(source.st_h);
@@ -1436,28 +1432,13 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
            }
 
          // CHoCH Invalidation (Making a High)
-         if (InpExtraSecurity) {
-             if (state.choch_dir == -1 && state.d2_l != 0) {
-                 // If a high is formed after D2, it MUST sweep T1 or T2. If it doesn't, it's invalid.
-                 if (!(state.min_h > state.t1_h || state.min_h > state.t2_h)) {
-                     state.choch_dir = 0;
-                 } else if (state.t3_h != 0) {
-                     // If T3 was already formed correctly, but we make ANOTHER high without breaking D2, reset.
-                     state.choch_dir = 0;
-                 }
-             }
-             if (state.choch_dir == 1 && state.t3_l != 0 && state.min_h <= state.d2_h) {
-                 state.choch_dir = 0;
-             }
-         } else {
-             if (state.choch_dir == -1 && state.t2_h != 0) {
-                 // T1, D1, T2 formed. Making ANOTHER High means Leg 3 failed to break D1. Reset.
-                 state.choch_dir = 0;
-             }
-             if (state.choch_dir == 1 && state.t2_l != 0 && state.min_h <= state.d1_h) {
-                 // Bullish: T1, D1, T2 formed. Making a High that is <= D1 means failure to break. Reset.
-                 state.choch_dir = 0;
-             }
+         if (state.choch_dir == -1 && state.t2_h != 0) {
+             // T1, D1, T2 formed. Making ANOTHER High means Leg 3 failed to break D1. Reset.
+             state.choch_dir = 0;
+         }
+         if (state.choch_dir == 1 && state.t2_l != 0 && state.min_h <= state.d1_h) {
+             // Bullish: T1, D1, T2 formed. Making a High that is <= D1 means failure to break. Reset.
+             state.choch_dir = 0;
          }
 
          // CHoCH Bearish sequence tracking
@@ -1468,37 +1449,16 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                  state.t1_i = state.min_h_i;
                  state.d1_h = 0; state.d1_l = 0; state.d1_i = 0;
                  state.t2_h = 0; state.t2_l = 0; state.t2_i = 0;
-                 state.d2_h = 0; state.d2_l = 0; state.d2_i = 0;
-                 state.t3_h = 0; state.t3_l = 0; state.t3_i = 0;
                  state.choch_dir = -1; // Tracking potential downside break
              } else if (state.choch_dir == -1) {
                  if (state.d1_l == 0) { // First turn down after T1 (This is D1 forming)
                      state.d1_l = state.min_l;
                      state.d1_i = state.min_l_i;
                  }
-                 if (InpExtraSecurity) {
-                     if (state.d1_l != 0 && state.t2_h == 0) {
-                         if (state.min_h_i > state.d1_i) {
-                             state.t2_h = state.min_h;
-                             state.t2_i = state.min_h_i;
-                         }
-                     } else if (state.t2_h != 0 && state.d2_l == 0) {
-                         if (state.min_l_i > state.t2_i && state.min_l < state.d1_l) {
-                             state.d2_l = state.min_l;
-                             state.d2_i = state.min_l_i;
-                         }
-                     } else if (state.d2_l != 0 && state.t3_h == 0) {
-                         if (state.min_h_i > state.d2_i && (state.min_h > state.t1_h || state.min_h > state.t2_h)) {
-                             state.t3_h = state.min_h;
-                             state.t3_i = state.min_h_i;
-                         }
-                     }
-                 } else {
-                     if (state.d1_l != 0 && state.t2_h == 0) {
-                         // T2 marks the turn back up towards T1 (regardless of whether it sweeps it or not).
-                         state.t2_h = state.min_h;
-                         state.t2_i = state.min_h_i;
-                     }
+                 if (state.d1_l != 0 && state.t2_h == 0) {
+                     // T2 marks the turn back up towards T1 (regardless of whether it sweeps it or not).
+                     state.t2_h = state.min_h;
+                     state.t2_i = state.min_h_i;
                  }
              }
          }
@@ -1539,26 +1499,13 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
            }
 
          // CHoCH Invalidation (Making a Low)
-         if (InpExtraSecurity) {
-             if (state.choch_dir == 1 && state.d2_h != 0) {
-                 if (!(state.min_l < state.t1_l || state.min_l < state.t2_l)) {
-                     state.choch_dir = 0;
-                 } else if (state.t3_l != 0) {
-                     state.choch_dir = 0;
-                 }
-             }
-             if (state.choch_dir == -1 && state.t3_h != 0 && state.min_l >= state.d2_l) {
-                 state.choch_dir = 0;
-             }
-         } else {
-             if (state.choch_dir == 1 && state.t2_l != 0) {
-                 // T1, D1, T2 formed. Making ANOTHER Low means Leg 3 failed to break D1. Reset.
-                 state.choch_dir = 0;
-             }
-             if (state.choch_dir == -1 && state.t2_h != 0 && state.min_l >= state.d1_l) {
-                 // Bearish: T1, D1, T2 formed. Making a Low that is >= D1 means failure to break. Reset.
-                 state.choch_dir = 0;
-             }
+         if (state.choch_dir == 1 && state.t2_l != 0) {
+             // T1, D1, T2 formed. Making ANOTHER Low means Leg 3 failed to break D1. Reset.
+             state.choch_dir = 0;
+         }
+         if (state.choch_dir == -1 && state.t2_h != 0 && state.min_l >= state.d1_l) {
+             // Bearish: T1, D1, T2 formed. Making a Low that is >= D1 means failure to break. Reset.
+             state.choch_dir = 0;
          }
 
          // CHoCH Bullish sequence tracking
@@ -1569,37 +1516,16 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                  state.t1_i = state.min_l_i;
                  state.d1_l = 0; state.d1_h = 0; state.d1_i = 0;
                  state.t2_l = 0; state.t2_h = 0; state.t2_i = 0;
-                 state.d2_h = 0; state.d2_l = 0; state.d2_i = 0;
-                 state.t3_h = 0; state.t3_l = 0; state.t3_i = 0;
                  state.choch_dir = 1; // Tracking potential upside break
              } else if (state.choch_dir == 1) {
                  if (state.d1_h == 0) { // First turn up after T1 (This is D1 forming)
                      state.d1_h = state.min_h;
                      state.d1_i = state.min_h_i;
                  }
-                 if (InpExtraSecurity) {
-                     if (state.d1_h != 0 && state.t2_l == 0) {
-                         if (state.min_l_i > state.d1_i) {
-                             state.t2_l = state.min_l;
-                             state.t2_i = state.min_l_i;
-                         }
-                     } else if (state.t2_l != 0 && state.d2_h == 0) {
-                         if (state.min_h_i > state.t2_i && state.min_h > state.d1_h) {
-                             state.d2_h = state.min_h;
-                             state.d2_i = state.min_h_i;
-                         }
-                     } else if (state.d2_h != 0 && state.t3_l == 0) {
-                         if (state.min_l_i > state.d2_i && (state.min_l < state.t1_l || state.min_l < state.t2_l)) {
-                             state.t3_l = state.min_l;
-                             state.t3_i = state.min_l_i;
-                         }
-                     }
-                 } else {
-                     if (state.d1_h != 0 && state.t2_l == 0) {
-                         // T2 marks the turn back down towards T1 (regardless of whether it sweeps it or not).
-                         state.t2_l = state.min_l;
-                         state.t2_i = state.min_l_i;
-                     }
+                 if (state.d1_h != 0 && state.t2_l == 0) {
+                     // T2 marks the turn back down towards T1 (regardless of whether it sweeps it or not).
+                     state.t2_l = state.min_l;
+                     state.t2_i = state.min_l_i;
                  }
              }
          }
@@ -1613,6 +1539,19 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
         }
      }
 
+   // Fakeout Sweep Tracker
+   if (InpExtraSecurity) {
+       if (state.ex_dir == -1 && !state.ex_swept) {
+           if (val_h > state.ex_lvl1 || val_h > state.ex_lvl2) {
+               state.ex_swept = true;
+           }
+       } else if (state.ex_dir == 1 && !state.ex_swept) {
+           if (val_l < state.ex_lvl1 || val_l < state.ex_lvl2) {
+               state.ex_swept = true;
+           }
+       }
+   }
+
    // CHoCH Trigger & Drawing Logic
    bool bear_trigger_ready = InpExtraSecurity ? (state.choch_dir == -1 && state.t3_h != 0 && state.d2_l != 0) : (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0);
    if (bear_trigger_ready) {
@@ -1624,16 +1563,32 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       int r_total = ArraySize(close);
       bool is_live_bar = (i == r_total - 1);
       bool is_just_closed = (i == r_total - 2);
-      double trigger_level = InpExtraSecurity ? state.d2_l : state.d1_l;
+      double trigger_level = state.d1_l;
       bool should_eval_bear = (!InpWaitRetest) ? (val_c < trigger_level) : (is_history && val_c < trigger_level);
 
       if (should_eval_bear && t2_valid) {
+          if (InpExtraSecurity) {
+              if (state.ex_dir != -1 || !state.ex_swept) {
+                  // Fakeout Intercepted!
+                  state.ex_dir = -1;
+                  state.ex_lvl1 = state.t1_h;
+                  state.ex_lvl2 = state.t2_h;
+                  state.ex_swept = false;
+                  state.choch_dir = 0; // Reset Sequence to wait for real CHoCH
+                  goto skip_bear_trigger;
+              } else {
+                  // Real CHoCH after sweep!
+                  state.ex_dir = 0;
+                  state.ex_swept = false;
+              }
+          }
+
           // Bearish CHoCH confirmed!
           state.last_choch_dir = -1;
           state.last_choch_level = trigger_level;
           state.last_choch_time = time[i];
 
-          bool is_strong = InpExtraSecurity ? (state.t3_h > state.t2_h) : (state.t2_h > state.t1_h);
+          bool is_strong = (state.t2_h > state.t1_h);
 
           if (draw_ui && (!is_history || (InpWaitRetest && is_just_closed))) {
               // Only alert if we haven't already alerted for THIS specific swing setup
@@ -1675,13 +1630,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   DrawLine(path_2, GetTimeSafe(time, state.d1_i), state.d1_l, GetTimeSafe(time, state.t2_i), state.t2_h, clrBlack, 1, STYLE_SOLID, false);
 
                   string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_h, GetTimeSafe(time, state.d2_i), state.d2_l, clrBlack, 1, STYLE_SOLID, false);
-
-                  string path_4 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_4, GetTimeSafe(time, state.d2_i), state.d2_l, GetTimeSafe(time, state.t3_i), state.t3_h, clrBlack, 1, STYLE_SOLID, false);
-
-                  string path_5 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_5, GetTimeSafe(time, state.t3_i), state.t3_h, GetTimeSafe(time, i), state.d2_l, clrBlack, 1, STYLE_SOLID, false);
+                  DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_h, GetTimeSafe(time, i), state.d1_l, clrBlack, 1, STYLE_SOLID, false);
 
                   string t1_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, t1_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t1_i), state.t1_h);
@@ -1697,16 +1646,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   ObjectCreate(0, t2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t2_i), state.t2_h);
                   ObjectSetString(0, t2_name, OBJPROP_TEXT, "T2");
                   ObjectSetInteger(0, t2_name, OBJPROP_COLOR, clrBlack);
-
-                  string d2_name = GetUniqueName(prefix + "CHoCH_Text_");
-                  ObjectCreate(0, d2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.d2_i), state.d2_l);
-                  ObjectSetString(0, d2_name, OBJPROP_TEXT, "D2");
-                  ObjectSetInteger(0, d2_name, OBJPROP_COLOR, clrBlack);
-
-                  string t3_name = GetUniqueName(prefix + "CHoCH_Text_");
-                  ObjectCreate(0, t3_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t3_i), state.t3_h);
-                  ObjectSetString(0, t3_name, OBJPROP_TEXT, "T3");
-                  ObjectSetInteger(0, t3_name, OBJPROP_COLOR, clrBlack);
 
               } else {
                   string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
@@ -1726,7 +1665,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
           state.choch_dir = 0; // Reset after trigger
       }
    } else {
-       bool bull_trigger_ready = InpExtraSecurity ? (state.choch_dir == 1 && state.t3_l != 0 && state.d2_h != 0) : (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0);
+       bool bull_trigger_ready = (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0);
        if (bull_trigger_ready) {
 
             double range = state.maj_h - state.maj_l;
@@ -1736,16 +1675,32 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       int r_total = ArraySize(close);
       bool is_live_bar = (i == r_total - 1);
       bool is_just_closed = (i == r_total - 2);
-      double trigger_level = InpExtraSecurity ? state.d2_h : state.d1_h;
+      double trigger_level = state.d1_h;
       bool should_eval_bull = (!InpWaitRetest) ? (val_c > trigger_level) : (is_history && val_c > trigger_level);
 
       if (should_eval_bull && t2_valid) {
+          if (InpExtraSecurity) {
+              if (state.ex_dir != 1 || !state.ex_swept) {
+                  // Fakeout Intercepted!
+                  state.ex_dir = 1;
+                  state.ex_lvl1 = state.t1_l;
+                  state.ex_lvl2 = state.t2_l;
+                  state.ex_swept = false;
+                  state.choch_dir = 0; // Reset Sequence to wait for real CHoCH
+                  goto skip_bull_trigger;
+              } else {
+                  // Real CHoCH after sweep!
+                  state.ex_dir = 0;
+                  state.ex_swept = false;
+              }
+          }
+
           // Bullish CHoCH confirmed!
           state.last_choch_dir = 1;
           state.last_choch_level = trigger_level;
           state.last_choch_time = time[i];
 
-          bool is_strong = InpExtraSecurity ? (state.t3_l < state.t2_l) : (state.t2_l < state.t1_l);
+          bool is_strong = (state.t2_l < state.t1_l);
 
           if (draw_ui && (!is_history || (InpWaitRetest && is_just_closed))) {
               // Only alert if we haven't already alerted for THIS specific swing setup
@@ -1787,13 +1742,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   DrawLine(path_2, GetTimeSafe(time, state.d1_i), state.d1_h, GetTimeSafe(time, state.t2_i), state.t2_l, clrBlack, 1, STYLE_SOLID, false);
 
                   string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_l, GetTimeSafe(time, state.d2_i), state.d2_h, clrBlack, 1, STYLE_SOLID, false);
-
-                  string path_4 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_4, GetTimeSafe(time, state.d2_i), state.d2_h, GetTimeSafe(time, state.t3_i), state.t3_l, clrBlack, 1, STYLE_SOLID, false);
-
-                  string path_5 = GetUniqueName(prefix + "CHoCH_Path_");
-                  DrawLine(path_5, GetTimeSafe(time, state.t3_i), state.t3_l, GetTimeSafe(time, i), state.d2_h, clrBlack, 1, STYLE_SOLID, false);
+                  DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_l, GetTimeSafe(time, i), state.d1_h, clrBlack, 1, STYLE_SOLID, false);
 
                   string t1_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, t1_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t1_i), state.t1_l);
@@ -1809,16 +1758,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   ObjectCreate(0, t2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t2_i), state.t2_l);
                   ObjectSetString(0, t2_name, OBJPROP_TEXT, "T2");
                   ObjectSetInteger(0, t2_name, OBJPROP_COLOR, clrBlack);
-
-                  string d2_name = GetUniqueName(prefix + "CHoCH_Text_");
-                  ObjectCreate(0, d2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.d2_i), state.d2_h);
-                  ObjectSetString(0, d2_name, OBJPROP_TEXT, "D2");
-                  ObjectSetInteger(0, d2_name, OBJPROP_COLOR, clrBlack);
-
-                  string t3_name = GetUniqueName(prefix + "CHoCH_Text_");
-                  ObjectCreate(0, t3_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t3_i), state.t3_l);
-                  ObjectSetString(0, t3_name, OBJPROP_TEXT, "T3");
-                  ObjectSetInteger(0, t3_name, OBJPROP_COLOR, clrBlack);
 
               } else {
                   string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
@@ -2271,8 +2210,7 @@ int OnCalculate(const int rates_total,
       g_state_hist.t1_h = 0; g_state_hist.t1_l = 0; g_state_hist.t1_i = 0;
       g_state_hist.d1_h = 0; g_state_hist.d1_l = 0; g_state_hist.d1_i = 0;
       g_state_hist.t2_h = 0; g_state_hist.t2_l = 0; g_state_hist.t2_i = 0;
-      g_state_hist.d2_h = 0; g_state_hist.d2_l = 0; g_state_hist.d2_i = 0;
-      g_state_hist.t3_h = 0; g_state_hist.t3_l = 0; g_state_hist.t3_i = 0;
+      g_state_hist.ex_dir = 0; g_state_hist.ex_lvl1 = 0; g_state_hist.ex_lvl2 = 0; g_state_hist.ex_swept = false;
       g_state_hist.choch_dir = 0;
 
       // Başlangıçta yapının (maj) boş kalmaması için ince bir ATR aralığında yapay swing oluşturuluyor.
