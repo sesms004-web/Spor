@@ -20,20 +20,37 @@ input double InpDaysH4   = 500.0;
 input double InpDaysD1   = 1500.0;
 
 
-//--- Hafıza Değişkenleri (1. İşlem t1 ve t2 seviyeleri) ---
-double g_first_trade_t1_h = 0.0;
-double g_first_trade_t2_h = 0.0;
-int    g_first_trade_maj_h_i = 0; // Hangi ana dalgada olduğumuzu takip etmek için
+//--- Hafıza Değişkenleri (Çoklu İşlem Takibi 1-5) ---
+// Düşüş (Bearish) işlemleri için
+double g_trade_t1_h[5];
+double g_trade_t2_h[5];
+int    g_trade_count_h = 0;
+int    g_current_maj_h_i = 0;
 
-double g_first_trade_t1_l = 0.0;
-double g_first_trade_t2_l = 0.0;
-int    g_first_trade_maj_l_i = 0; // Hangi ana dalgada olduğumuzu takip etmek için
+// Yükseliş (Bullish) işlemleri için
+double g_trade_t1_l[5];
+double g_trade_t2_l[5];
+int    g_trade_count_l = 0;
+int    g_current_maj_l_i = 0;
+
+void ResetBearishMemory() {
+    g_trade_count_h = 0;
+    for(int i=0; i<5; i++) { g_trade_t1_h[i] = 0; g_trade_t2_h[i] = 0; }
+}
+
+void ResetBullishMemory() {
+    g_trade_count_l = 0;
+    for(int i=0; i<5; i++) { g_trade_t1_l[i] = 0; g_trade_t2_l[i] = 0; }
+}
 
 //--- CHoCH Settings ---
 input group "--- TRADE EXECUTION & RISK ---"
 input bool   InpEnableTradeExecution   = true;        // Master->Slave Sinyal Köprüsü Aktif
 input bool   InpFirstTradeEnable       = true;        // 1. İşlem Aktif
-input bool   InpSecondTradeEnable      = false;       // 2. İşlem Aktif
+input bool   InpSecondTradeEnable      = true;        // 2. İşlem Aktif
+input bool   InpThirdTradeEnable       = false;       // 3. İşlem Aktif
+input bool   InpFourthTradeEnable      = false;       // 4. İşlem Aktif
+input bool   InpFifthTradeEnable       = false;       // 5. İşlem Aktif
 input bool   InpTestMTFChochReport     = false;       // 🧪 Üst Zaman Dilimi (MTF) CHoCH Raporunu Tetikle
 input bool   InpAlertRejectedTrades    = false;       // ❌ Reddedilen (Puanı Yetersiz) İşlemleri Bildir
 input bool   InpWaitRetest             = false;       // 🎯 Gelişmiş Retest (Pusu) Modu Aktif
@@ -1563,35 +1580,57 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           bool is_strong = (state.t2_h > state.t1_h); // T2 sweeps T1's high
 
-          bool is_first_trade = false;
-          bool is_second_trade = false;
+          int current_trade_index = -1;
 
           if (draw_ui) {
               static int last_alert_d1_i_bear = 0;
               static int last_alert_maj_i_bear = 0;
 
-              is_first_trade = (last_alert_maj_i_bear != state.maj_h_i);
+              // Ana dalga değiştiyse sıfırla
+              if (state.maj_h_i != g_current_maj_h_i) {
+                  ResetBearishMemory();
+                  g_current_maj_h_i = state.maj_h_i;
+              }
 
-              if (state.d1_i != last_alert_d1_i_bear) {
-                  if (is_first_trade) {
-                      g_first_trade_t1_h = state.t1_h;
-                      g_first_trade_t2_h = state.t2_h;
-                      g_first_trade_maj_h_i = state.maj_h_i;
+              bool is_new_signal = (state.d1_i != last_alert_d1_i_bear);
+              bool valid_sequence = false;
+
+              if (g_trade_count_h == 0) {
+                  valid_sequence = true;
+              } else if (g_trade_count_h > 0 && g_trade_count_h < 5) {
+                  // Son işlemin t1/t2 sini sweep etmiş mi
+                  int prev_i = g_trade_count_h - 1;
+                  if (state.t2_h > g_trade_t1_h[prev_i] && state.t2_h > g_trade_t2_h[prev_i]) {
+                      valid_sequence = true;
                   }
               }
 
-              is_second_trade = (!is_first_trade && state.maj_h_i == g_first_trade_maj_h_i && state.t2_h > g_first_trade_t1_h && state.t2_h > g_first_trade_t2_h);
+              if (is_new_signal && valid_sequence && g_trade_count_h < 5) {
+                  current_trade_index = g_trade_count_h;
+                  g_trade_t1_h[current_trade_index] = state.t1_h;
+                  g_trade_t2_h[current_trade_index] = state.t2_h;
+                  g_trade_count_h++;
+              } else if (!is_new_signal && valid_sequence && g_trade_count_h > 0) {
+                  // Yeni sinyal değilse ama geçerliyse son endeksi kullan
+                  current_trade_index = g_trade_count_h - 1;
+              }
 
               if (!is_history || (InpWaitRetest && is_just_closed)) {
-                  if (state.d1_i != last_alert_d1_i_bear) {
+                  if (is_new_signal && current_trade_index >= 0) {
                       bool should_execute = false;
-                      if (is_first_trade && InpFirstTradeEnable) should_execute = true;
-                      if (is_second_trade && InpSecondTradeEnable) should_execute = true;
+                      if (current_trade_index == 0 && InpFirstTradeEnable) should_execute = true;
+                      if (current_trade_index == 1 && InpSecondTradeEnable) should_execute = true;
+                      if (current_trade_index == 2 && InpThirdTradeEnable) should_execute = true;
+                      if (current_trade_index == 3 && InpFourthTradeEnable) should_execute = true;
+                      if (current_trade_index == 4 && InpFifthTradeEnable) should_execute = true;
 
                       if (should_execute) {
-                          if (is_second_trade) Alert("2. İşlem Onaylandı");
+                          if (current_trade_index > 0) Alert(IntegerToString(current_trade_index + 1) + ". İşlem Onaylandı");
+
+                          bool is_subsequent = (current_trade_index > 0);
+
                           if (!InpWaitRetest) {
-                              EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, state.t2_h, state.maj_h_i, is_second_trade);
+                              EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, state.t2_h, state.maj_h_i, is_subsequent, false);
                           } else {
                               g_pending_active = true;
                               g_pending_dir = -1;
@@ -1600,7 +1639,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                               g_pending_is_strong = is_strong;
                               g_pending_p_pct = p_pct;
                               g_pending_maj_extreme_i = state.maj_h_i;
-                              g_pending_is_second_trade = is_second_trade;
+                              g_pending_is_second_trade = is_subsequent;
                               double dist = state.t2_h - state.d1_l;
                               g_pending_entry = state.d1_l + (dist * (InpRetestDepthPct / 100.0));
                           }
@@ -1623,7 +1662,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
                   DrawLine(choch_name, GetTimeSafe(time, i), state.d1_l, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
 
-                  string label_text = is_first_trade ? "1" : (is_second_trade ? "2" : "-");
+                  string label_text = (current_trade_index >= 0) ? IntegerToString(current_trade_index + 1) : "-";
                   string text_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, text_name, OBJ_TEXT, 0, GetTimeSafe(time, i), state.d1_l);
                   ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
@@ -1632,7 +1671,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   ObjectSetInteger(0, text_name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UPPER);
               }
 
-              if (state.d1_i != last_alert_d1_i_bear) {
+              if (is_new_signal) {
                   last_alert_d1_i_bear = state.d1_i;
                   last_alert_maj_i_bear = state.maj_h_i;
               }
@@ -1658,35 +1697,57 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
           bool is_strong = (state.t2_l < state.t1_l); // T2 sweeps T1's low
 
-          bool is_first_trade = false;
-          bool is_second_trade = false;
+          int current_trade_index = -1;
 
           if (draw_ui) {
               static int last_alert_d1_i_bull = 0;
               static int last_alert_maj_i_bull = 0;
 
-              is_first_trade = (last_alert_maj_i_bull != state.maj_l_i);
+              // Ana dalga değiştiyse sıfırla
+              if (state.maj_l_i != g_current_maj_l_i) {
+                  ResetBullishMemory();
+                  g_current_maj_l_i = state.maj_l_i;
+              }
 
-              if (state.d1_i != last_alert_d1_i_bull) {
-                  if (is_first_trade) {
-                      g_first_trade_t1_l = state.t1_l;
-                      g_first_trade_t2_l = state.t2_l;
-                      g_first_trade_maj_l_i = state.maj_l_i;
+              bool is_new_signal = (state.d1_i != last_alert_d1_i_bull);
+              bool valid_sequence = false;
+
+              if (g_trade_count_l == 0) {
+                  valid_sequence = true;
+              } else if (g_trade_count_l > 0 && g_trade_count_l < 5) {
+                  // Son işlemin t1/t2 sini sweep etmiş mi
+                  int prev_i = g_trade_count_l - 1;
+                  if (state.t2_l < g_trade_t1_l[prev_i] && state.t2_l < g_trade_t2_l[prev_i]) {
+                      valid_sequence = true;
                   }
               }
 
-              is_second_trade = (!is_first_trade && state.maj_l_i == g_first_trade_maj_l_i && state.t2_l < g_first_trade_t1_l && state.t2_l < g_first_trade_t2_l);
+              if (is_new_signal && valid_sequence && g_trade_count_l < 5) {
+                  current_trade_index = g_trade_count_l;
+                  g_trade_t1_l[current_trade_index] = state.t1_l;
+                  g_trade_t2_l[current_trade_index] = state.t2_l;
+                  g_trade_count_l++;
+              } else if (!is_new_signal && valid_sequence && g_trade_count_l > 0) {
+                  // Yeni sinyal değilse ama geçerliyse son endeksi kullan
+                  current_trade_index = g_trade_count_l - 1;
+              }
 
               if (!is_history || (InpWaitRetest && is_just_closed)) {
-                  if (state.d1_i != last_alert_d1_i_bull) {
+                  if (is_new_signal && current_trade_index >= 0) {
                       bool should_execute = false;
-                      if (is_first_trade && InpFirstTradeEnable) should_execute = true;
-                      if (is_second_trade && InpSecondTradeEnable) should_execute = true;
+                      if (current_trade_index == 0 && InpFirstTradeEnable) should_execute = true;
+                      if (current_trade_index == 1 && InpSecondTradeEnable) should_execute = true;
+                      if (current_trade_index == 2 && InpThirdTradeEnable) should_execute = true;
+                      if (current_trade_index == 3 && InpFourthTradeEnable) should_execute = true;
+                      if (current_trade_index == 4 && InpFifthTradeEnable) should_execute = true;
 
                       if (should_execute) {
-                          if (is_second_trade) Alert("2. İşlem Onaylandı");
+                          if (current_trade_index > 0) Alert(IntegerToString(current_trade_index + 1) + ". İşlem Onaylandı");
+
+                          bool is_subsequent = (current_trade_index > 0);
+
                           if (!InpWaitRetest) {
-                              EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, state.t2_l, state.maj_l_i, is_second_trade);
+                              EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, state.t2_l, state.maj_l_i, is_subsequent, false);
                           } else {
                               g_pending_active = true;
                               g_pending_dir = 1;
@@ -1695,7 +1756,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                               g_pending_is_strong = is_strong;
                               g_pending_p_pct = p_pct;
                               g_pending_maj_extreme_i = state.maj_l_i;
-                              g_pending_is_second_trade = is_second_trade;
+                              g_pending_is_second_trade = is_subsequent;
                               double dist = state.d1_h - state.t2_l;
                               g_pending_entry = state.d1_h - (dist * (InpRetestDepthPct / 100.0));
                           }
@@ -1718,7 +1779,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
                   DrawLine(choch_name, GetTimeSafe(time, i), state.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
 
-                  string label_text = is_first_trade ? "1" : (is_second_trade ? "2" : "-");
+                  string label_text = (current_trade_index >= 0) ? IntegerToString(current_trade_index + 1) : "-";
                   string text_name = GetUniqueName(prefix + "CHoCH_Text_");
                   ObjectCreate(0, text_name, OBJ_TEXT, 0, GetTimeSafe(time, i), state.d1_h);
                   ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
@@ -1727,7 +1788,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   ObjectSetInteger(0, text_name, OBJPROP_ANCHOR, ANCHOR_RIGHT_LOWER);
               }
 
-              if (state.d1_i != last_alert_d1_i_bull) {
+              if (is_new_signal) {
                   last_alert_d1_i_bull = state.d1_i;
                   last_alert_maj_i_bull = state.maj_l_i;
               }
