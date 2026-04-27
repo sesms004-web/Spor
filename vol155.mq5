@@ -1467,7 +1467,10 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       bool is_just_closed = (i == r_total - 2);
       bool should_eval_bear = (!InpWaitRetest) ? (val_c < state.d1_l) : (is_history && val_c < state.d1_l);
 
-      if (should_eval_bear && t2_valid) {
+      if (should_eval_bear) {
+          if (!t2_valid) {
+              state.choch_dir = 0; // Kırılım geldi ama %40 şartını sağlamadı, yapıyı iptal et
+          } else {
           // Bearish CHoCH confirmed!
           state.last_choch_dir = -1;
           state.last_choch_level = state.d1_l;
@@ -1494,9 +1497,10 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               if (g_trade_count_h == 0) {
                   valid_sequence = true; // İlk sinyal her zaman geçerlidir
               } else if (g_trade_count_h > 0 && g_trade_count_h < 5) {
-                  // Kendinden hemen önceki (g_trade_count_h - 1) işlemin hem t1 hem t2 tepelerini AŞMIŞ olmalı
+                  // Kendinden hemen önceki (g_trade_count_h - 1) işlemin en yüksek tepesini AŞMIŞ olmalı (Likidite Temizliği)
                   int prev_i = g_trade_count_h - 1;
-                  if (state.t2_h > g_trade_t1_h[prev_i] && state.t2_h > g_trade_t2_h[prev_i]) {
+                  double prev_peak = MathMax(g_trade_t1_h[prev_i], g_trade_t2_h[prev_i]);
+                  if (state.t2_h > prev_peak) {
                       valid_sequence = true;
                   }
               }
@@ -1579,6 +1583,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               }
           }
           state.choch_dir = 0; // Reset after trigger
+          }
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
 
@@ -1592,7 +1597,10 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       bool is_just_closed = (i == r_total - 2);
       bool should_eval_bull = (!InpWaitRetest) ? (val_c > state.d1_h) : (is_history && val_c > state.d1_h);
 
-      if (should_eval_bull && t2_valid) {
+      if (should_eval_bull) {
+          if (!t2_valid) {
+              state.choch_dir = 0; // Kırılım geldi ama %40 şartını sağlamadı, yapıyı iptal et
+          } else {
           // Bullish CHoCH confirmed!
           state.last_choch_dir = 1;
           state.last_choch_level = state.d1_h;
@@ -1619,9 +1627,10 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               if (g_trade_count_l == 0) {
                   valid_sequence = true; // İlk sinyal her zaman geçerlidir
               } else if (g_trade_count_l > 0 && g_trade_count_l < 5) {
-                  // Kendinden hemen önceki (g_trade_count_l - 1) işlemin hem t1 hem t2 diplerinin ALTINA İNMİŞ olmalı
+                  // Kendinden hemen önceki (g_trade_count_l - 1) işlemin en düşük dibinin ALTINA İNMİŞ olmalı (Likidite Temizliği)
                   int prev_i = g_trade_count_l - 1;
-                  if (state.t2_l < g_trade_t1_l[prev_i] && state.t2_l < g_trade_t2_l[prev_i]) {
+                  double prev_dip = MathMin(g_trade_t1_l[prev_i], g_trade_t2_l[prev_i]);
+                  if (state.t2_l < prev_dip) {
                       valid_sequence = true;
                   }
               }
@@ -1703,6 +1712,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               }
           }
           state.choch_dir = 0; // Reset after trigger
+          }
       }
    }
 
