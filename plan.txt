@@ -1,0 +1,6 @@
+Kullanıcının İsteği:
+1. Ayarlar (input) bölümüne "2. İşlem (true/false)" ve "1. İşlem (true/false)" eklenecek.
+2. 2. İşlem mantığı: T1-D1-T2 yapısında eğer trend yukarı ise (state.maj_tr == 1) ve fiyat T2'nin altında kaldığı sürece 2. bir işleme (farklı bir şartla veya tekrar kırılımda) izin verilecek. Aynı şekilde trend aşağı ise T2'nin üstünde kaldığı sürece 2. işleme izin verilecek. Ekrana "2. İşlem" yazdırılacak.
+3. 1. İşlem de ayarlardan kapatılıp açılabilecek (güvenilmeyen günlerde sadece 2. işlem çalışsın diye).
+
+smcv1.mq5'te `ProcessBar` veya CHoCH tetiklenme yerlerine bakarak 2. işlem mantığını kurmalıyız.
