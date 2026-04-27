@@ -1437,8 +1437,14 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
          // CHoCH Invalidation (Making a High)
          if (InpExtraSecurity) {
-             if (state.choch_dir == -1 && state.t3_h != 0) {
-                 state.choch_dir = 0;
+             if (state.choch_dir == -1 && state.d2_l != 0) {
+                 // If a high is formed after D2, it MUST sweep T1 or T2. If it doesn't, it's invalid.
+                 if (!(state.min_h > state.t1_h || state.min_h > state.t2_h)) {
+                     state.choch_dir = 0;
+                 } else if (state.t3_h != 0) {
+                     // If T3 was already formed correctly, but we make ANOTHER high without breaking D2, reset.
+                     state.choch_dir = 0;
+                 }
              }
              if (state.choch_dir == 1 && state.t3_l != 0 && state.min_h <= state.d2_h) {
                  state.choch_dir = 0;
@@ -1477,12 +1483,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                              state.t2_i = state.min_h_i;
                          }
                      } else if (state.t2_h != 0 && state.d2_l == 0) {
-                         if (state.min_l_i > state.t2_i) {
+                         if (state.min_l_i > state.t2_i && state.min_l < state.d1_l) {
                              state.d2_l = state.min_l;
                              state.d2_i = state.min_l_i;
                          }
                      } else if (state.d2_l != 0 && state.t3_h == 0) {
-                         if (state.min_h_i > state.d2_i) {
+                         if (state.min_h_i > state.d2_i && (state.min_h > state.t1_h || state.min_h > state.t2_h)) {
                              state.t3_h = state.min_h;
                              state.t3_i = state.min_h_i;
                          }
@@ -1534,8 +1540,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
          // CHoCH Invalidation (Making a Low)
          if (InpExtraSecurity) {
-             if (state.choch_dir == 1 && state.t3_l != 0) {
-                 state.choch_dir = 0;
+             if (state.choch_dir == 1 && state.d2_h != 0) {
+                 if (!(state.min_l < state.t1_l || state.min_l < state.t2_l)) {
+                     state.choch_dir = 0;
+                 } else if (state.t3_l != 0) {
+                     state.choch_dir = 0;
+                 }
              }
              if (state.choch_dir == -1 && state.t3_h != 0 && state.min_l >= state.d2_l) {
                  state.choch_dir = 0;
@@ -1574,12 +1584,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                              state.t2_i = state.min_l_i;
                          }
                      } else if (state.t2_l != 0 && state.d2_h == 0) {
-                         if (state.min_h_i > state.t2_i) {
+                         if (state.min_h_i > state.t2_i && state.min_h > state.d1_h) {
                              state.d2_h = state.min_h;
                              state.d2_i = state.min_h_i;
                          }
                      } else if (state.d2_h != 0 && state.t3_l == 0) {
-                         if (state.min_l_i > state.d2_i) {
+                         if (state.min_l_i > state.d2_i && (state.min_l < state.t1_l || state.min_l < state.t2_l)) {
                              state.t3_l = state.min_l;
                              state.t3_i = state.min_l_i;
                          }
