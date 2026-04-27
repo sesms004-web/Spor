@@ -1629,7 +1629,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
                   ObjectSetInteger(0, text_name, OBJPROP_COLOR, sig_color);
                   ObjectSetInteger(0, text_name, OBJPROP_FONTSIZE, 10);
-                  ObjectSetInteger(0, text_name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UP);
+                  ObjectSetInteger(0, text_name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UPPER);
               }
 
               if (state.d1_i != last_alert_d1_i_bear) {
@@ -1724,7 +1724,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
                   ObjectSetInteger(0, text_name, OBJPROP_COLOR, sig_color);
                   ObjectSetInteger(0, text_name, OBJPROP_FONTSIZE, 10);
-                  ObjectSetInteger(0, text_name, OBJPROP_ANCHOR, ANCHOR_RIGHT_DOWN);
+                  ObjectSetInteger(0, text_name, OBJPROP_ANCHOR, ANCHOR_RIGHT_LOWER);
               }
 
               if (state.d1_i != last_alert_d1_i_bull) {
