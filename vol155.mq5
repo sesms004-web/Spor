@@ -995,112 +995,6 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
 
    total_points += m5_points;
 
-   // --- YENİ DESTEKLEYİCİ CHOCH FAKEOUT (TUZAK) MATRİS SİSTEMİ ---
-
-   int c_dir_h1=0, c_dir_m30=0, c_dir_m15=0, c_dir_m5=0;
-   double c_lvl_h1=0, c_lvl_m30=0, c_lvl_m15=0, c_lvl_m5=0;
-   datetime c_t_h1=0, c_t_m30=0, c_t_m15=0, c_t_m5=0;
-
-   GetMTFChochDetails(PERIOD_H1, TimeCurrent(), c_dir_h1, c_lvl_h1, c_t_h1);
-   GetMTFChochDetails(PERIOD_M30, TimeCurrent(), c_dir_m30, c_lvl_m30, c_t_m30);
-   GetMTFChochDetails(PERIOD_M15, TimeCurrent(), c_dir_m15, c_lvl_m15, c_t_m15);
-   GetMTFChochDetails(PERIOD_M5, TimeCurrent(), c_dir_m5, c_lvl_m5, c_t_m5);
-
-   int h1_sup_points=0, m30_sup_points=0, m15_sup_points=0, m5_sup_points=0;
-   string h1_sup_text="", m30_sup_text="", m15_sup_text="", m5_sup_text="";
-
-   bool valid_h1 = (c_dir_h1 == 1 && live_price > c_lvl_h1) || (c_dir_h1 == -1 && live_price < c_lvl_h1);
-   bool valid_m30 = (c_dir_m30 == 1 && live_price > c_lvl_m30) || (c_dir_m30 == -1 && live_price < c_lvl_m30);
-   bool valid_m15 = (c_dir_m15 == 1 && live_price > c_lvl_m15) || (c_dir_m15 == -1 && live_price < c_lvl_m15);
-   bool valid_m5 = (c_dir_m5 == 1 && live_price > c_lvl_m5) || (c_dir_m5 == -1 && live_price < c_lvl_m5);
-
-   if (trigger_dir == 1) { // M1 BUY
-       if (c_dir_h1 == 1 && valid_h1) { h1_sup_points = 20; h1_sup_text = "🟢 H1 Yukarı + Geçerli -> [+20 Puan]\n"; }
-       else if (c_dir_h1 == 1 && !valid_h1) { h1_sup_points = -20; h1_sup_text = "🔴 H1 Yukarı + Geçersiz (Tuzak) -> [-20 Puan]\n"; }
-       else if (c_dir_h1 == -1 && valid_h1) { h1_sup_points = -20; h1_sup_text = "🔴 H1 Aşağı + Geçerli -> [-20 Puan]\n"; }
-       else if (c_dir_h1 == -1 && !valid_h1) { h1_sup_points = 20; h1_sup_text = "🟢 H1 Aşağı + Geçersiz (Tuzak) -> [+20 Puan]\n"; }
-       else { h1_sup_text = "⚪ H1 Veri Bekleniyor... -> [0 Puan]\n"; }
-
-       if (c_dir_m30 == 1 && valid_m30) { m30_sup_points = 15; m30_sup_text = "🟢 M30 Yukarı + Geçerli -> [+15 Puan]\n"; }
-       else if (c_dir_m30 == 1 && !valid_m30) { m30_sup_points = -15; m30_sup_text = "🔴 M30 Yukarı + Geçersiz (Tuzak) -> [-15 Puan]\n"; }
-       else if (c_dir_m30 == -1 && valid_m30) { m30_sup_points = -15; m30_sup_text = "🔴 M30 Aşağı + Geçerli -> [-15 Puan]\n"; }
-       else if (c_dir_m30 == -1 && !valid_m30) { m30_sup_points = 15; m30_sup_text = "🟢 M30 Aşağı + Geçersiz (Tuzak) -> [+15 Puan]\n"; }
-       else { m30_sup_text = "⚪ M30 Veri Bekleniyor... -> [0 Puan]\n"; }
-
-       if (c_dir_m15 == 1 && valid_m15) { m15_sup_points = 10; m15_sup_text = "🟢 M15 Yukarı + Geçerli -> [+10 Puan]\n"; }
-       else if (c_dir_m15 == 1 && !valid_m15) { m15_sup_points = -10; m15_sup_text = "🔴 M15 Yukarı + Geçersiz (Tuzak) -> [-10 Puan]\n"; }
-       else if (c_dir_m15 == -1 && valid_m15) { m15_sup_points = -10; m15_sup_text = "🔴 M15 Aşağı + Geçerli -> [-10 Puan]\n"; }
-       else if (c_dir_m15 == -1 && !valid_m15) { m15_sup_points = 10; m15_sup_text = "🟢 M15 Aşağı + Geçersiz (Tuzak) -> [+10 Puan]\n"; }
-       else { m15_sup_text = "⚪ M15 Veri Bekleniyor... -> [0 Puan]\n"; }
-
-       if (c_dir_m5 == 1 && valid_m5) { m5_sup_points = 5; m5_sup_text = "🟢 M5 Yukarı + Geçerli -> [+5 Puan]\n"; }
-       else if (c_dir_m5 == 1 && !valid_m5) { m5_sup_points = -5; m5_sup_text = "🔴 M5 Yukarı + Geçersiz (Tuzak) -> [-5 Puan]\n"; }
-       else if (c_dir_m5 == -1 && valid_m5) { m5_sup_points = -5; m5_sup_text = "🔴 M5 Aşağı + Geçerli -> [-5 Puan]\n"; }
-       else if (c_dir_m5 == -1 && !valid_m5) { m5_sup_points = 5; m5_sup_text = "🟢 M5 Aşağı + Geçersiz (Tuzak) -> [+5 Puan]\n"; }
-       else { m5_sup_text = "⚪ M5 Veri Bekleniyor... -> [0 Puan]\n"; }
-   } else { // M1 SELL
-       if (c_dir_h1 == -1 && valid_h1) { h1_sup_points = 20; h1_sup_text = "🔴 H1 Aşağı + Geçerli -> [+20 Puan]\n"; }
-       else if (c_dir_h1 == -1 && !valid_h1) { h1_sup_points = -20; h1_sup_text = "🟢 H1 Aşağı + Geçersiz (Tuzak) -> [-20 Puan]\n"; }
-       else if (c_dir_h1 == 1 && valid_h1) { h1_sup_points = -20; h1_sup_text = "🟢 H1 Yukarı + Geçerli -> [-20 Puan]\n"; }
-       else if (c_dir_h1 == 1 && !valid_h1) { h1_sup_points = 20; h1_sup_text = "🔴 H1 Yukarı + Geçersiz (Tuzak) -> [+20 Puan]\n"; }
-       else { h1_sup_text = "⚪ H1 Veri Bekleniyor... -> [0 Puan]\n"; }
-
-       if (c_dir_m30 == -1 && valid_m30) { m30_sup_points = 15; m30_sup_text = "🔴 M30 Aşağı + Geçerli -> [+15 Puan]\n"; }
-       else if (c_dir_m30 == -1 && !valid_m30) { m30_sup_points = -15; m30_sup_text = "🟢 M30 Aşağı + Geçersiz (Tuzak) -> [-15 Puan]\n"; }
-       else if (c_dir_m30 == 1 && valid_m30) { m30_sup_points = -15; m30_sup_text = "🟢 M30 Yukarı + Geçerli -> [-15 Puan]\n"; }
-       else if (c_dir_m30 == 1 && !valid_m30) { m30_sup_points = 15; m30_sup_text = "🔴 M30 Yukarı + Geçersiz (Tuzak) -> [+15 Puan]\n"; }
-       else { m30_sup_text = "⚪ M30 Veri Bekleniyor... -> [0 Puan]\n"; }
-
-       if (c_dir_m15 == -1 && valid_m15) { m15_sup_points = 10; m15_sup_text = "🔴 M15 Aşağı + Geçerli -> [+10 Puan]\n"; }
-       else if (c_dir_m15 == -1 && !valid_m15) { m15_sup_points = -10; m15_sup_text = "🟢 M15 Aşağı + Geçersiz (Tuzak) -> [-10 Puan]\n"; }
-       else if (c_dir_m15 == 1 && valid_m15) { m15_sup_points = -10; m15_sup_text = "🟢 M15 Yukarı + Geçerli -> [-10 Puan]\n"; }
-       else if (c_dir_m15 == 1 && !valid_m15) { m15_sup_points = 10; m15_sup_text = "🔴 M15 Yukarı + Geçersiz (Tuzak) -> [+10 Puan]\n"; }
-       else { m15_sup_text = "⚪ M15 Veri Bekleniyor... -> [0 Puan]\n"; }
-
-       if (c_dir_m5 == -1 && valid_m5) { m5_sup_points = 5; m5_sup_text = "🔴 M5 Aşağı + Geçerli -> [+5 Puan]\n"; }
-       else if (c_dir_m5 == -1 && !valid_m5) { m5_sup_points = -5; m5_sup_text = "🟢 M5 Aşağı + Geçersiz (Tuzak) -> [-5 Puan]\n"; }
-       else if (c_dir_m5 == 1 && valid_m5) { m5_sup_points = -5; m5_sup_text = "🟢 M5 Yukarı + Geçerli -> [-5 Puan]\n"; }
-       else if (c_dir_m5 == 1 && !valid_m5) { m5_sup_points = 5; m5_sup_text = "🔴 M5 Yukarı + Geçersiz (Tuzak) -> [+5 Puan]\n"; }
-       else { m5_sup_text = "⚪ M5 Veri Bekleniyor... -> [0 Puan]\n"; }
-   }
-
-   total_points += h1_sup_points + m30_sup_points + m15_sup_points + m5_sup_points;
-
-   // TIME PENALTY LOGIC (4. Sırada H1 ise -15, değilse -10)
-   SMTFReport treps[4];
-   treps[0].time = c_t_h1; treps[0].tf = PERIOD_H1; treps[0].tf_name = "H1";
-   treps[1].time = c_t_m30; treps[1].tf = PERIOD_M30; treps[1].tf_name = "M30";
-   treps[2].time = c_t_m15; treps[2].tf = PERIOD_M15; treps[2].tf_name = "M15";
-   treps[3].time = c_t_m5; treps[3].tf = PERIOD_M5; treps[3].tf_name = "M5";
-
-   for(int i=0; i<3; i++) {
-       for(int j=0; j<3-i; j++) {
-           if(treps[j].time < treps[j+1].time) {
-               SMTFReport temp = treps[j];
-               treps[j] = treps[j+1];
-               treps[j+1] = temp;
-           }
-       }
-   }
-
-   string penalty_text = "";
-   int penalty = 0;
-
-   // Sadece 4. En Eskiye Ceza Var (index 3)
-   if (treps[3].time != 0) {
-       int pen_4 = (treps[3].tf == PERIOD_H1) ? -15 : -10;
-       penalty += pen_4;
-       penalty_text += "4. En Eski (" + treps[3].tf_name + "): [" + IntegerToString(pen_4) + " Puan]\n";
-   }
-
-   total_points += penalty;
-
-   string sup_text = "\n🛡️ DESTEKLEYİCİ YAPILAR & CEZALAR:\n";
-   sup_text += h1_sup_text + m30_sup_text + m15_sup_text + m5_sup_text;
-   if (penalty != 0) {
-       sup_text += "⏱️ ZAMAN CEZALARI:\n" + penalty_text;
-   }
-
 
    string order_details = "";
    // --- M1 vs M3 RANGE EXPECTATION ---
@@ -1179,7 +1073,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
    msg += "* " + m15_text;
    msg += "* " + m5_text + " ";
    msg += "🎯 İŞLEM MENZİLİ (M1 ve M3 Uyumu):\n" + range_text + " \n";
-   msg += sup_text + "\n";
+
    msg += "📈 TOPLAM İŞLEM SKORU:\n";
    msg += "Hesaplanan: " + IntegerToString(total_points) + " Puan (Gerekli Baraj: " + IntegerToString(InpMinTradeScoreLimit) + " Puan)\n";
    msg += "KARAR: " + verdict;
@@ -1189,7 +1083,7 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        if(InpAlertPopup) Alert(msg);
        if(InpAlertPush) {
            string msg1 = "🚨 [" + Symbol() + "] YENİ İŞLEM (1/2)\n" + "🔍 M1 KIRILIM:\n" + m1_text + "\n📊 ZAMAN DİLİMİ ANALİZİ:\n" + h1_text + m30_text + m15_text + m5_text;
-           string msg2 = "🚨 [" + Symbol() + "] (2/2)\n" + sup_text + "\n📈 SKOR: " + IntegerToString(total_points) + " Puan\n" + verdict;
+           string msg2 = "🚨 [" + Symbol() + "] (2/2)\n" + "\n📈 SKOR: " + IntegerToString(total_points) + " Puan\n" + verdict;
            SendNotification(msg1);
            Sleep(100); // Prevent spam block
            SendNotification(msg2);
@@ -1565,7 +1459,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
             double range = state.maj_h - state.maj_l;
       double t2_pct = (range != 0) ? ((state.t2_h - state.maj_l) / range) * 100.0 : 0;
-      bool t2_valid = (t2_pct >= InpMinPullbackPct && t2_pct <= InpMaxPullbackPct);
+      // Max %100 limitini kaldiriyoruz (cunku stop hunt t2_h, maj_h'i asabilir), sadece min %40 kurali gecerli olmali.
+      bool t2_valid = (t2_pct >= InpMinPullbackPct);
 
       int r_total = ArraySize(close);
       bool is_live_bar = (i == r_total - 1);
@@ -1593,25 +1488,32 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               }
 
               bool is_new_signal = (state.d1_i != last_alert_d1_i_bear);
+              // 1-2-3-4-5 Merdiven (Staircase) Algoritması - Sıkı Bağlantı
               bool valid_sequence = false;
 
               if (g_trade_count_h == 0) {
-                  valid_sequence = true;
+                  valid_sequence = true; // İlk sinyal her zaman geçerlidir
               } else if (g_trade_count_h > 0 && g_trade_count_h < 5) {
-                  // Son işlemin t1/t2 sini sweep etmiş mi
+                  // Kendinden hemen önceki (g_trade_count_h - 1) işlemin hem t1 hem t2 tepelerini AŞMIŞ olmalı
                   int prev_i = g_trade_count_h - 1;
                   if (state.t2_h > g_trade_t1_h[prev_i] && state.t2_h > g_trade_t2_h[prev_i]) {
                       valid_sequence = true;
                   }
               }
 
-              if (is_new_signal && valid_sequence && g_trade_count_h < 5) {
-                  current_trade_index = g_trade_count_h;
-                  g_trade_t1_h[current_trade_index] = state.t1_h;
-                  g_trade_t2_h[current_trade_index] = state.t2_h;
-                  g_trade_count_h++;
-              } else if (!is_new_signal && valid_sequence && g_trade_count_h > 0) {
-                  // Yeni sinyal değilse ama geçerliyse son endeksi kullan
+              if (is_new_signal) {
+                  if (valid_sequence && g_trade_count_h < 5) {
+                      current_trade_index = g_trade_count_h;
+                      g_trade_t1_h[current_trade_index] = state.t1_h;
+                      g_trade_t2_h[current_trade_index] = state.t2_h;
+                      g_trade_count_h++;
+                  } else {
+                      // Eğer önceki yapıyı kırmadıysa, bu yeni işlem "sayılmaz", bir öncekinin indeksi veya -1 atanmaz,
+                      // zincir kırılmaz ama mevcut sinyal yeni bir sayı da almaz.
+                      current_trade_index = -1; // Ignore this execution/labeling
+                  }
+              } else {
+                  // Sinyal yeni değilse, var olan en son indexi çizmek için al (UI draw)
                   current_trade_index = g_trade_count_h - 1;
               }
 
@@ -1682,7 +1584,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
             double range = state.maj_h - state.maj_l;
       double t2_pct = (range != 0) ? ((state.maj_h - state.t2_l) / range) * 100.0 : 0;
-      bool t2_valid = (t2_pct >= InpMinPullbackPct && t2_pct <= InpMaxPullbackPct);
+      // Max %100 limitini kaldiriyoruz (cunku stop hunt t2_l, maj_l'nin altina inebilir), sadece min %40 kurali gecerli olmali.
+      bool t2_valid = (t2_pct >= InpMinPullbackPct);
 
       int r_total = ArraySize(close);
       bool is_live_bar = (i == r_total - 1);
@@ -1710,25 +1613,31 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               }
 
               bool is_new_signal = (state.d1_i != last_alert_d1_i_bull);
+              // 1-2-3-4-5 Merdiven (Staircase) Algoritması - Sıkı Bağlantı
               bool valid_sequence = false;
 
               if (g_trade_count_l == 0) {
-                  valid_sequence = true;
+                  valid_sequence = true; // İlk sinyal her zaman geçerlidir
               } else if (g_trade_count_l > 0 && g_trade_count_l < 5) {
-                  // Son işlemin t1/t2 sini sweep etmiş mi
+                  // Kendinden hemen önceki (g_trade_count_l - 1) işlemin hem t1 hem t2 diplerinin ALTINA İNMİŞ olmalı
                   int prev_i = g_trade_count_l - 1;
                   if (state.t2_l < g_trade_t1_l[prev_i] && state.t2_l < g_trade_t2_l[prev_i]) {
                       valid_sequence = true;
                   }
               }
 
-              if (is_new_signal && valid_sequence && g_trade_count_l < 5) {
-                  current_trade_index = g_trade_count_l;
-                  g_trade_t1_l[current_trade_index] = state.t1_l;
-                  g_trade_t2_l[current_trade_index] = state.t2_l;
-                  g_trade_count_l++;
-              } else if (!is_new_signal && valid_sequence && g_trade_count_l > 0) {
-                  // Yeni sinyal değilse ama geçerliyse son endeksi kullan
+              if (is_new_signal) {
+                  if (valid_sequence && g_trade_count_l < 5) {
+                      current_trade_index = g_trade_count_l;
+                      g_trade_t1_l[current_trade_index] = state.t1_l;
+                      g_trade_t2_l[current_trade_index] = state.t2_l;
+                      g_trade_count_l++;
+                  } else {
+                      // Eğer önceki yapıyı kırmadıysa, bu yeni işlem "sayılmaz", ignore et
+                      current_trade_index = -1;
+                  }
+              } else {
+                  // Sinyal yeni değilse, var olan en son indexi çizmek için al (UI draw)
                   current_trade_index = g_trade_count_l - 1;
               }
 
