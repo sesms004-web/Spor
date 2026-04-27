@@ -1436,18 +1436,21 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
            }
 
          // CHoCH Invalidation (Making a High)
-         if (state.choch_dir == -1 && state.t2_h != 0) {
-             if (InpExtraSecurity) {
-                 if (state.t3_h != 0) state.choch_dir = 0;
-             } else {
+         if (InpExtraSecurity) {
+             if (state.choch_dir == -1 && state.t3_h != 0) {
                  state.choch_dir = 0;
              }
-         }
-         if (state.choch_dir == 1 && state.t2_l != 0) {
-             if (InpExtraSecurity) {
-                 if (state.t3_l != 0 && state.min_h <= state.d2_h) state.choch_dir = 0;
-             } else {
-                 if (state.min_h <= state.d1_h) state.choch_dir = 0;
+             if (state.choch_dir == 1 && state.t3_l != 0 && state.min_h <= state.d2_h) {
+                 state.choch_dir = 0;
+             }
+         } else {
+             if (state.choch_dir == -1 && state.t2_h != 0) {
+                 // T1, D1, T2 formed. Making ANOTHER High means Leg 3 failed to break D1. Reset.
+                 state.choch_dir = 0;
+             }
+             if (state.choch_dir == 1 && state.t2_l != 0 && state.min_h <= state.d1_h) {
+                 // Bullish: T1, D1, T2 formed. Making a High that is <= D1 means failure to break. Reset.
+                 state.choch_dir = 0;
              }
          }
 
@@ -1467,16 +1470,29 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                      state.d1_l = state.min_l;
                      state.d1_i = state.min_l_i;
                  }
-                 if (state.d1_l != 0 && state.t2_h == 0) {
-                     // T2 marks the turn back up towards T1 (regardless of whether it sweeps it or not).
-                     state.t2_h = state.min_h;
-                     state.t2_i = state.min_h_i;
-                 } else if (InpExtraSecurity && state.t2_h != 0 && state.d2_l == 0) {
-                     state.d2_l = state.min_l;
-                     state.d2_i = state.min_l_i;
-                 } else if (InpExtraSecurity && state.d2_l != 0 && state.t3_h == 0) {
-                     state.t3_h = state.min_h;
-                     state.t3_i = state.min_h_i;
+                 if (InpExtraSecurity) {
+                     if (state.d1_l != 0 && state.t2_h == 0) {
+                         if (state.min_h_i > state.d1_i) {
+                             state.t2_h = state.min_h;
+                             state.t2_i = state.min_h_i;
+                         }
+                     } else if (state.t2_h != 0 && state.d2_l == 0) {
+                         if (state.min_l_i > state.t2_i) {
+                             state.d2_l = state.min_l;
+                             state.d2_i = state.min_l_i;
+                         }
+                     } else if (state.d2_l != 0 && state.t3_h == 0) {
+                         if (state.min_h_i > state.d2_i) {
+                             state.t3_h = state.min_h;
+                             state.t3_i = state.min_h_i;
+                         }
+                     }
+                 } else {
+                     if (state.d1_l != 0 && state.t2_h == 0) {
+                         // T2 marks the turn back up towards T1 (regardless of whether it sweeps it or not).
+                         state.t2_h = state.min_h;
+                         state.t2_i = state.min_h_i;
+                     }
                  }
              }
          }
@@ -1517,18 +1533,21 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
            }
 
          // CHoCH Invalidation (Making a Low)
-         if (state.choch_dir == 1 && state.t2_l != 0) {
-             if (InpExtraSecurity) {
-                 if (state.t3_l != 0) state.choch_dir = 0;
-             } else {
+         if (InpExtraSecurity) {
+             if (state.choch_dir == 1 && state.t3_l != 0) {
                  state.choch_dir = 0;
              }
-         }
-         if (state.choch_dir == -1 && state.t2_h != 0) {
-             if (InpExtraSecurity) {
-                 if (state.t3_h != 0 && state.min_l >= state.d2_l) state.choch_dir = 0;
-             } else {
-                 if (state.min_l >= state.d1_l) state.choch_dir = 0;
+             if (state.choch_dir == -1 && state.t3_h != 0 && state.min_l >= state.d2_l) {
+                 state.choch_dir = 0;
+             }
+         } else {
+             if (state.choch_dir == 1 && state.t2_l != 0) {
+                 // T1, D1, T2 formed. Making ANOTHER Low means Leg 3 failed to break D1. Reset.
+                 state.choch_dir = 0;
+             }
+             if (state.choch_dir == -1 && state.t2_h != 0 && state.min_l >= state.d1_l) {
+                 // Bearish: T1, D1, T2 formed. Making a Low that is >= D1 means failure to break. Reset.
+                 state.choch_dir = 0;
              }
          }
 
@@ -1548,16 +1567,29 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                      state.d1_h = state.min_h;
                      state.d1_i = state.min_h_i;
                  }
-                 if (state.d1_h != 0 && state.t2_l == 0) {
-                     // T2 marks the turn back down towards T1 (regardless of whether it sweeps it or not).
-                     state.t2_l = state.min_l;
-                     state.t2_i = state.min_l_i;
-                 } else if (InpExtraSecurity && state.t2_l != 0 && state.d2_h == 0) {
-                     state.d2_h = state.min_h;
-                     state.d2_i = state.min_h_i;
-                 } else if (InpExtraSecurity && state.d2_h != 0 && state.t3_l == 0) {
-                     state.t3_l = state.min_l;
-                     state.t3_i = state.min_l_i;
+                 if (InpExtraSecurity) {
+                     if (state.d1_h != 0 && state.t2_l == 0) {
+                         if (state.min_l_i > state.d1_i) {
+                             state.t2_l = state.min_l;
+                             state.t2_i = state.min_l_i;
+                         }
+                     } else if (state.t2_l != 0 && state.d2_h == 0) {
+                         if (state.min_h_i > state.t2_i) {
+                             state.d2_h = state.min_h;
+                             state.d2_i = state.min_h_i;
+                         }
+                     } else if (state.d2_h != 0 && state.t3_l == 0) {
+                         if (state.min_l_i > state.d2_i) {
+                             state.t3_l = state.min_l;
+                             state.t3_i = state.min_l_i;
+                         }
+                     }
+                 } else {
+                     if (state.d1_h != 0 && state.t2_l == 0) {
+                         // T2 marks the turn back down towards T1 (regardless of whether it sweeps it or not).
+                         state.t2_l = state.min_l;
+                         state.t2_i = state.min_l_i;
+                     }
                  }
              }
          }
@@ -1640,6 +1672,32 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
                   string path_5 = GetUniqueName(prefix + "CHoCH_Path_");
                   DrawLine(path_5, GetTimeSafe(time, state.t3_i), state.t3_h, GetTimeSafe(time, i), state.d2_l, InpColorChochPath, 1, STYLE_DOT, false);
+
+                  string t1_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  ObjectCreate(0, t1_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t1_i), state.t1_h);
+                  ObjectSetString(0, t1_name, OBJPROP_TEXT, "T1");
+                  ObjectSetInteger(0, t1_name, OBJPROP_COLOR, clrWhite);
+
+                  string d1_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  ObjectCreate(0, d1_name, OBJ_TEXT, 0, GetTimeSafe(time, state.d1_i), state.d1_l);
+                  ObjectSetString(0, d1_name, OBJPROP_TEXT, "D1");
+                  ObjectSetInteger(0, d1_name, OBJPROP_COLOR, clrWhite);
+
+                  string t2_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  ObjectCreate(0, t2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t2_i), state.t2_h);
+                  ObjectSetString(0, t2_name, OBJPROP_TEXT, "T2");
+                  ObjectSetInteger(0, t2_name, OBJPROP_COLOR, clrWhite);
+
+                  string d2_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  ObjectCreate(0, d2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.d2_i), state.d2_l);
+                  ObjectSetString(0, d2_name, OBJPROP_TEXT, "D2");
+                  ObjectSetInteger(0, d2_name, OBJPROP_COLOR, clrWhite);
+
+                  string t3_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  ObjectCreate(0, t3_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t3_i), state.t3_h);
+                  ObjectSetString(0, t3_name, OBJPROP_TEXT, "T3");
+                  ObjectSetInteger(0, t3_name, OBJPROP_COLOR, clrWhite);
+
               } else {
                   string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
                   DrawLine(path_1, GetTimeSafe(time, state.t1_i), state.t1_h, GetTimeSafe(time, state.d1_i), state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
@@ -1726,6 +1784,32 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
 
                   string path_5 = GetUniqueName(prefix + "CHoCH_Path_");
                   DrawLine(path_5, GetTimeSafe(time, state.t3_i), state.t3_l, GetTimeSafe(time, i), state.d2_h, InpColorChochPath, 1, STYLE_DOT, false);
+
+                  string t1_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  ObjectCreate(0, t1_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t1_i), state.t1_l);
+                  ObjectSetString(0, t1_name, OBJPROP_TEXT, "T1");
+                  ObjectSetInteger(0, t1_name, OBJPROP_COLOR, clrWhite);
+
+                  string d1_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  ObjectCreate(0, d1_name, OBJ_TEXT, 0, GetTimeSafe(time, state.d1_i), state.d1_h);
+                  ObjectSetString(0, d1_name, OBJPROP_TEXT, "D1");
+                  ObjectSetInteger(0, d1_name, OBJPROP_COLOR, clrWhite);
+
+                  string t2_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  ObjectCreate(0, t2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t2_i), state.t2_l);
+                  ObjectSetString(0, t2_name, OBJPROP_TEXT, "T2");
+                  ObjectSetInteger(0, t2_name, OBJPROP_COLOR, clrWhite);
+
+                  string d2_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  ObjectCreate(0, d2_name, OBJ_TEXT, 0, GetTimeSafe(time, state.d2_i), state.d2_h);
+                  ObjectSetString(0, d2_name, OBJPROP_TEXT, "D2");
+                  ObjectSetInteger(0, d2_name, OBJPROP_COLOR, clrWhite);
+
+                  string t3_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  ObjectCreate(0, t3_name, OBJ_TEXT, 0, GetTimeSafe(time, state.t3_i), state.t3_l);
+                  ObjectSetString(0, t3_name, OBJPROP_TEXT, "T3");
+                  ObjectSetInteger(0, t3_name, OBJPROP_COLOR, clrWhite);
+
               } else {
                   string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
                   DrawLine(path_1, GetTimeSafe(time, state.t1_i), state.t1_l, GetTimeSafe(time, state.d1_i), state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
@@ -2143,6 +2227,7 @@ int OnCalculate(const int rates_total,
       ObjectsDeleteAll(0, "CHoCH_Bull_");
       ObjectsDeleteAll(0, "CHoCH_Path_");
       ObjectsDeleteAll(0, "CHoCH_Signal_");
+      ObjectsDeleteAll(0, "CHoCH_Text_");
 
 
       int start_idx = 0;
