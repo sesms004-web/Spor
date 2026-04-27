@@ -1553,7 +1553,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
    }
 
    // CHoCH Trigger & Drawing Logic
-   bool bear_trigger_ready = InpExtraSecurity ? (state.choch_dir == -1 && state.t3_h != 0 && state.d2_l != 0) : (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0);
+   bool bear_trigger_ready = (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0);
    if (bear_trigger_ready) {
 
             double range = state.maj_h - state.maj_l;
@@ -1567,6 +1567,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       bool should_eval_bear = (!InpWaitRetest) ? (val_c < trigger_level) : (is_history && val_c < trigger_level);
 
       if (should_eval_bear && t2_valid) {
+          bool is_intercepted = false;
           if (InpExtraSecurity) {
               if (state.ex_dir != -1 || !state.ex_swept) {
                   // Fakeout Intercepted!
@@ -1575,7 +1576,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   state.ex_lvl2 = state.t2_h;
                   state.ex_swept = false;
                   state.choch_dir = 0; // Reset Sequence to wait for real CHoCH
-                  goto skip_bear_trigger;
+                  is_intercepted = true;
               } else {
                   // Real CHoCH after sweep!
                   state.ex_dir = 0;
@@ -1583,6 +1584,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               }
           }
 
+          if (!is_intercepted) {
           // Bearish CHoCH confirmed!
           state.last_choch_dir = -1;
           state.last_choch_level = trigger_level;
@@ -1596,7 +1598,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               static int last_alert_maj_i_bear = 0;
               if (state.d1_i != last_alert_d1_i_bear) {
 
-                  double sl_level = InpExtraSecurity ? state.t3_h : state.t2_h;
+                  double sl_level = state.t2_h;
                   if (!InpWaitRetest) {
                       EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, sl_level, state.maj_h_i);
                   } else {
@@ -1614,7 +1616,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       g_pending_entry = trigger_level + (dist * (InpRetestDepthPct / 100.0));
                   }
 
-                  last_alert_d1_i_bear = InpExtraSecurity ? state.d2_i : state.d1_i;
+                  last_alert_d1_i_bear = state.d1_i;
                   last_alert_maj_i_bear = state.maj_h_i;
               }
           }
@@ -1679,6 +1681,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       bool should_eval_bull = (!InpWaitRetest) ? (val_c > trigger_level) : (is_history && val_c > trigger_level);
 
       if (should_eval_bull && t2_valid) {
+          bool is_intercepted = false;
           if (InpExtraSecurity) {
               if (state.ex_dir != 1 || !state.ex_swept) {
                   // Fakeout Intercepted!
@@ -1687,7 +1690,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   state.ex_lvl2 = state.t2_l;
                   state.ex_swept = false;
                   state.choch_dir = 0; // Reset Sequence to wait for real CHoCH
-                  goto skip_bull_trigger;
+                  is_intercepted = true;
               } else {
                   // Real CHoCH after sweep!
                   state.ex_dir = 0;
@@ -1695,6 +1698,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               }
           }
 
+          if (!is_intercepted) {
           // Bullish CHoCH confirmed!
           state.last_choch_dir = 1;
           state.last_choch_level = trigger_level;
@@ -1708,7 +1712,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               static int last_alert_maj_i_bull = 0;
               if (state.d1_i != last_alert_d1_i_bull) {
 
-                  double sl_level = InpExtraSecurity ? state.t3_l : state.t2_l;
+                  double sl_level = state.t2_l;
                   if (!InpWaitRetest) {
                       EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, sl_level, state.maj_l_i);
                   } else {
@@ -1726,7 +1730,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       g_pending_entry = trigger_level - (dist * (InpRetestDepthPct / 100.0));
                   }
 
-                  last_alert_d1_i_bull = InpExtraSecurity ? state.d2_i : state.d1_i;
+                  last_alert_d1_i_bull = state.d1_i;
                   last_alert_maj_i_bull = state.maj_l_i;
               }
           }
