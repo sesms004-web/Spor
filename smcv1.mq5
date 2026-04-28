@@ -1617,7 +1617,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               if (ObjectFind(0, text_name) < 0) {
                   ObjectCreate(0, text_name, OBJ_TEXT, 0, GetTimeSafe(time, i), state.d1_l);
               }
-              string label_text = is_second_trade ? " 2" : " 1";
+              string label_text = is_strong ? " 2" : " 1";
               ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
               ObjectSetInteger(0, text_name, OBJPROP_COLOR, sig_color);
               ObjectSetInteger(0, text_name, OBJPROP_FONTSIZE, 12);
@@ -1705,7 +1705,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               if (ObjectFind(0, text_name) < 0) {
                   ObjectCreate(0, text_name, OBJ_TEXT, 0, GetTimeSafe(time, i), state.d1_h);
               }
-              string label_text = is_second_trade ? " 2" : " 1";
+              string label_text = is_strong ? " 2" : " 1";
               ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
               ObjectSetInteger(0, text_name, OBJPROP_COLOR, sig_color);
               ObjectSetInteger(0, text_name, OBJPROP_FONTSIZE, 12);
