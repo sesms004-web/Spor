@@ -1457,8 +1457,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
    // CHoCH Trigger & Drawing Logic
    if (state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0) {
 
-      double local_range = state.t1_h - state.d1_l;
-      double t2_pct = (local_range > 0) ? ((state.t2_h - state.d1_l) / local_range) * 100.0 : 0;
+      double range = state.maj_h - state.maj_l;
+      double t2_pct = (range != 0) ? ((state.t2_h - state.maj_l) / range) * 100.0 : 0;
       // Max %100 limitini kaldiriyoruz (cunku stop hunt t2_h, maj_h'i asabilir), sadece min %40 kurali gecerli olmali.
       bool t2_valid = (t2_pct >= InpMinPullbackPct);
 
@@ -1597,8 +1597,8 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
       }
    } else if (state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0) {
 
-      double local_range = state.d1_h - state.t1_l;
-      double t2_pct = (local_range > 0) ? ((state.d1_h - state.t2_l) / local_range) * 100.0 : 0;
+      double range = state.maj_h - state.maj_l;
+      double t2_pct = (range != 0) ? ((state.maj_h - state.t2_l) / range) * 100.0 : 0;
       // Max %100 limitini kaldiriyoruz (cunku stop hunt t2_l, maj_l'nin altina inebilir), sadece min %40 kurali gecerli olmali.
       bool t2_valid = (t2_pct >= InpMinPullbackPct);
 
