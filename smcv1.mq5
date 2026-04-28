@@ -1341,6 +1341,7 @@ void OnDeinit(const int reason)
    ObjectsDeleteAll(0, "CHoCH_Bull_");
    ObjectsDeleteAll(0, "CHoCH_Path_");
    ObjectsDeleteAll(0, "CHoCH_Signal_");
+   ObjectsDeleteAll(0, "CHoCH_Text_");
   }
 
 //+------------------------------------------------------------------+
@@ -1610,6 +1611,16 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
               DrawLine(choch_name, GetTimeSafe(time, i), state.d1_l, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
+
+              // Draw 1 or 2 text label next to the CHoCH line
+              string text_name = GetUniqueName(prefix + "CHoCH_Text_");
+              if (ObjectFind(0, text_name) < 0) {
+                  ObjectCreate(0, text_name, OBJ_TEXT, 0, GetTimeSafe(time, i), state.d1_l);
+              }
+              string label_text = is_second_trade ? " 2" : " 1";
+              ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
+              ObjectSetInteger(0, text_name, OBJPROP_COLOR, sig_color);
+              ObjectSetInteger(0, text_name, OBJPROP_FONTSIZE, 12);
           }
           state.choch_dir = 0; // Reset after trigger
       }
@@ -1688,6 +1699,16 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
               // 2. Draw the short, thick signal marker at breakout level
               string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
               DrawLine(choch_name, GetTimeSafe(time, i), state.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
+
+              // Draw 1 or 2 text label next to the CHoCH line
+              string text_name = GetUniqueName(prefix + "CHoCH_Text_");
+              if (ObjectFind(0, text_name) < 0) {
+                  ObjectCreate(0, text_name, OBJ_TEXT, 0, GetTimeSafe(time, i), state.d1_h);
+              }
+              string label_text = is_second_trade ? " 2" : " 1";
+              ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
+              ObjectSetInteger(0, text_name, OBJPROP_COLOR, sig_color);
+              ObjectSetInteger(0, text_name, OBJPROP_FONTSIZE, 12);
           }
           state.choch_dir = 0; // Reset after trigger
       }
@@ -2090,6 +2111,7 @@ int OnCalculate(const int rates_total,
       ObjectsDeleteAll(0, "CHoCH_Bull_");
       ObjectsDeleteAll(0, "CHoCH_Path_");
       ObjectsDeleteAll(0, "CHoCH_Signal_");
+   ObjectsDeleteAll(0, "CHoCH_Text_");
 
 
       int start_idx = 0;
