@@ -66,7 +66,7 @@ input double InpMinSLPct               = 3.0;         // Min SL Uzaklığı (Ana
 input double InpMaxSLPct               = 15.0;        // Maks SL Uzaklığı (Ana Dalganın %'si)
 
 input int    InpMinTradeScoreLimit = 40;       // İşlem İçin Min. Puan (100 Üzerinden)
-input double InpMinPullbackPct = 40.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
+input double InpMinPullbackPct = 45.0;           // CHoCH Min Çekilme % (Onay Yüzdeliği)
 input double InpMaxPullbackPct = 100.0;          // CHoCH Max Çekilme % (İşlem Yüzdeliği)
 input color  InpColorChochStrong = clrPurple;      // Güçlü CHoCH (Mor)
 input color  InpColorChochWeak   = clrRed;         // Güçsuz CHoCH (Kırmızı)
@@ -1514,17 +1514,24 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       g_trade_t2_h[current_trade_index] = state.t2_h;
                       g_trade_count_h++;
                   } else {
-                      // Eğer önceki yapıyı kırmadıysa, bu yeni işlem "sayılmaz", bir öncekinin indeksi veya -1 atanmaz,
-                      // zincir kırılmaz ama mevcut sinyal yeni bir sayı da almaz.
-                      current_trade_index = -1; // Ignore this execution/labeling
+                      current_trade_index = -1;
                   }
               } else {
-                  // Sinyal yeni değilse, var olan en son indexi çizmek için al (UI draw)
-                  current_trade_index = g_trade_count_h - 1;
+                  // Sinyal yeni değilse, önceden kaydedilmiş mi kontrol etmeliyiz.
+                  // Eger bu d1_i seviyesi basariyla kaydedildiyse dizide olmali:
+                  current_trade_index = -1;
+                  for(int idx = 0; idx < g_trade_count_h; idx++) {
+                      if (g_trade_t1_h[idx] == state.t1_h && g_trade_t2_h[idx] == state.t2_h) {
+                          current_trade_index = idx;
+                          break;
+                      }
+                  }
               }
 
-              if (!is_history || (InpWaitRetest && is_just_closed)) {
-                  if (is_new_signal && current_trade_index >= 0) {
+              // Sadece gecerli bir siralamaysa cizim ve islem yap:
+              if (current_trade_index >= 0) {
+                  if (!is_history || (InpWaitRetest && is_just_closed)) {
+                      if (is_new_signal) {
                       bool should_execute = false;
                       if (current_trade_index == 0 && InpFirstTradeEnable) should_execute = true;
                       if (current_trade_index == 1 && InpSecondTradeEnable) should_execute = true;
@@ -1553,9 +1560,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                           }
                       }
                   }
-              }
+                  }
 
-              if (InpShowChoch) {
+                  if (InpShowChoch) {
                   color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
 
                   string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
@@ -1577,6 +1584,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   ObjectSetInteger(0, text_name, OBJPROP_COLOR, sig_color);
                   ObjectSetInteger(0, text_name, OBJPROP_FONTSIZE, 10);
                   ObjectSetInteger(0, text_name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UPPER);
+                  }
               }
 
               if (is_new_signal) {
@@ -1646,16 +1654,21 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       g_trade_t2_l[current_trade_index] = state.t2_l;
                       g_trade_count_l++;
                   } else {
-                      // Eğer önceki yapıyı kırmadıysa, bu yeni işlem "sayılmaz", ignore et
                       current_trade_index = -1;
                   }
               } else {
-                  // Sinyal yeni değilse, var olan en son indexi çizmek için al (UI draw)
-                  current_trade_index = g_trade_count_l - 1;
+                  current_trade_index = -1;
+                  for(int idx = 0; idx < g_trade_count_l; idx++) {
+                      if (g_trade_t1_l[idx] == state.t1_l && g_trade_t2_l[idx] == state.t2_l) {
+                          current_trade_index = idx;
+                          break;
+                      }
+                  }
               }
 
-              if (!is_history || (InpWaitRetest && is_just_closed)) {
-                  if (is_new_signal && current_trade_index >= 0) {
+              if (current_trade_index >= 0) {
+                  if (!is_history || (InpWaitRetest && is_just_closed)) {
+                      if (is_new_signal) {
                       bool should_execute = false;
                       if (current_trade_index == 0 && InpFirstTradeEnable) should_execute = true;
                       if (current_trade_index == 1 && InpSecondTradeEnable) should_execute = true;
@@ -1684,9 +1697,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                           }
                       }
                   }
-              }
+                  }
 
-              if (InpShowChoch) {
+                  if (InpShowChoch) {
                   color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
 
                   string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
@@ -1708,6 +1721,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   ObjectSetInteger(0, text_name, OBJPROP_COLOR, sig_color);
                   ObjectSetInteger(0, text_name, OBJPROP_FONTSIZE, 10);
                   ObjectSetInteger(0, text_name, OBJPROP_ANCHOR, ANCHOR_RIGHT_LOWER);
+                  }
               }
 
               if (is_new_signal) {
