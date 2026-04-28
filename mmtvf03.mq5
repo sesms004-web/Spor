@@ -1,8 +1,11 @@
 //+------------------------------------------------------------------+
-//|                                              Core_Structure.mqh  |
+//|                                              mmtvf03.mq5         |
 //|                    Major and Minor Structure Core Logic Only     |
 //+------------------------------------------------------------------+
 #property strict
+#property indicator_chart_window
+#property indicator_buffers 0
+#property indicator_plots 0
 
 //+------------------------------------------------------------------+
 //| CStack: Array wrapper used for holding swing points              |
@@ -133,39 +136,57 @@ struct SState
 //+------------------------------------------------------------------+
 //| Core Function: Processes each bar to update Structure state      |
 //+------------------------------------------------------------------+
-void ProcessStructureBar(int i, const double &high[], const double &low[], const double &close[], SState &state)
+void ProcessStructureBar(int i, const double &open[], const double &high[], const double &low[], const double &close[], SState &state)
   {
    double val_h = high[i];
    double val_l = low[i];
    double val_c = close[i];
+   double val_o = open[i];
 
-   // --- MOTHER BAR & INSIDE BAR LOGIC ---
-   // If min_tr is 0, we are initializing
+   // --- INITIALIZATION & INSIDE BAR LOGIC ---
+   // If min_tr is 0, we are initializing the very first bar
    if(state.min_tr == 0)
      {
-      state.min_tr = 1;
+      // Set minor trend based on the very first bar's direction
+      state.min_tr = (val_c > val_o) ? 1 : -1;
+
       state.min_h = val_h; state.min_h_i = i;
       state.min_l = val_l; state.min_l_i = i;
       state.trig_h = val_h; state.trig_l = val_l;
+
       state.mb_h = val_h; state.mb_l = val_l; state.mb_i = i;
+
+      // Initialize temporary and confirmed major bounds identically to minor bounds
+      // to create an artificial "first" Major point so that logic works perfectly from day 1
+      state.tmp_h = val_h; state.tmp_h_i = i;
+      state.tmp_l = val_l; state.tmp_l_i = i;
+      state.maj_h = val_h; state.maj_h_i = i;
+      state.maj_l = val_l; state.maj_l_i = i;
+
+      state.anc_i = i;
+      state.anc_v = val_c;
+      state.lp_i = i;
+      state.lp_p = val_c;
+
+      state.maj_tr = state.min_tr;
+      state.maj_st = 0; // Impulsive
+      state.bos_i = i;
+      return;
+     }
+
+   // Mother Bar / Inside Bar Check
+   bool is_inside = (val_h <= state.mb_h && val_l >= state.mb_l);
+   if(is_inside)
+     {
+      // Skip structural processing for inside bars
+      return;
      }
    else
      {
-      // Check if current bar is an inside bar relative to the mother bar
-      bool is_inside = (val_h <= state.mb_h && val_l >= state.mb_l);
-
-      if(is_inside)
-        {
-         // Skip structural processing for inside bars
-         return;
-        }
-      else
-        {
-         // Break out of inside bar, this bar becomes the new mother bar
-         state.mb_h = val_h;
-         state.mb_l = val_l;
-         state.mb_i = i;
-        }
+      // Break out of inside bar, this bar becomes the new mother bar
+      state.mb_h = val_h;
+      state.mb_l = val_l;
+      state.mb_i = i;
      }
 
    // --- MINOR STRUCTURE LOGIC ---
@@ -240,14 +261,7 @@ void ProcessStructureBar(int i, const double &high[], const double &low[], const
 
 
    // --- MAJOR STRUCTURE LOGIC ---
-   // Initialize Major Structure
-   if(state.maj_tr == 0)
-     {
-      state.maj_tr = 1; // Default to uptrend
-      state.anc_i = state.min_l_i;
-      state.anc_v = state.min_l;
-      state.maj_l_i = state.min_l_i;
-     }
+   // (maj_tr is strictly handled now by initialization and BOS logic)
 
    if(state.maj_tr == 1) // Major Uptrend
      {
@@ -446,19 +460,21 @@ void ProcessStructureBar(int i, const double &high[], const double &low[], const
         }
      }
   }
-//+------------------------------------------------------------------+
 
 //+------------------------------------------------------------------+
 //| Wrapper Indicator Logic for Testing Core Structure               |
 //+------------------------------------------------------------------+
-#property indicator_chart_window
-#property indicator_buffers 0
-#property indicator_plots 0
-
 SState g_state;
 
 int OnInit()
   {
+   // Sınırlama: Yalnızca M1 grafiğinde çalışmasını sağla
+   if(Period() != PERIOD_M1)
+     {
+      Print("Bu indicator sadece M1 (1 Dakika) periyodunda calisacak sekilde sinirlandirilmistir.");
+      return(INIT_FAILED);
+     }
+
    g_state.Init();
    return(INIT_SUCCEEDED);
   }
@@ -477,16 +493,18 @@ int OnCalculate(const int rates_total,
    if(rates_total < 2)
       return 0;
 
-   int start = (prev_calculated > 0) ? prev_calculated - 1 : 0;
-
+   // Initialization trigger
    if(prev_calculated == 0)
      {
       g_state.Init();
      }
 
+   int start = (prev_calculated > 0) ? prev_calculated - 1 : 0;
+
+   // Loop through bars to process structure sequentially without UI dependencies
    for(int i = start; i < rates_total; i++)
      {
-      ProcessStructureBar(i, high, low, close, g_state);
+      ProcessStructureBar(i, open, high, low, close, g_state);
      }
 
    return rates_total;
