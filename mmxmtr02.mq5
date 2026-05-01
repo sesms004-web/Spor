@@ -37,8 +37,10 @@ input color  InpColorBull    = clrLime;
 input color  InpColorBear    = clrRed;
 input color  InpColorVLBull  = clrDodgerBlue;
 input color  InpColorVLBear  = clrOrangeRed;
-input color  InpColorBoxBull = C'0,70,160';
-input color  InpColorBoxBear = C'160,50,0';
+input color  InpColorBoxBull = clrDodgerBlue;
+input color  InpColorBoxBear = clrRed;
+input color  InpColorBoxBullFaint = C'0,40,90';
+input color  InpColorBoxBearFaint = C'90,20,0';
 
 input group "--- KUTU ---"
 input double InpMaxBoxPct    = 20.0;
@@ -198,7 +200,7 @@ void DoDrawBox(const datetime &time[],string pfx,SState &s,
    double maj_sz = s.maj_h - s.maj_l;
    if(maj_sz > 0 && (top-bot)/maj_sz*100.0 > InpMaxBoxPct)
    {
-      if(clr == InpColorBoxBull)
+      if(clr == InpColorBoxBull || clr == InpColorBoxBullFaint)
       {
          // Bull: bot sabit, top'u en küçük iç minor high'a çek
          double fh = -1;
@@ -424,14 +426,9 @@ void ProcessBar(int i,
             state.maj_l=val_l;state.maj_l_i=i;
             if(state.has_pot_bear_minor)
             {
-               if(is_history && draw_ui && InpShowBox) DoDrawBox(time,pfx,state,state.pot_bear_start_i,state.pot_bear_start_p,state.pot_bear_end_p,InpColorBoxBear);
-               BxReset(state,state.pot_bear_end_p,state.pot_bear_start_p);
-               state.bx_phase=1;
+               if(is_history && draw_ui && InpShowBox) DoDrawBox(time,pfx,state,state.pot_bear_start_i,state.pot_bear_start_p,state.pot_bear_end_p,InpColorBoxBearFaint);
             }
-            else
-            {
-               BxReset(state,val_l,state.tmp_h);
-            }
+            BxReset(state,val_l,state.tmp_h);
             CutLine(state.cur_top_line,time[i]);CutLine(state.cur_bot_line,time[i]);state.cur_top_line="";state.cur_bot_line="";
          }
       }
@@ -460,14 +457,9 @@ void ProcessBar(int i,
             state.maj_l=val_l;state.maj_l_i=i;
             if(state.has_pot_bear_minor)
             {
-               if(is_history && draw_ui && InpShowBox) DoDrawBox(time,pfx,state,state.pot_bear_start_i,state.pot_bear_start_p,state.pot_bear_end_p,InpColorBoxBear);
-               BxReset(state,state.pot_bear_end_p,state.pot_bear_start_p);
-               state.bx_phase=1;
+               if(is_history && draw_ui && InpShowBox) DoDrawBox(time,pfx,state,state.pot_bear_start_i,state.pot_bear_start_p,state.pot_bear_end_p,InpColorBoxBearFaint);
             }
-            else
-            {
-               BxReset(state,val_l,state.tmp_h);
-            }
+            BxReset(state,val_l,state.tmp_h);
             CutLine(state.cur_top_line,time[i]);CutLine(state.cur_bot_line,time[i]);state.cur_top_line="";state.cur_bot_line="";
          }
       }
@@ -502,14 +494,9 @@ void ProcessBar(int i,
             state.maj_h=val_h;state.maj_h_i=i;
             if(state.has_pot_bull_minor)
             {
-               if(is_history && draw_ui && InpShowBox) DoDrawBox(time,pfx,state,state.pot_bull_start_i,state.pot_bull_end_p,state.pot_bull_start_p,InpColorBoxBull);
-               BxReset(state,state.pot_bull_start_p,state.pot_bull_end_p);
-               state.bx_phase=1;
+               if(is_history && draw_ui && InpShowBox) DoDrawBox(time,pfx,state,state.pot_bull_start_i,state.pot_bull_end_p,state.pot_bull_start_p,InpColorBoxBullFaint);
             }
-            else
-            {
-               BxReset(state,state.tmp_l,val_h);
-            }
+            BxReset(state,state.tmp_l,val_h);
             CutLine(state.cur_top_line,time[i]);CutLine(state.cur_bot_line,time[i]);state.cur_top_line="";state.cur_bot_line="";
          }
       }
@@ -538,14 +525,9 @@ void ProcessBar(int i,
             state.maj_h=val_h;state.maj_h_i=i;
             if(state.has_pot_bull_minor)
             {
-               if(is_history && draw_ui && InpShowBox) DoDrawBox(time,pfx,state,state.pot_bull_start_i,state.pot_bull_end_p,state.pot_bull_start_p,InpColorBoxBull);
-               BxReset(state,state.pot_bull_start_p,state.pot_bull_end_p);
-               state.bx_phase=1;
+               if(is_history && draw_ui && InpShowBox) DoDrawBox(time,pfx,state,state.pot_bull_start_i,state.pot_bull_end_p,state.pot_bull_start_p,InpColorBoxBullFaint);
             }
-            else
-            {
-               BxReset(state,state.tmp_l,val_h);
-            }
+            BxReset(state,state.tmp_l,val_h);
             CutLine(state.cur_top_line,time[i]);CutLine(state.cur_bot_line,time[i]);state.cur_top_line="";state.cur_bot_line="";
          }
       }
