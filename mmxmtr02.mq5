@@ -421,7 +421,7 @@ void ProcessBar(int i,
             state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.maj_h_i),state.maj_h,InpColorBull,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.maj_h_i,InpColorVLBull);
-            // Kutu onayda kesilmiyor, flip beklenecek (1 swing uzatma)
+            // Kutu onayda kesilmiyor, V3'ü bekleyecek
             state.st_l.Clear();state.st_h.Clear();state.maj_st=1;
             state.anc_i=state.maj_h_i;state.anc_v=state.maj_h;state.tmp_l=val_l;state.tmp_l_i=i;
             CutLine(state.cur_top_line,time[i]);CutLine(state.cur_bot_line,time[i]);
@@ -489,7 +489,7 @@ void ProcessBar(int i,
             state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.maj_l_i),state.maj_l,InpColorBear,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.maj_l_i,InpColorVLBear);
-            // Kutu onayda kesilmiyor, flip beklenecek (1 swing uzatma)
+            // Kutu onayda kesilmiyor, V3'ü bekleyecek
             state.st_l.Clear();state.st_h.Clear();state.maj_st=1;
             state.anc_i=state.maj_l_i;state.anc_v=state.maj_l;state.tmp_h=val_h;state.tmp_h_i=i;
             CutLine(state.cur_top_line,time[i]);CutLine(state.cur_bot_line,time[i]);
