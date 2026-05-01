@@ -11,7 +11,7 @@
 //               değilse → bx_swing_l=trough
 //  Phase 2 → Sonraki bull minor → KUTU çiz → phase=1
 //
-//  Majör konfirmasyon → BxTrimAll (sağ VLine'da kes)
+//  Majör konfirmasyon → BxAdvanceTrim (sağ VLine'da kes)
 //  Trend flip         → BxDeleteAll (tamamen sil)
 //  BoS devam          → BxReset (phase=0, yeni impuls)
 //
@@ -53,14 +53,27 @@ datetime g_anchor_time = 0;
 //--------------------------------------------------------------------
 #define BOX_MAX 512
 string g_bx_nm[BOX_MAX];
-bool   g_bx_op[BOX_MAX];
+int    g_bx_state[BOX_MAX]; // 2=Active, 1=Pending Trim, 0=Trimmed
 int    g_bx_cnt = 0;
 
 void BxAdd(string nm)
-{ if(g_bx_cnt<BOX_MAX){g_bx_nm[g_bx_cnt]=nm;g_bx_op[g_bx_cnt]=true;g_bx_cnt++;} }
+{ if(g_bx_cnt<BOX_MAX){g_bx_nm[g_bx_cnt]=nm;g_bx_state[g_bx_cnt]=2;g_bx_cnt++;} }
 
-void BxTrimAll(datetime t)
-{ for(int k=0;k<g_bx_cnt;k++) if(g_bx_op[k]&&ObjectFind(0,g_bx_nm[k])>=0){ObjectSetInteger(0,g_bx_nm[k],OBJPROP_TIME,1,t);g_bx_op[k]=false;} }
+void BxAdvanceTrim(datetime t)
+{
+   for(int k=0;k<g_bx_cnt;k++)
+   {
+      if(g_bx_state[k]==1 && ObjectFind(0,g_bx_nm[k])>=0)
+      {
+         ObjectSetInteger(0,g_bx_nm[k],OBJPROP_TIME,1,t);
+         g_bx_state[k]=0;
+      }
+      else if(g_bx_state[k]==2)
+      {
+         g_bx_state[k]=1;
+      }
+   }
+}
 
 void BxDeleteAll()
 { for(int k=0;k<g_bx_cnt;k++) if(ObjectFind(0,g_bx_nm[k])>=0)ObjectDelete(0,g_bx_nm[k]); g_bx_cnt=0; }
@@ -404,11 +417,11 @@ void ProcessBar(int i,
          double act=state.st_l.Size()>0?state.st_l.GetVal(state.st_l.Size()-1):EMPTY_VALUE;
          if(act!=EMPTY_VALUE&&val_l<act)
          {
-            // Bull majör HIGH onaylandı → BxTrimAll
+            // Bull majör HIGH onaylandı → BxAdvanceTrim
             state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.maj_h_i),state.maj_h,InpColorBull,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.maj_h_i,InpColorVLBull);
-            if(draw_ui&&InpShowBox)BxTrimAll(time[state.maj_h_i]);
+            // Kutu onayda kesilmiyor, flip beklenecek (1 swing uzatma)
             state.st_l.Clear();state.st_h.Clear();state.maj_st=1;
             state.anc_i=state.maj_h_i;state.anc_v=state.maj_h;state.tmp_l=val_l;state.tmp_l_i=i;
             CutLine(state.cur_top_line,time[i]);CutLine(state.cur_bot_line,time[i]);
@@ -417,8 +430,8 @@ void ProcessBar(int i,
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;if(draw_ui&&InpShowMaj)UpdateLevel(state.cur_bot_line,state.maj_l);}
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_c<state.maj_l)
          {
-            // FLIP bull→bear → BxTrimAll and Draw VL
-            if(draw_ui&&InpShowBox)BxTrimAll(time[state.tmp_h_i]);
+            // FLIP bull→bear → BxAdvanceTrim and Draw VL
+            if(is_history&&draw_ui&&InpShowBox)BxAdvanceTrim(time[state.tmp_h_i]);
             state.maj_tr=-1;state.maj_st=0;state.bos_i=i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.tmp_h_i,InpColorVLBull);
@@ -448,8 +461,8 @@ void ProcessBar(int i,
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;if(draw_ui&&InpShowMaj)UpdateLevel(state.cur_bot_line,state.maj_l);}
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_c<state.maj_l)
          {
-            // FLIP bull→bear → BxTrimAll and Draw VL
-            if(draw_ui&&InpShowBox)BxTrimAll(time[state.tmp_h_i]);
+            // FLIP bull→bear → BxAdvanceTrim and Draw VL
+            if(is_history&&draw_ui&&InpShowBox)BxAdvanceTrim(time[state.tmp_h_i]);
             state.maj_tr=-1;state.maj_st=0;state.bos_i=i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.tmp_h_i,InpColorVLBull);
@@ -472,11 +485,11 @@ void ProcessBar(int i,
          double act=state.st_h.Size()>0?state.st_h.GetVal(state.st_h.Size()-1):EMPTY_VALUE;
          if(act!=EMPTY_VALUE&&val_h>act)
          {
-            // Bear majör LOW onaylandı → BxTrimAll
+            // Bear majör LOW onaylandı → BxAdvanceTrim
             state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.maj_l_i),state.maj_l,InpColorBear,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.maj_l_i,InpColorVLBear);
-            if(draw_ui&&InpShowBox)BxTrimAll(time[state.maj_l_i]);
+            // Kutu onayda kesilmiyor, flip beklenecek (1 swing uzatma)
             state.st_l.Clear();state.st_h.Clear();state.maj_st=1;
             state.anc_i=state.maj_l_i;state.anc_v=state.maj_l;state.tmp_h=val_h;state.tmp_h_i=i;
             CutLine(state.cur_top_line,time[i]);CutLine(state.cur_bot_line,time[i]);
@@ -486,7 +499,7 @@ void ProcessBar(int i,
          if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_c>state.maj_h)
          {
             // FLIP bear→bull
-            if(draw_ui&&InpShowBox)BxTrimAll(time[state.tmp_l_i]);
+            if(is_history&&draw_ui&&InpShowBox)BxAdvanceTrim(time[state.tmp_l_i]);
             state.maj_tr=1;state.maj_st=0;state.bos_i=i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.tmp_l_i,InpColorVLBear);
@@ -517,7 +530,7 @@ void ProcessBar(int i,
          if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_c>state.maj_h)
          {
             // FLIP bear→bull
-            if(draw_ui&&InpShowBox)BxTrimAll(time[state.tmp_l_i]);
+            if(is_history&&draw_ui&&InpShowBox)BxAdvanceTrim(time[state.tmp_l_i]);
             state.maj_tr=1;state.maj_st=0;state.bos_i=i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.tmp_l_i,InpColorVLBear);
@@ -555,6 +568,21 @@ int OnCalculate(const int rates_total,const int prev_calculated,
    int vp=prev_calculated;
    if(prev_calculated==0&&last_bar_time==time[rates_total-1])vp=rates_total-1;
    if(last_rates_tot>0&&rates_total<last_rates_tot)vp=0;
+
+   if(vp>0 && vp<rates_total-1)
+   {
+      // Incremental calculation for newly closed bars
+      for(int i=vp;i<rates_total-1;i++)
+      {
+         bool inside=(high[i]<=g_state_hist.mb_h)&&(low[i]>=g_state_hist.mb_l);
+         if(!inside)
+         {
+            if(high[i]>g_state_hist.mb_h||low[i]<g_state_hist.mb_l)
+               {g_state_hist.mb_h=high[i];g_state_hist.mb_l=low[i];g_state_hist.mb_i=i;}
+            ProcessBar(i,open,high,low,close,time,g_state_hist,true,true);
+         }
+      }
+   }
 
    if(vp==0)
    {
