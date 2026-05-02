@@ -1005,15 +1005,12 @@ void DrawMTFPanel()
       if(above)
       {
          konum="USTUNDE";
-         // Üstünde: aşağı mı iniyor (bearish), yukarı mı gidiyor (bullish)?
-         if(c<o){ durum="asagi"; dn_cnt++; }
-         else   { durum="yukari"; up_cnt++; }
+         durum="yukari"; up_cnt++;
       }
       else if(below)
       {
          konum="ALTINDA";
-         if(c>o){ durum="yukari"; up_cnt++; }
-         else   { durum="asagi";  dn_cnt++; }
+         durum="asagi";  dn_cnt++;
       }
       else if(in_main)
       {
