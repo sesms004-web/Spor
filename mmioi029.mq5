@@ -34,6 +34,10 @@ input double InpDaysH1   = 60.0;
 input double InpDaysH4   = 240.0;
 input double InpDaysD1   = 1440.0;
 
+input group "--- BİLDİRİM ---"
+input bool   InpNotifTest    = false;  // Test bildirimi gönder (açınca çalışır)
+input bool   InpNotifSignal  = true;   // Sinyal değişince bildirim gönder
+
 input group "--- GÖRSEL ---"
 input bool   InpShowMin      = true;
 input bool   InpShowMaj      = true;
@@ -738,7 +742,7 @@ void ProcessBar(int i,
             state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.maj_h_i),state.maj_h,InpColorBull,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.maj_h_i,InpColorVLBull);
-            if(is_history&&draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.maj_h_i));
+            if(draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.maj_h_i));
             state.st_l.Clear();state.st_h.Clear();state.maj_st=1;
             state.anc_i=state.maj_h_i;state.anc_v=state.maj_h;state.tmp_l=val_l;state.tmp_l_i=i;
             CutLine(state.cur_top_line,time[i]);CutLine(state.cur_bot_line,time[i]);
@@ -747,7 +751,7 @@ void ProcessBar(int i,
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;if(draw_ui&&InpShowMaj)UpdateLevel(state.cur_bot_line,state.maj_l);}
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_c<state.maj_l)
          {
-            if(is_history&&draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.tmp_h_i));
+            if(draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.tmp_h_i));
             state.maj_tr=-1;state.maj_st=0;state.bos_i=i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.tmp_h_i,InpColorVLBull);
@@ -774,7 +778,7 @@ void ProcessBar(int i,
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;if(draw_ui&&InpShowMaj)UpdateLevel(state.cur_bot_line,state.maj_l);}
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_c<state.maj_l)
          {
-            if(is_history&&draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.tmp_h_i));
+            if(draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.tmp_h_i));
             state.maj_tr=-1;state.maj_st=0;state.bos_i=i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.tmp_h_i,InpColorVLBull);
@@ -798,7 +802,7 @@ void ProcessBar(int i,
             state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.maj_l_i),state.maj_l,InpColorBear,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.maj_l_i,InpColorVLBear);
-            if(is_history&&draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.maj_l_i));
+            if(draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.maj_l_i));
             state.st_l.Clear();state.st_h.Clear();state.maj_st=1;
             state.anc_i=state.maj_l_i;state.anc_v=state.maj_l;state.tmp_h=val_h;state.tmp_h_i=i;
             CutLine(state.cur_top_line,time[i]);CutLine(state.cur_bot_line,time[i]);
@@ -807,7 +811,7 @@ void ProcessBar(int i,
          if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_h>state.maj_h&&val_c<=state.maj_h){state.maj_h=val_h;if(draw_ui&&InpShowMaj)UpdateLevel(state.cur_top_line,state.maj_h);}
          if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_c>state.maj_h)
          {
-            if(is_history&&draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.tmp_l_i));
+            if(draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.tmp_l_i));
             state.maj_tr=1;state.maj_st=0;state.bos_i=i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.tmp_l_i,InpColorVLBear);
@@ -834,7 +838,7 @@ void ProcessBar(int i,
          if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_h>state.maj_h&&val_c<=state.maj_h){state.maj_h=val_h;if(draw_ui&&InpShowMaj)UpdateLevel(state.cur_top_line,state.maj_h);}
          if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_c>state.maj_h)
          {
-            if(is_history&&draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.tmp_l_i));
+            if(draw_ui&&InpShowBox)BxAdvanceTrim(ST(time,state.tmp_l_i));
             state.maj_tr=1;state.maj_st=0;state.bos_i=i;
             if(draw_ui&&InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),ST(time,state.anc_i),state.anc_v,ST(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             if(draw_ui&&InpShowVL&&is_history)DrawSwingVLines(time,pfx,state.anc_i,state.tmp_l_i,InpColorVLBear);
@@ -848,24 +852,6 @@ void ProcessBar(int i,
       }
    }
 }
-
-
-//====================================================================
-//  MTF PANEL – Sağ Üst Köşe (M1→D1 Trend + Güç)
-//====================================================================
-
-
-//--------------------------------------------------------------------
-//--------------------------------------------------------------------
-
-int OnInit(){ IndicatorSetString(INDICATOR_SHORTNAME,"SMACv2_v29"); return INIT_SUCCEEDED; }
-
-void OnDeinit(const int reason)
-{
-   ObjectsDeleteAll(0,"Minor_");ObjectsDeleteAll(0,"Major_");ObjectsDeleteAll(0,"HLine_");
-   ObjectsDeleteAll(0,"VL_");ObjectsDeleteAll(0,"Box_");ObjectsDeleteAll(0,"Live_");
-   ObjectsDeleteAll(0,"BoxWkAbv_");ObjectsDeleteAll(0,"BoxWkBlw_");ObjectsDeleteAll(0,"BoxLbl_");
-   BxClear(); Comment("");
 }
 
 //--------------------------------------------------------------------
@@ -962,13 +948,20 @@ int OnCalculate(const int rates_total,const int prev_calculated,
    }
 
    if(InpShowStats&&li>0)
-   {
-      datetime now=TimeCurrent();
       BxDrawLabels(time[li]+(datetime)(PeriodSeconds()*2));
-      BxShowComment(now);
-   }
+
+   // MTF Sinyal Paneli
 
    last_rates_tot=rates_total;
    return(rates_total);
 }
 //+------------------------------------------------------------------+
+
+int OnInit() { IndicatorSetString(INDICATOR_SHORTNAME,"SMACv2_v30"); return INIT_SUCCEEDED; }
+void OnDeinit(const int reason)
+{
+   ObjectsDeleteAll(0,"Minor_");ObjectsDeleteAll(0,"Major_");ObjectsDeleteAll(0,"HLine_");
+   ObjectsDeleteAll(0,"VL_");ObjectsDeleteAll(0,"Box_");ObjectsDeleteAll(0,"Live_");
+   ObjectsDeleteAll(0,"BoxWkAbv_");ObjectsDeleteAll(0,"BoxWkBlw_");ObjectsDeleteAll(0,"BoxLbl_");
+   BxClear(); Comment("");
+}
