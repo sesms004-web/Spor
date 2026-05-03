@@ -903,6 +903,11 @@ string GetTFSignal(ENUM_TIMEFRAMES tf, string tf_name,
          if(hit_appr==1  && c<bx_bot) { hit_state=2; hit_bar=b; break; }
          if(hit_appr==-1 && c>bx_top) { hit_state=2; hit_bar=b; break; }
       }
+      else if(hit_state==0)
+      {
+         if(hit_appr==1  && c>wk_top) { hit_state=3; hit_bar=b; break; }
+         if(hit_appr==-1 && c<wk_bot) { hit_state=3; hit_bar=b; break; }
+      }
       else if(hit_bar<0 && (in_wk_a||in_wk_b))
       { hit_bar=b; hit_appr=in_wk_a?1:-1; hit_state=0; }
 
@@ -1034,10 +1039,10 @@ void DrawMTFSignalPanel()
       ObjectSetInteger(0,"MTF_BG",OBJPROP_YDISTANCE,  py);
       ObjectSetInteger(0,"MTF_BG",OBJPROP_XSIZE,      pw);
       ObjectSetInteger(0,"MTF_BG",OBJPROP_YSIZE,      ph);
-      ObjectSetInteger(0,"MTF_BG",OBJPROP_BGCOLOR,    C'0,0,0');
+      ObjectSetInteger(0,"MTF_BG",OBJPROP_BGCOLOR,    C'30,30,30');
       ObjectSetInteger(0,"MTF_BG",OBJPROP_BORDER_TYPE,BORDER_FLAT);
       ObjectSetInteger(0,"MTF_BG",OBJPROP_COLOR,      C'0,0,0');
-      ObjectSetInteger(0,"MTF_BG",OBJPROP_BACK,       false);
+      ObjectSetInteger(0,"MTF_BG",OBJPROP_BACK,       true);
       ObjectSetInteger(0,"MTF_BG",OBJPROP_HIDDEN,     true);
 
       _MTFLabel("MTF_HDR","== KUTU SINYALLERİ ==",px+pw,py+8,8);
