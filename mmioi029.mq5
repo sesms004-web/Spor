@@ -852,7 +852,6 @@ void ProcessBar(int i,
       }
    }
 }
-}
 
 //--------------------------------------------------------------------
 int OnCalculate(const int rates_total,const int prev_calculated,
