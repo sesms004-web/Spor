@@ -859,99 +859,150 @@ void ProcessBar(int i,
 //--------------------------------------------------------------------
 //  AKILLI BİLDİRİM SİSTEMİ (M5 Analizi)
 //--------------------------------------------------------------------
-void CheckSmartMTFNotification()
+void CheckSmartMTFNotification(ENUM_TIMEFRAMES tf)
 {
-   static datetime last_notif_time = 0;
-   static string   last_msg = "";
+   static datetime last_notif_time_m5 = 0, last_notif_time_m15 = 0;
+   static string   last_msg_m5 = "",       last_msg_m15 = "";
+
+   datetime last_notif_time = (tf == PERIOD_M5) ? last_notif_time_m5 : last_notif_time_m15;
+   string   last_msg        = (tf == PERIOD_M5) ? last_msg_m5        : last_msg_m15;
 
    if(TimeCurrent() - last_notif_time < InpNotifInterval) return;
 
-   int best_k = -1;
-   datetime best_t = 0;
-   for(int k = 0; k < g_bx_cnt; k++)
+   // 1. Fetch higher timeframe data
+   MqlRates r[];
+   int copied = CopyRates(Symbol(), tf, 0, 1000, r);
+   if(copied < 100) return;
+
+   // 2. Initialize a headless state machine for the higher timeframe
+   SState mtf_state;
+   double h0=r[0].high, l0=r[0].low, c0=r[0].close, o0=r[0].open;
+
+   mtf_state.min_h=h0; mtf_state.min_h_i=0;
+   mtf_state.min_l=l0; mtf_state.min_l_i=0;
+   mtf_state.trig_h=h0; mtf_state.trig_l=l0;
+   mtf_state.tmp_h=h0; mtf_state.tmp_h_i=0;
+   mtf_state.tmp_l=l0; mtf_state.tmp_l_i=0;
+   mtf_state.min_tr=(c0>o0)?1:-1;
+   mtf_state.anc_i=0; mtf_state.anc_v=c0;
+   mtf_state.lp_i=0; mtf_state.lp_p=c0;
+   mtf_state.bos_i=0; mtf_state.maj_h_i=0; mtf_state.maj_l_i=0;
+   mtf_state.mb_h=h0; mtf_state.mb_l=l0; mtf_state.mb_i=0;
+   double ig=h0-l0; if(ig==0) ig=Point()*10;
+   mtf_state.maj_h=h0+ig*0.1; mtf_state.maj_l=l0-ig*0.1;
+   mtf_state.maj_tr=mtf_state.min_tr; mtf_state.maj_st=1;
+   mtf_state.cur_top_line=""; mtf_state.cur_bot_line="";
+   mtf_state.st_h.Clear(); mtf_state.st_l.Clear();
+   BxReset(mtf_state, l0, h0);
+   mtf_state.has_pot_bull_minor=false; mtf_state.has_pot_bear_minor=false;
+
+   // 3. Process array forward to build the current valid MTF Box (headless)
+   datetime dummy_time[]; ArrayResize(dummy_time, copied);
+   for(int j=0; j<copied; j++) dummy_time[j] = r[j].time;
+
+   double open_arr[], high_arr[], low_arr[], close_arr[];
+   ArrayResize(open_arr, copied); ArrayResize(high_arr, copied);
+   ArrayResize(low_arr, copied); ArrayResize(close_arr, copied);
+   for(int j=0; j<copied; j++) { open_arr[j]=r[j].open; high_arr[j]=r[j].high; low_arr[j]=r[j].low; close_arr[j]=r[j].close; }
+
+   for(int j=1; j<copied; j++)
    {
-      if(g_bx_state[k] == 0) continue;
-      datetime t = g_bx_event_time[k];
-      if(g_bx_wk_time[k] > t) t = g_bx_wk_time[k];
-      if(t > best_t){ best_t=t; best_k=k; }
+      bool inside=(high_arr[j]<=mtf_state.mb_h)&&(low_arr[j]>=mtf_state.mb_l);
+      if(!inside)
+      {
+         if(high_arr[j]>mtf_state.mb_h || low_arr[j]<mtf_state.mb_l)
+            { mtf_state.mb_h=high_arr[j]; mtf_state.mb_l=low_arr[j]; mtf_state.mb_i=j; }
+         ProcessBar(j, open_arr, high_arr, low_arr, close_arr, dummy_time, mtf_state, true, false); // draw_ui = false
+      }
    }
 
-   if(best_k < 0) return;
+   // 4. Extract the active box coordinates
+   if(mtf_state.bx_phase == 0) return; // No active box
 
-   double bx_top = g_bx_top[best_k];
-   double bx_bot = g_bx_bot[best_k];
-   double wk_top = g_bx_wk_abv_top[best_k];
-   double wk_bot = g_bx_wk_blw_bot[best_k];
+   double bx_top = 0, bx_bot = 0;
+   if(mtf_state.bx_extreme) // Bull box
+   {
+      bx_top = mtf_state.bx_swing_h;
+      bx_bot = mtf_state.bx_swing_l;
+   }
+   else // Bear box
+   {
+      bx_top = mtf_state.bx_swing_h;
+      bx_bot = mtf_state.bx_swing_l;
+   }
+   if(bx_top < bx_bot){ double tmp=bx_top; bx_top=bx_bot; bx_bot=tmp; }
 
-   MqlRates r[];
-   int copied = CopyRates(Symbol(), Period(), 0, 50, r);
-   if(copied < 35) return;
+   double wk_sz = (bx_top - bx_bot) * InpWeakZonePct / 100.0;
+   double wk_top = bx_top + wk_sz;
+   double wk_bot = bx_bot - wk_sz;
+
+   // 5. Evaluate the current price against the MTF box backwards
    ArraySetAsSeries(r, true);
-
-   // Trend belirleme
    int trend = (r[0].close > r[9].close) ? 1 : -1;
    string trend_str = (trend == 1) ? "YUKARI" : "ASAGI";
 
    int bars_in_bx = 0;
    int bars_in_wk = 0;
    int bars_out = 0;
-   int entry_dir = 0; // 1 = yukarıdan geldi girdi, -1 = aşağıdan geldi girdi
-   int exit_dir = 0;  // 1 = yukarıdan çıktı, -1 = aşağıdan çıktı
+   int entry_dir = 0;
+   int exit_dir = 0;
 
-   // Durum tespiti: Su anki mumun nerede oldugunu bul
-   int current_loc = 0; // 0=disari, 1=zayif ust, -1=zayif alt, 2=ana kutu
-   double h0 = r[0].high, l0 = r[0].low;
+   int current_loc = 0;
+   double h0_s = r[0].high, l0_s = r[0].low, c0_s = r[0].close;
 
-   if(h0 >= bx_bot && l0 <= bx_top) current_loc = 2; // wick veya govde kutu icine giriyorsa
-   else if(h0 >= bx_top && l0 <= wk_top) current_loc = 1;
-   else if(h0 >= wk_bot && l0 <= bx_bot) current_loc = -1;
+   if(h0_s >= bx_bot && l0_s <= bx_top) current_loc = 2;
+   else if(h0_s >= bx_top && l0_s <= wk_top) current_loc = 1;
+   else if(h0_s >= wk_bot && l0_s <= bx_bot) current_loc = -1;
 
    int i = 0;
+   bool touched_main = false;
+   bool pierced = false;
+   double highest_seen = 0.0, lowest_seen = 9999999.0;
 
-   // Eger su an ICERIDEYSE (ana kutu veya zayif bolge)
    if(current_loc != 0)
    {
-      while(i < copied)
+      while(i < 50)
       {
          double h = r[i].high, l = r[i].low;
-         if(h >= bx_bot && l <= bx_top) bars_in_bx++;
+         if(h >= bx_bot && l <= bx_top) { bars_in_bx++; touched_main = true; }
          else if((h >= bx_top && l <= wk_top) || (h >= wk_bot && l <= bx_bot)) bars_in_wk++;
-
-         // Tamamen disarida oldugu ilk mumu bulursak dur
          if(l > wk_top || h < wk_bot) break;
          i++;
       }
-      if(i < copied) entry_dir = (r[i].low > wk_top) ? 1 : -1;
+      if(i < 50) entry_dir = (r[i].low > wk_top) ? 1 : -1;
    }
-   else // TAMAMEN DISARIDA
+   else
    {
-      // Once disarida gecirdigi sureyi (bars_out) bulalim
-      while(i < copied)
+      while(i < 50)
       {
          double h = r[i].high, l = r[i].low;
          if(h < wk_bot || l > wk_top) bars_out++;
-         else break; // Kutuya (veya zayif bolgeye) degdigi ilk ani bulduk
+         else break;
          i++;
       }
 
-      // Su an nerede oldugumuza gore cikis yonunu belirle
-      exit_dir = (l0 > wk_top) ? 1 : -1;
+      exit_dir = (c0_s > wk_top) ? 1 : -1;
 
-      // Simdi iceride gecirdigi sureyi bulalim
-      while(i < copied)
+      while(i < 50)
       {
          double h = r[i].high, l = r[i].low;
-         if(h >= bx_bot && l <= bx_top) bars_in_bx++;
+
+         if(h > highest_seen) highest_seen = h;
+         if(l < lowest_seen)  lowest_seen = l;
+
+         if(h >= bx_bot && l <= bx_top) { bars_in_bx++; touched_main = true; }
          else if((h >= bx_top && l <= wk_top) || (h >= wk_bot && l <= bx_bot)) bars_in_wk++;
-         else if(l > wk_top || h < wk_bot) break; // Tekrar (obur tarafa ya da ayni tarafa) disari ciktiginda dur
+         else if(l > wk_top || h < wk_bot) break;
          i++;
       }
 
-      // i = kutuya en bastan girdigi mum (kutu oncesi disarida oldugu ilk an)
-      if(i < copied) entry_dir = (r[i].low > wk_top) ? 1 : -1;
+      if(i < 50) entry_dir = (r[i].low > wk_top) ? 1 : -1;
+
+      if(highest_seen >= wk_top && lowest_seen <= wk_bot) pierced = true;
+      if(entry_dir != exit_dir) pierced = true;
    }
 
-   string tf_name = EnumToString(Period());
+   string tf_name = EnumToString(tf);
    StringReplace(tf_name, "PERIOD_", "");
    string msg = "SMACv2 (" + tf_name + ") Analiz:\nTrend: " + trend_str + "\n";
    string giris_str = (entry_dir == 1) ? "Yukaridan geldi" : "Asagidan geldi";
@@ -982,9 +1033,9 @@ void CheckSmartMTFNotification()
       }
       else
       {
-         if(entry_dir == exit_dir) // Girdigi yerden cikti -> TEPKI ALDI
+         if(!pierced)
          {
-            if(bars_in_bx > 0) msg += "Durum: Kutunun ICINDEN TEPKI ALDI, " + giris_str + " ve ayni yone dondu.\n";
+            if(touched_main)   msg += "Durum: Kutunun ICINDEN TEPKI ALDI, " + giris_str + " ve ayni yone dondu.\n";
             else               msg += "Durum: Sadece ZAYIF BOLGEDEN TEPKI ALDI, " + giris_str + " ve ayni yone dondu.\n";
             msg += "Hareket: Kutudan cikali " + IntegerToString(bars_out) + " mum oldu.\n";
             if((trend == 1 && exit_dir == 1) || (trend == -1 && exit_dir == -1))
@@ -992,9 +1043,10 @@ void CheckSmartMTFNotification()
             else
                msg += "Beklenti: RISKLI - Trende karsi hareket (tepki kisa kalabilir).";
          }
-         else // Girdigi yerin tersinden cikti -> DELDI GECTI
+         else
          {
-            msg += "Durum: Kutuyu tamamen DELDI GECTI.\n";
+            if(touched_main) msg += "Durum: Kutuyu ANA GOVDESINDEN DELDI GECTI.\n";
+            else             msg += "Durum: Zayif bolgeyi DELDI GECTI.\n";
             msg += "Giris: " + giris_str + "\n";
             msg += "Hareket: Kutudan cikali " + IntegerToString(bars_out) + " mum oldu.";
          }
@@ -1004,8 +1056,8 @@ void CheckSmartMTFNotification()
    if(msg != last_msg)
    {
       SendNotification(msg);
-      last_msg = msg;
-      last_notif_time = TimeCurrent();
+      if(tf == PERIOD_M5) { last_msg_m5 = msg; last_notif_time_m5 = TimeCurrent(); }
+      else                { last_msg_m15 = msg; last_notif_time_m15 = TimeCurrent(); }
    }
 }
 
@@ -1104,8 +1156,11 @@ int OnCalculate(const int rates_total,const int prev_calculated,
    if(InpShowStats&&li>0)
       BxDrawLabels(time[li]+(datetime)(PeriodSeconds()*2));
 
-   if(InpSmartNotif)
-      CheckSmartMTFNotification();
+   if(InpSmartNotif && Period() == PERIOD_M1)
+   {
+      CheckSmartMTFNotification(PERIOD_M5);
+      CheckSmartMTFNotification(PERIOD_M15);
+   }
 
    last_rates_tot=rates_total;
    return(rates_total);
