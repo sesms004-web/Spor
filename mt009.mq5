@@ -1247,11 +1247,8 @@ void EvaluateTradeSignal(int current_bar_i, datetime t, double live_price, int t
        if(InpAlertPopup) Alert(msg);
        if(InpAlertPush) {
            string push_msg = choch_header + "\n\n"
-               + "M1"  + choch_icon_m1  + ": " + push_m1  + "\n\n"
                + "M5"  + choch_icon_m5  + ": " + push_m5  + "\n\n"
                + "M15" + choch_icon_m15 + ": " + push_m15 + "\n\n"
-               + "M30" + choch_icon_m30 + ": " + push_m30 + "\n\n"
-               + "H1"  + choch_icon_h1  + ": " + push_h1  + "\n\n"
                + "📈 " + IntegerToString(total_points) + "/" + IntegerToString(InpMinTradeScoreLimit) + " | " + verdict;
            if(total_points >= InpMinTradeScoreLimit && choch_level != 0) {
                double sl_dist  = MathAbs(live_price - minor_extreme_sl);
