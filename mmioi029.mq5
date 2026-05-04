@@ -37,6 +37,8 @@ input double InpDaysD1   = 1440.0;
 input group "--- BİLDİRİM ---"
 input bool   InpNotifTest    = false;  // Test bildirimi gönder (açınca çalışır)
 input bool   InpNotifSignal  = true;   // Sinyal değişince bildirim gönder
+input bool   InpSmartNotif   = true;   // Akıllı telefon analizi gönder (M5)
+input int    InpNotifInterval= 60;     // Bildirim saniye aralığı
 
 input group "--- GÖRSEL ---"
 input bool   InpShowMin      = true;
@@ -854,6 +856,108 @@ void ProcessBar(int i,
 }
 
 //--------------------------------------------------------------------
+//--------------------------------------------------------------------
+//  AKILLI BİLDİRİM SİSTEMİ (M5 Analizi)
+//--------------------------------------------------------------------
+void CheckSmartMTFNotification()
+{
+   static datetime last_notif_time = 0;
+   static string   last_msg = "";
+
+   if(TimeCurrent() - last_notif_time < InpNotifInterval) return;
+
+   int best_k = -1;
+   datetime best_t = 0;
+   for(int k = 0; k < g_bx_cnt; k++)
+   {
+      if(g_bx_state[k] == 0) continue;
+      datetime t = g_bx_event_time[k];
+      if(g_bx_wk_time[k] > t) t = g_bx_wk_time[k];
+      if(t > best_t){ best_t=t; best_k=k; }
+   }
+
+   if(best_k < 0) return;
+
+   double bx_top = g_bx_top[best_k];
+   double bx_bot = g_bx_bot[best_k];
+   double wk_top = g_bx_wk_abv_top[best_k];
+   double wk_bot = g_bx_wk_blw_bot[best_k];
+
+   MqlRates r[];
+   if(CopyRates(Symbol(), PERIOD_M5, 0, 30, r) < 20) return;
+   ArraySetAsSeries(r, true);
+
+   // Trend belirleme
+   int trend = (r[0].close > r[9].close) ? 1 : -1;
+   string trend_str = (trend == 1) ? "YUKARI" : "ASAGI";
+
+   int state = 0; // 0: Dışarıda, 1: Zayıf Bölgede, 2: Kutu İçinde, 3: Kutuyu Deldi, 4: Tepki Aldı Çıktı
+   int bars_in_wk = 0;
+   int bars_in_bx = 0;
+   int bars_out   = 0;
+   int touch_dir  = 0; // 1: Üstten değdi, -1: Alttan değdi
+
+   double cur_c = r[0].close; double prev_c = r[16].close;
+
+   for(int b = 15; b >= 0; b--)
+   {
+      double h = r[b].high;
+      double l = r[b].low;
+      double c = r[b].close;
+
+      bool in_main = (h >= bx_bot && l <= bx_top);
+      bool in_wk_top = (h >= bx_top && l <= wk_top && !in_main);
+      bool in_wk_bot = (h >= wk_bot && l <= bx_bot && !in_main);
+
+      if(in_main)
+      {
+         state = 2;
+         bars_in_bx++;
+         bars_out = 0;
+         if(touch_dir == 0) touch_dir = (prev_c > bx_top) ? 1 : -1;
+      }
+      else if(in_wk_top || in_wk_bot)
+      {
+         if(state == 0) touch_dir = in_wk_top ? 1 : -1;
+         if(state == 0 || state == 1) { state = 1; bars_in_wk++; bars_out = 0; }
+         else if(state == 2) { state = 4; bars_out++; } // Kutudan çıkış aşaması
+      }
+      else
+      {
+         bars_out++;
+         if(state == 1) state = 4; // Zayıf bölgeden tepki aldı çıktı
+         if(state == 2) state = 4; // Kutudan tepki aldı çıktı
+         if(state == 4 && ((touch_dir==1 && c < bx_bot) || (touch_dir==-1 && c > bx_top))) state = 3; // Deldi geçti
+      }
+
+      prev_c = c;
+   }
+
+   string msg = "SMACv2 (M5) Analiz:\nTrend: " + trend_str + "\n";
+
+   if(state == 1) msg += "Durum: Zayif bolgede (nokta nokta cizgide)\nBekleme: " + IntegerToString(bars_in_wk) + " mumdur icinde.\n";
+   else if(state == 2) msg += "Durum: Kutunun icinde\nBekleme: " + IntegerToString(bars_in_bx) + " mumdur icinde.\n";
+   else if(state == 3) msg += "Durum: Kutuyu tamamen delip gecti (Gecersiz).\n";
+   else if(state == 4)
+   {
+      if(bars_in_bx == 0) msg += "Durum: Sadece zayif bolgeden (fitilden) tepki aldi.\n";
+      else msg += "Durum: Kutunun icinden tepki aldi.\n";
+      msg += "Hareket: Kutudan cikali " + IntegerToString(bars_out) + " mum oldu.\n";
+      if((trend == 1 && touch_dir == -1) || (trend == -1 && touch_dir == 1))
+         msg += "Beklenti: GUVENLI - Gucu arkasina aldi, sert hareket gelebilir!";
+      else
+         msg += "Beklenti: RİSKLİ - Trende karsi islem (tepki kisa kalabilir).";
+   }
+   else msg += "Durum: Kutuya henuz yaklasilamadi.\n";
+
+   if(msg != last_msg && state != 0)
+   {
+      SendNotification(msg);
+      last_msg = msg;
+      last_notif_time = TimeCurrent();
+   }
+}
+
 int OnCalculate(const int rates_total,const int prev_calculated,
                 const datetime &time[],const double &open[],
                 const double &high[], const double &low[],
@@ -949,7 +1053,8 @@ int OnCalculate(const int rates_total,const int prev_calculated,
    if(InpShowStats&&li>0)
       BxDrawLabels(time[li]+(datetime)(PeriodSeconds()*2));
 
-   // MTF Sinyal Paneli
+   if(InpSmartNotif)
+      CheckSmartMTFNotification();
 
    last_rates_tot=rates_total;
    return(rates_total);
