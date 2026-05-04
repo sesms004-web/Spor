@@ -884,7 +884,7 @@ void CheckSmartMTFNotification()
    double wk_bot = g_bx_wk_blw_bot[best_k];
 
    MqlRates r[];
-   int copied = CopyRates(Symbol(), PERIOD_M5, 0, 50, r);
+   int copied = CopyRates(Symbol(), Period(), 0, 50, r);
    if(copied < 35) return;
    ArraySetAsSeries(r, true);
 
@@ -895,79 +895,86 @@ void CheckSmartMTFNotification()
    int bars_in_bx = 0;
    int bars_in_wk = 0;
    int bars_out = 0;
-   int entry_dir = 0; // 1 = yukarıdan girdi, -1 = aşağıdan girdi
+   int entry_dir = 0; // 1 = yukarıdan geldi girdi, -1 = aşağıdan geldi girdi
    int exit_dir = 0;  // 1 = yukarıdan çıktı, -1 = aşağıdan çıktı
 
-   // Durum tespiti: Şu anki mumun nerede olduğunu bul
-   int current_loc = 0; // 0=dışarı, 1=zayıf üst, -1=zayıf alt, 2=ana kutu
-   double c0 = r[0].close;
+   // Durum tespiti: Su anki mumun nerede oldugunu bul
+   int current_loc = 0; // 0=disari, 1=zayif ust, -1=zayif alt, 2=ana kutu
+   double h0 = r[0].high, l0 = r[0].low;
 
-   if(c0 >= bx_bot && c0 <= bx_top) current_loc = 2;
-   else if(c0 > bx_top && c0 <= wk_top) current_loc = 1;
-   else if(c0 < bx_bot && c0 >= wk_bot) current_loc = -1;
+   if(h0 >= bx_bot && l0 <= bx_top) current_loc = 2; // wick veya govde kutu icine giriyorsa
+   else if(h0 >= bx_top && l0 <= wk_top) current_loc = 1;
+   else if(h0 >= wk_bot && l0 <= bx_bot) current_loc = -1;
 
    int i = 0;
-   if(current_loc == 2 || current_loc == 1 || current_loc == -1) // İÇERİDE
-   {
-      // Geçmişe doğru say, ne zamandır içeride
-      while(i < copied)
-      {
-         double c = r[i].close;
-         if(c >= bx_bot && c <= bx_top) bars_in_bx++;
-         else if((c > bx_top && c <= wk_top) || (c < bx_bot && c >= wk_bot)) bars_in_wk++;
-         else break; // Dışarı çıktığı an
-         i++;
-      }
-      // i = dışarıda olduğu ilk bar. Bu barın kapanışı nerede?
-      if(i < 30) entry_dir = (r[i].close > wk_top) ? 1 : -1;
-   }
-   else // DIŞARIDA
-   {
-      // Geçmişe doğru say, ne zamandır dışarıda
-      while(i < copied)
-      {
-         double c = r[i].close;
-         if(c > wk_top || c < wk_bot) bars_out++;
-         else break; // İçeri girdiği an
-         i++;
-      }
-      exit_dir = (r[0].close > wk_top) ? 1 : -1; // güncel mum yukarıdan mı aşağıdan mı çıktı
 
-      // Şimdi ne kadar süre içeride kalmış onu bul
+   // Eger su an ICERIDEYSE (ana kutu veya zayif bolge)
+   if(current_loc != 0)
+   {
       while(i < copied)
       {
-         double c = r[i].close;
-         if(c >= bx_bot && c <= bx_top) bars_in_bx++;
-         else if((c > bx_top && c <= wk_top) || (c < bx_bot && c >= wk_bot)) bars_in_wk++;
-         else break; // Tekrar dışarı çıktığı (kutunun öbür tarafı/aynı tarafı)
+         double h = r[i].high, l = r[i].low;
+         if(h >= bx_bot && l <= bx_top) bars_in_bx++;
+         else if((h >= bx_top && l <= wk_top) || (h >= wk_bot && l <= bx_bot)) bars_in_wk++;
+
+         // Tamamen disarida oldugu ilk mumu bulursak dur
+         if(l > wk_top || h < wk_bot) break;
          i++;
       }
-      // i = ilk dışarıda olduğu bar
-      if(i < 30) entry_dir = (r[i].close > wk_top) ? 1 : -1;
+      if(i < copied) entry_dir = (r[i].low > wk_top) ? 1 : -1;
+   }
+   else // TAMAMEN DISARIDA
+   {
+      // Once disarida gecirdigi sureyi (bars_out) bulalim
+      while(i < copied)
+      {
+         double h = r[i].high, l = r[i].low;
+         if(h < wk_bot || l > wk_top) bars_out++;
+         else break; // Kutuya (veya zayif bolgeye) degdigi ilk ani bulduk
+         i++;
+      }
+
+      // Su an nerede oldugumuza gore cikis yonunu belirle
+      exit_dir = (l0 > wk_top) ? 1 : -1;
+
+      // Simdi iceride gecirdigi sureyi bulalim
+      while(i < copied)
+      {
+         double h = r[i].high, l = r[i].low;
+         if(h >= bx_bot && l <= bx_top) bars_in_bx++;
+         else if((h >= bx_top && l <= wk_top) || (h >= wk_bot && l <= bx_bot)) bars_in_wk++;
+         else if(l > wk_top || h < wk_bot) break; // Tekrar (obur tarafa ya da ayni tarafa) disari ciktiginda dur
+         i++;
+      }
+
+      // i = kutuya en bastan girdigi mum (kutu oncesi disarida oldugu ilk an)
+      if(i < copied) entry_dir = (r[i].low > wk_top) ? 1 : -1;
    }
 
-   string msg = "SMACv2 (M5) Analiz:\nTrend: " + trend_str + "\n";
+   string tf_name = EnumToString(Period());
+   StringReplace(tf_name, "PERIOD_", "");
+   string msg = "SMACv2 (" + tf_name + ") Analiz:\nTrend: " + trend_str + "\n";
    string giris_str = (entry_dir == 1) ? "Yukaridan geldi" : "Asagidan geldi";
 
    if(current_loc == 2)
    {
-      msg += "Durum: Kutunun TAM ICINDE\n";
+      msg += "Durum: Kutunun TAM ICINDE (Wick veya Govde)\n";
       msg += "Giris: " + giris_str + "\n";
       msg += "Bekleme: " + IntegerToString(bars_in_bx + bars_in_wk) + " mumdur iceride.";
    }
    else if(current_loc == 1)
    {
-      msg += "Durum: Ust zayif bolgede (Nokta cizgide)\n";
+      msg += "Durum: Ust zayif bolgeye dokunuyor (Nokta cizgi)\n";
       msg += "Giris: " + giris_str + "\n";
-      msg += "Bekleme: " + IntegerToString(bars_in_wk) + " mumdur iceride.";
+      msg += "Bekleme: " + IntegerToString(bars_in_wk) + " mumdur zayif bolgede.";
    }
    else if(current_loc == -1)
    {
-      msg += "Durum: Alt zayif bolgede (Nokta cizgide)\n";
+      msg += "Durum: Alt zayif bolgeye dokunuyor (Nokta cizgi)\n";
       msg += "Giris: " + giris_str + "\n";
-      msg += "Bekleme: " + IntegerToString(bars_in_wk) + " mumdur iceride.";
+      msg += "Bekleme: " + IntegerToString(bars_in_wk) + " mumdur zayif bolgede.";
    }
-   else // DIŞARIDA
+   else // DISARIDA
    {
       if(bars_in_bx == 0 && bars_in_wk == 0)
       {
@@ -975,7 +982,7 @@ void CheckSmartMTFNotification()
       }
       else
       {
-         if(entry_dir == exit_dir) // Tepki aldı
+         if(entry_dir == exit_dir) // Girdigi yerden cikti -> TEPKI ALDI
          {
             if(bars_in_bx > 0) msg += "Durum: Kutunun ICINDEN TEPKI ALDI, " + giris_str + " ve ayni yone dondu.\n";
             else               msg += "Durum: Sadece ZAYIF BOLGEDEN TEPKI ALDI, " + giris_str + " ve ayni yone dondu.\n";
@@ -983,9 +990,9 @@ void CheckSmartMTFNotification()
             if((trend == 1 && exit_dir == 1) || (trend == -1 && exit_dir == -1))
                msg += "Beklenti: GUVENLI - Gucu arkasina aldi, guclu hareket gelebilir!";
             else
-               msg += "Beklenti: RİSKLİ - Trende karsi hareket (tepki kisa kalabilir).";
+               msg += "Beklenti: RISKLI - Trende karsi hareket (tepki kisa kalabilir).";
          }
-         else // Deldi geçti
+         else // Girdigi yerin tersinden cikti -> DELDI GECTI
          {
             msg += "Durum: Kutuyu tamamen DELDI GECTI.\n";
             msg += "Giris: " + giris_str + "\n";
