@@ -637,7 +637,7 @@ void ProcessBar(int i,
    double prev_c=(i>0)?close[i-1]:close[i];
    string pfx=is_history?"":"Live_";
 
-   if(InpShowStats)
+   if(InpShowStats && draw_ui)
       BxUpdateStats(val_h,val_l,val_c,prev_c,time[i]);
 
    //================================================================
@@ -861,6 +861,13 @@ void ProcessBar(int i,
 //--------------------------------------------------------------------
 void CheckSmartMTFNotification(ENUM_TIMEFRAMES tf)
 {
+   static datetime next_run_m5 = 0, next_run_m15 = 0;
+   if(tf == PERIOD_M5 && TimeCurrent() < next_run_m5) return;
+   if(tf == PERIOD_M15 && TimeCurrent() < next_run_m15) return;
+
+   if(tf == PERIOD_M5) next_run_m5 = TimeCurrent() + 10;
+   else                next_run_m15 = TimeCurrent() + 10;
+
    static datetime last_notif_time_m5 = 0, last_notif_time_m15 = 0;
    static string   last_msg_m5 = "",       last_msg_m15 = "";
 
@@ -1053,12 +1060,15 @@ void CheckSmartMTFNotification(ENUM_TIMEFRAMES tf)
       }
    }
 
-   if(msg != last_msg)
+   if(msg != last_msg || InpNotifTest)
    {
       SendNotification(msg);
-      if(tf == PERIOD_M5) { last_msg_m5 = msg; last_notif_time_m5 = TimeCurrent(); }
-      else                { last_msg_m15 = msg; last_notif_time_m15 = TimeCurrent(); }
+      if(tf == PERIOD_M5) { last_msg_m5 = msg; }
+      else                { last_msg_m15 = msg; }
    }
+
+   if(tf == PERIOD_M5) last_notif_time_m5 = TimeCurrent();
+   else                last_notif_time_m15 = TimeCurrent();
 }
 
 int OnCalculate(const int rates_total,const int prev_calculated,
@@ -1167,7 +1177,12 @@ int OnCalculate(const int rates_total,const int prev_calculated,
 }
 //+------------------------------------------------------------------+
 
-int OnInit() { IndicatorSetString(INDICATOR_SHORTNAME,"SMACv2_v30"); return INIT_SUCCEEDED; }
+int OnInit()
+{
+   IndicatorSetString(INDICATOR_SHORTNAME,"SMACv2_v30");
+   if(InpNotifTest) SendNotification("SMACv2 (" + Symbol() + ") Test Bildirimi Basarili!");
+   return INIT_SUCCEEDED;
+}
 void OnDeinit(const int reason)
 {
    ObjectsDeleteAll(0,"Minor_");ObjectsDeleteAll(0,"Major_");ObjectsDeleteAll(0,"HLine_");
