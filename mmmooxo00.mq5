@@ -1704,6 +1704,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                           if (!InpWaitRetest) {
                               EvaluateTradeSignal(i, time[i], val_c, -1, p_pct, is_strong, state.t2_h, state.maj_h_i, is_subsequent, false, current_trade_index+1, state.d1_l);
                           } else {
+                              double dist = state.t2_h - state.d1_l;
+                              g_pending_entry = state.d1_l + (dist * (InpRetestDepthPct / 100.0));
+                              if (!is_history && InpAlertPopup) Alert("⏳ [" + Symbol() + "] PUSU AKTİF: Bearish CHoCH tespit edildi. Giriş Bekleniyor: " + DoubleToString(g_pending_entry, _Digits));
                               g_pending_active = true;
                               g_pending_dir = -1;
                               g_pending_bar_i = i;
@@ -1712,8 +1715,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                               g_pending_p_pct = p_pct;
                               g_pending_maj_extreme_i = state.maj_h_i;
                               g_pending_is_second_trade = is_subsequent;
-                              double dist = state.t2_h - state.d1_l;
-                              g_pending_entry = state.d1_l + (dist * (InpRetestDepthPct / 100.0));
                           }
                       }
                   }
@@ -1742,20 +1743,20 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   if (is_new_signal && InpShowChoch) {
                   color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
 
-                  string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
+                  string path_1 = GetUniqueName("CHoCH_Path_");
                   DrawLine(path_1, GetTimeSafe(time, state.t1_i), state.t1_h, GetTimeSafe(time, state.d1_i), state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
-                  string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
+                  string path_2 = GetUniqueName("CHoCH_Path_");
                   DrawLine(path_2, GetTimeSafe(time, state.d1_i), state.d1_l, GetTimeSafe(time, state.t2_i), state.t2_h, InpColorChochPath, 1, STYLE_DOT, false);
 
-                  string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
+                  string path_3 = GetUniqueName("CHoCH_Path_");
                   DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_h, GetTimeSafe(time, i), state.d1_l, InpColorChochPath, 1, STYLE_DOT, false);
 
-                  string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
+                  string choch_name = GetUniqueName("CHoCH_Signal_");
                   DrawLine(choch_name, GetTimeSafe(time, i), state.d1_l, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_l, sig_color, 3, STYLE_SOLID, false);
 
                   string label_text = (current_trade_index >= 0) ? IntegerToString(current_trade_index + 1) : "-";
-                  string text_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  string text_name = GetUniqueName("CHoCH_Text_");
                   ObjectCreate(0, text_name, OBJ_TEXT, 0, GetTimeSafe(time, i), state.d1_l);
                   ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
                   ObjectSetInteger(0, text_name, OBJPROP_COLOR, sig_color);
@@ -1859,6 +1860,9 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                           if (!InpWaitRetest) {
                               EvaluateTradeSignal(i, time[i], val_c, 1, p_pct, is_strong, state.t2_l, state.maj_l_i, is_subsequent, false, current_trade_index+1, state.d1_h);
                           } else {
+                              double dist = state.d1_h - state.t2_l;
+                              g_pending_entry = state.d1_h - (dist * (InpRetestDepthPct / 100.0));
+                              if (!is_history && InpAlertPopup) Alert("⏳ [" + Symbol() + "] PUSU AKTİF: Bullish CHoCH tespit edildi. Giriş Bekleniyor: " + DoubleToString(g_pending_entry, _Digits));
                               g_pending_active = true;
                               g_pending_dir = 1;
                               g_pending_bar_i = i;
@@ -1867,8 +1871,6 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                               g_pending_p_pct = p_pct;
                               g_pending_maj_extreme_i = state.maj_l_i;
                               g_pending_is_second_trade = is_subsequent;
-                              double dist = state.d1_h - state.t2_l;
-                              g_pending_entry = state.d1_h - (dist * (InpRetestDepthPct / 100.0));
                           }
                       }
                   }
@@ -1897,20 +1899,20 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                   if (is_new_signal && InpShowChoch) {
                   color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
 
-                  string path_1 = GetUniqueName(prefix + "CHoCH_Path_");
+                  string path_1 = GetUniqueName("CHoCH_Path_");
                   DrawLine(path_1, GetTimeSafe(time, state.t1_i), state.t1_l, GetTimeSafe(time, state.d1_i), state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
-                  string path_2 = GetUniqueName(prefix + "CHoCH_Path_");
+                  string path_2 = GetUniqueName("CHoCH_Path_");
                   DrawLine(path_2, GetTimeSafe(time, state.d1_i), state.d1_h, GetTimeSafe(time, state.t2_i), state.t2_l, InpColorChochPath, 1, STYLE_DOT, false);
 
-                  string path_3 = GetUniqueName(prefix + "CHoCH_Path_");
+                  string path_3 = GetUniqueName("CHoCH_Path_");
                   DrawLine(path_3, GetTimeSafe(time, state.t2_i), state.t2_l, GetTimeSafe(time, i), state.d1_h, InpColorChochPath, 1, STYLE_DOT, false);
 
-                  string choch_name = GetUniqueName(prefix + "CHoCH_Signal_");
+                  string choch_name = GetUniqueName("CHoCH_Signal_");
                   DrawLine(choch_name, GetTimeSafe(time, i), state.d1_h, GetTimeSafe(time, i) + PeriodSeconds() * 5, state.d1_h, sig_color, 3, STYLE_SOLID, false);
 
                   string label_text = (current_trade_index >= 0) ? IntegerToString(current_trade_index + 1) : "-";
-                  string text_name = GetUniqueName(prefix + "CHoCH_Text_");
+                  string text_name = GetUniqueName("CHoCH_Text_");
                   ObjectCreate(0, text_name, OBJ_TEXT, 0, GetTimeSafe(time, i), state.d1_h);
                   ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
                   ObjectSetInteger(0, text_name, OBJPROP_COLOR, sig_color);
