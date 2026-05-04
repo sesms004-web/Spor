@@ -1060,11 +1060,14 @@ void CheckSmartMTFNotification(ENUM_TIMEFRAMES tf)
       }
    }
 
-   if(msg != last_msg || InpNotifTest)
+   static bool test_fired_m5 = false, test_fired_m15 = false;
+   bool fire_test = (InpNotifTest && ((tf == PERIOD_M5 && !test_fired_m5) || (tf == PERIOD_M15 && !test_fired_m15)));
+
+   if(msg != last_msg || fire_test)
    {
       SendNotification(msg);
-      if(tf == PERIOD_M5) { last_msg_m5 = msg; }
-      else                { last_msg_m15 = msg; }
+      if(tf == PERIOD_M5) { last_msg_m5 = msg; test_fired_m5 = true; }
+      else                { last_msg_m15 = msg; test_fired_m15 = true; }
    }
 
    if(tf == PERIOD_M5) last_notif_time_m5 = TimeCurrent();
@@ -1180,7 +1183,6 @@ int OnCalculate(const int rates_total,const int prev_calculated,
 int OnInit()
 {
    IndicatorSetString(INDICATOR_SHORTNAME,"SMACv2_v30");
-   if(InpNotifTest) SendNotification("SMACv2 (" + Symbol() + ") Test Bildirimi Basarili!");
    return INIT_SUCCEEDED;
 }
 void OnDeinit(const int reason)
