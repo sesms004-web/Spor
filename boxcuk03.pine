@@ -1,0 +1,557 @@
+//@version=5
+indicator("SMACv2 CHoCH Box - TV Port", overlay=true, max_boxes_count=500, max_lines_count=500)
+
+// --- INPUTS ---
+show_min = input.bool(true, "Show Minor Swings")
+show_maj = input.bool(true, "Show Major Swings")
+show_vl = input.bool(true, "Show Vertical Lines")
+show_box = input.bool(true, "Show Boxes")
+// Colors
+color_min = input.color(color.silver, "Minor Color")
+color_bull = input.color(color.lime, "Bull Major Color")
+color_bear = input.color(color.red, "Bear Major Color")
+color_vl_bull = input.color(color.blue, "Bull VL Color")
+color_vl_bear = input.color(color.maroon, "Bear VL Color")
+color_box_bull = input.color(color.new(color.blue, 70), "Bull Box")
+color_box_bear = input.color(color.new(color.red, 70), "Bear Box")
+color_box_bull_faint = input.color(color.new(color.blue, 90), "Bull Box Faint")
+color_box_bear_faint = input.color(color.new(color.red, 90), "Bear Box Faint")
+
+max_box_pct = input.float(20.0, "Max Box %")
+weak_zone_pct = input.float(50.0, "Weak Zone %")
+
+// --- TYPES & STATE ---
+type CStack
+    array<float> vals
+    array<int> idxs
+
+method push(CStack this, float val, int idx) =>
+    array.push(this.vals, val)
+    array.push(this.idxs, idx)
+
+method pop(CStack this) =>
+    if array.size(this.vals) > 0
+        array.pop(this.vals)
+        array.pop(this.idxs)
+
+method clear(CStack this) =>
+    array.clear(this.vals)
+    array.clear(this.idxs)
+
+method size(CStack this) =>
+    array.size(this.vals)
+
+method get_val(CStack this, int index) =>
+    array.get(this.vals, index)
+
+method get_idx(CStack this, int index) =>
+    array.get(this.idxs, index)
+
+type SState
+    int min_tr
+    int maj_tr
+    int maj_st
+    float min_h
+    int min_h_i
+    float min_l
+    int min_l_i
+    float trig_h
+    float trig_l
+    int lp_i
+    float lp_p
+    float maj_h
+    float maj_l
+    int maj_h_i
+    int maj_l_i
+    float tmp_h
+    int tmp_h_i
+    float tmp_l
+    int tmp_l_i
+    int anc_i
+    float anc_v
+    int bos_i
+    float mb_h
+    float mb_l
+    int mb_i
+    int bx_phase
+    bool bx_extreme
+    float bx_swing_h
+    float bx_swing_l
+    bool has_pot_bull_minor
+    int pot_bull_start_i
+    float pot_bull_start_p
+    float pot_bull_end_p
+    bool has_pot_bear_minor
+    int pot_bear_start_i
+    float pot_bear_start_p
+    float pot_bear_end_p
+    CStack st_h
+    CStack st_l
+    line cur_top_line
+    line cur_bot_line
+
+var SState state = SState.new(
+      0, 0, 0,
+      high, bar_index, low, bar_index,
+      high, low, bar_index, close,
+      0.0, 0.0, 0, 0,
+      high, bar_index, low, bar_index,
+      bar_index, close, bar_index,
+      high, low, bar_index,
+      0, false, 0.0, 0.0,
+      false, 0, 0.0, 0.0,
+      false, 0, 0.0, 0.0,
+      CStack.new(array.new<float>(), array.new<int>()),
+      CStack.new(array.new<float>(), array.new<int>()),
+      na, na
+  )
+
+method BxReset(SState s, float rl, float rh) =>
+    s.bx_phase := 0
+    s.bx_extreme := false
+    s.bx_swing_l := rl
+    s.bx_swing_h := rh
+
+method DoDrawBox(SState s, int left_i, float top, float bot, color clr) =>
+    if show_box
+        int l_i = left_i < s.anc_i ? s.anc_i : left_i
+        float t = top
+        float b = bot
+        if t < b
+            float tmp = t
+            t := b
+            b := tmp
+
+        float maj_sz = s.maj_h - s.maj_l
+        if maj_sz > 0 and (t - b) / maj_sz * 100.0 > max_box_pct
+            if clr == color_box_bull or clr == color_box_bull_faint
+                float fh = -1.0
+                int fi = l_i
+                if s.st_h.size() > 0
+                    for k = 0 to s.st_h.size() - 1
+                        float mh = s.st_h.get_val(k)
+                        if mh > b and mh < t and (fh < 0 or mh < fh)
+                            fh := mh
+                            fi := s.st_h.get_idx(k)
+                if fh > 0
+                    t := fh
+                    l_i := fi
+                else
+                    t := b + maj_sz * max_box_pct / 100.0
+            else
+                float fl = -1.0
+                int fi = l_i
+                if s.st_l.size() > 0
+                    for k = 0 to s.st_l.size() - 1
+                        float ml = s.st_l.get_val(k)
+                        if ml < t and ml > b and (fl < 0 or ml > fl)
+                            fl := ml
+                            fi := s.st_l.get_idx(k)
+                if fl > 0
+                    b := fl
+                    l_i := fi
+                else
+                    b := t - maj_sz * max_box_pct / 100.0
+        if t > b
+            box.new(l_i, t, bar_index, b, border_color=clr, bgcolor=color.new(clr, 85))
+
+method CutLine(line l, int t) =>
+    if not na(l)
+        line.set_x2(l, t)
+        line.set_extend(l, extend.none)
+
+method UpdateLevel(line l, float v) =>
+    if not na(l)
+        line.set_y1(l, v)
+        line.set_y2(l, v)
+
+// Initialization at bar 0
+if bar_index == 0
+    state.min_tr := close > open ? 1 : -1
+    state.maj_tr := state.min_tr
+    state.maj_st := 1
+    state.maj_h := high + (high - low) * 0.1
+    state.maj_l := low - (high - low) * 0.1
+    state.BxReset(low, high)
+
+// Logic inside bar processing
+bool inside = high <= state.mb_h and low >= state.mb_l
+if not inside
+    if high > state.mb_h or low < state.mb_l
+        state.mb_h := high
+        state.mb_l := low
+        state.mb_i := bar_index
+
+    // ProcessBar
+    float val_h = high
+    float val_l = low
+    float val_c = close
+
+    // MINOR
+    float ot = 0.0
+    if state.min_tr == 1
+        ot := state.trig_l
+        if val_h > state.min_h
+            state.min_h := val_h
+            state.min_h_i := bar_index
+            state.trig_l := val_l
+        if val_l < ot
+            int pi = state.min_h_i
+            float pp = state.min_h
+            int si = state.lp_i
+            float sp = state.lp_p
+            if show_min
+                line.new(si, sp, pi, pp, color=color_min, width=1)
+            if state.maj_tr == -1 and not state.has_pot_bull_minor and si >= state.tmp_l_i
+                state.has_pot_bull_minor := true
+                state.pot_bull_start_i := si
+                state.pot_bull_start_p := sp
+                state.pot_bull_end_p := pp
+            if state.maj_st == 0 and state.maj_tr == 1
+                if state.bx_phase == 0 or state.bx_phase == 2
+                    state.DoDrawBox(si, pp, sp, color_box_bull)
+                    state.bx_phase := 1
+                    state.bx_extreme := false
+                    state.bx_swing_h := pp
+                    state.bx_swing_l := sp
+                else
+                    if pp > state.bx_swing_h
+                        state.bx_extreme := true
+                        state.bx_swing_h := pp
+            if state.maj_st == 0 and state.maj_tr == -1 and state.bx_phase == 1
+                if state.bx_extreme and pp > state.bx_swing_h
+                    state.bx_phase := 2
+                    state.bx_extreme := false
+                else
+                    state.bx_swing_h := pp
+            state.st_h.push(pp, pi)
+            if state.maj_tr == 1 and state.maj_st == 0 and pp < state.tmp_h and state.st_l.size() > 0
+                if state.st_l.get_idx(state.st_l.size() - 1) > state.bos_i
+                    state.st_l.pop()
+            state.min_tr := -1
+            state.lp_i := pi
+            state.lp_p := pp
+            state.min_l := val_l
+            state.min_l_i := bar_index
+            state.trig_h := val_h
+    else
+        ot := state.trig_h
+        if val_l < state.min_l
+            state.min_l := val_l
+            state.min_l_i := bar_index
+            state.trig_h := val_h
+        if val_h > ot
+            int ti = state.min_l_i
+            float tp = state.min_l
+            int si = state.lp_i
+            float sp = state.lp_p
+            if show_min
+                line.new(si, sp, ti, tp, color=color_min, width=1)
+            if state.maj_tr == 1 and not state.has_pot_bear_minor and si >= state.tmp_h_i
+                state.has_pot_bear_minor := true
+                state.pot_bear_start_i := si
+                state.pot_bear_start_p := sp
+                state.pot_bear_end_p := tp
+            if state.maj_st == 0 and state.maj_tr == 1 and state.bx_phase == 1
+                if state.bx_extreme and tp < state.bx_swing_l
+                    state.bx_phase := 2
+                    state.bx_extreme := false
+                else
+                    state.bx_swing_l := tp
+            if state.maj_st == 0 and state.maj_tr == -1
+                if state.bx_phase == 0 or state.bx_phase == 2
+                    state.DoDrawBox(si, sp, tp, color_box_bear)
+                    state.bx_phase := 1
+                    state.bx_extreme := false
+                    state.bx_swing_h := sp
+                    state.bx_swing_l := tp
+                else
+                    if tp < state.bx_swing_l
+                        state.bx_extreme := true
+                        state.bx_swing_l := tp
+            state.st_l.push(tp, ti)
+            if state.maj_tr == -1 and state.maj_st == 0 and tp > state.tmp_l and state.st_h.size() > 0
+                if state.st_h.get_idx(state.st_h.size() - 1) > state.bos_i
+                    state.st_h.pop()
+            state.min_tr := 1
+            state.lp_i := ti
+            state.lp_p := tp
+            state.min_h := val_h
+            state.min_h_i := bar_index
+            state.trig_l := val_l
+
+    // MAJOR
+    if state.maj_tr == 0
+        state.maj_tr := 1
+        state.anc_i := state.min_l_i
+        state.anc_v := state.min_l
+        state.maj_l_i := state.min_l_i
+
+    if state.maj_tr == 1
+        if val_h > state.tmp_h
+            state.tmp_h := val_h
+            state.tmp_h_i := bar_index
+            state.has_pot_bear_minor := false
+        if state.maj_st == 0
+            float act = state.st_l.size() > 0 ? state.st_l.get_val(state.st_l.size() - 1) : na
+            if not na(act) and val_l < act
+                state.maj_h := state.tmp_h
+                state.maj_h_i := state.tmp_h_i
+                if show_maj
+                    line.new(state.anc_i, state.anc_v, state.maj_h_i, state.maj_h, color=color_bull, width=2)
+                if show_vl
+                    line.new(state.anc_i, low, state.anc_i, high, color=color_vl_bull, extend=extend.both, style=line.style_dashed)
+                    line.new(state.maj_h_i, low, state.maj_h_i, high, color=color_vl_bull, extend=extend.both, style=line.style_dashed)
+                state.st_l.clear()
+                state.st_h.clear()
+                state.maj_st := 1
+                state.anc_i := state.maj_h_i
+                state.anc_v := state.maj_h
+                state.tmp_l := val_l
+                state.tmp_l_i := bar_index
+                CutLine(state.cur_top_line, bar_index)
+                CutLine(state.cur_bot_line, bar_index)
+                if show_maj
+                    state.cur_top_line := line.new(state.maj_h_i, state.maj_h, bar_index + 1, state.maj_h, color=color_bull, style=line.style_dashed, extend=extend.right)
+                    if not na(state.maj_l) and state.maj_l != 0
+                        state.cur_bot_line := line.new(state.maj_l_i, state.maj_l, bar_index + 1, state.maj_l, color=color_bull, style=line.style_dashed, extend=extend.right)
+            if not na(state.maj_l) and state.maj_l != 0 and val_l < state.maj_l and val_c >= state.maj_l
+                state.maj_l := val_l
+                if show_maj
+                    UpdateLevel(state.cur_bot_line, state.maj_l)
+            if not na(state.maj_l) and state.maj_l != 0 and val_c < state.maj_l
+                state.maj_tr := -1
+                state.maj_st := 0
+                state.bos_i := bar_index
+                if show_maj
+                    line.new(state.anc_i, state.anc_v, state.tmp_h_i, state.tmp_h, color=color_bull, width=2)
+                if show_vl
+                    line.new(state.anc_i, low, state.anc_i, high, color=color_vl_bull, extend=extend.both, style=line.style_dashed)
+                    line.new(state.tmp_h_i, low, state.tmp_h_i, high, color=color_vl_bull, extend=extend.both, style=line.style_dashed)
+                state.st_l.clear()
+                state.anc_i := state.tmp_h_i
+                state.anc_v := state.tmp_h
+                state.tmp_l := val_l
+                state.tmp_l_i := bar_index
+                state.maj_h := state.tmp_h
+                state.maj_h_i := state.tmp_h_i
+                state.maj_l := val_l
+                state.maj_l_i := bar_index
+                if state.has_pot_bear_minor
+                    state.DoDrawBox(state.pot_bear_start_i, state.pot_bear_start_p, state.pot_bear_end_p, color_box_bear_faint)
+                state.BxReset(val_l, state.tmp_h)
+                CutLine(state.cur_top_line, bar_index)
+                CutLine(state.cur_bot_line, bar_index)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+        else if state.maj_st == 1
+            if val_l < state.tmp_l
+                state.tmp_l := val_l
+                state.tmp_l_i := bar_index
+                state.has_pot_bull_minor := false
+            if val_h > state.maj_h and val_c <= state.maj_h
+                state.maj_h := val_h
+                if show_maj
+                    UpdateLevel(state.cur_top_line, state.maj_h)
+            if val_c > state.maj_h
+                state.bos_i := bar_index
+                state.maj_l := state.tmp_l
+                state.maj_l_i := state.tmp_l_i
+                if show_maj
+                    line.new(state.anc_i, state.anc_v, state.maj_l_i, state.maj_l, color=color_bull, width=2)
+                state.st_h.clear()
+                state.maj_st := 0
+                state.anc_i := state.maj_l_i
+                state.anc_v := state.maj_l
+                state.tmp_h := val_h
+                state.tmp_h_i := bar_index
+                state.BxReset(state.maj_l, val_h)
+                CutLine(state.cur_top_line, bar_index)
+                CutLine(state.cur_bot_line, bar_index)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+            if not na(state.maj_l) and state.maj_l != 0 and val_l < state.maj_l and val_c >= state.maj_l
+                state.maj_l := val_l
+                if show_maj
+                    UpdateLevel(state.cur_bot_line, state.maj_l)
+            if not na(state.maj_l) and state.maj_l != 0 and val_c < state.maj_l
+                state.maj_tr := -1
+                state.maj_st := 0
+                state.bos_i := bar_index
+                if show_maj
+                    line.new(state.anc_i, state.anc_v, state.tmp_h_i, state.tmp_h, color=color_bull, width=2)
+                if show_vl
+                    line.new(state.anc_i, low, state.anc_i, high, color=color_vl_bull, extend=extend.both, style=line.style_dashed)
+                    line.new(state.tmp_h_i, low, state.tmp_h_i, high, color=color_vl_bull, extend=extend.both, style=line.style_dashed)
+                state.st_l.clear()
+                state.anc_i := state.tmp_h_i
+                state.anc_v := state.tmp_h
+                state.tmp_l := val_l
+                state.tmp_l_i := bar_index
+                state.maj_h := state.tmp_h
+                state.maj_h_i := state.tmp_h_i
+                state.maj_l := val_l
+                state.maj_l_i := bar_index
+                if state.has_pot_bear_minor
+                    state.DoDrawBox(state.pot_bear_start_i, state.pot_bear_start_p, state.pot_bear_end_p, color_box_bear_faint)
+                state.BxReset(val_l, state.tmp_h)
+                CutLine(state.cur_top_line, bar_index)
+                CutLine(state.cur_bot_line, bar_index)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+    else
+        if val_l < state.tmp_l
+            state.tmp_l := val_l
+            state.tmp_l_i := bar_index
+            state.has_pot_bull_minor := false
+        if state.maj_st == 0
+            float act = state.st_h.size() > 0 ? state.st_h.get_val(state.st_h.size() - 1) : na
+            if not na(act) and val_h > act
+                state.maj_l := state.tmp_l
+                state.maj_l_i := state.tmp_l_i
+                if show_maj
+                    line.new(state.anc_i, state.anc_v, state.maj_l_i, state.maj_l, color=color_bear, width=2)
+                if show_vl
+                    line.new(state.anc_i, low, state.anc_i, high, color=color_vl_bear, extend=extend.both, style=line.style_dashed)
+                    line.new(state.maj_l_i, low, state.maj_l_i, high, color=color_vl_bear, extend=extend.both, style=line.style_dashed)
+                state.st_l.clear()
+                state.st_h.clear()
+                state.maj_st := 1
+                state.anc_i := state.maj_l_i
+                state.anc_v := state.maj_l
+                state.tmp_h := val_h
+                state.tmp_h_i := bar_index
+                CutLine(state.cur_top_line, bar_index)
+                CutLine(state.cur_bot_line, bar_index)
+                if show_maj
+                    state.cur_bot_line := line.new(state.maj_l_i, state.maj_l, bar_index + 1, state.maj_l, color=color_bear, style=line.style_dashed, extend=extend.right)
+                    if not na(state.maj_h) and state.maj_h != 0
+                        state.cur_top_line := line.new(state.maj_h_i, state.maj_h, bar_index + 1, state.maj_h, color=color_bear, style=line.style_dashed, extend=extend.right)
+            if not na(state.maj_h) and state.maj_h != 0 and val_h > state.maj_h and val_c <= state.maj_h
+                state.maj_h := val_h
+                if show_maj
+                    UpdateLevel(state.cur_top_line, state.maj_h)
+            if not na(state.maj_h) and state.maj_h != 0 and val_c > state.maj_h
+                state.maj_tr := 1
+                state.maj_st := 0
+                state.bos_i := bar_index
+                if show_maj
+                    line.new(state.anc_i, state.anc_v, state.tmp_l_i, state.tmp_l, color=color_bear, width=2)
+                if show_vl
+                    line.new(state.anc_i, low, state.anc_i, high, color=color_vl_bear, extend=extend.both, style=line.style_dashed)
+                    line.new(state.tmp_l_i, low, state.tmp_l_i, high, color=color_vl_bear, extend=extend.both, style=line.style_dashed)
+                state.st_h.clear()
+                state.anc_i := state.tmp_l_i
+                state.anc_v := state.tmp_l
+                state.tmp_h := val_h
+                state.tmp_h_i := bar_index
+                state.maj_l := state.tmp_l
+                state.maj_l_i := state.tmp_l_i
+                state.maj_h := val_h
+                state.maj_h_i := bar_index
+                if state.has_pot_bull_minor
+                    state.DoDrawBox(state.pot_bull_start_i, state.pot_bull_end_p, state.pot_bull_start_p, color_box_bull_faint)
+                state.BxReset(state.tmp_l, val_h)
+                CutLine(state.cur_top_line, bar_index)
+                CutLine(state.cur_bot_line, bar_index)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+        else if state.maj_st == 1
+            if val_h > state.tmp_h
+                state.tmp_h := val_h
+                state.tmp_h_i := bar_index
+                state.has_pot_bear_minor := false
+            if val_l < state.maj_l and val_c >= state.maj_l
+                state.maj_l := val_l
+                if show_maj
+                    UpdateLevel(state.cur_bot_line, state.maj_l)
+            if val_c < state.maj_l
+                state.maj_h := state.tmp_h
+                state.bos_i := bar_index
+                state.maj_h_i := state.tmp_h_i
+                if show_maj
+                    line.new(state.anc_i, state.anc_v, state.maj_h_i, state.maj_h, color=color_bear, width=2)
+                state.st_l.clear()
+                state.maj_st := 0
+                state.anc_i := state.maj_h_i
+                state.anc_v := state.maj_h
+                state.tmp_l := val_l
+                state.tmp_l_i := bar_index
+                state.BxReset(val_l, state.maj_h)
+                CutLine(state.cur_top_line, bar_index)
+                CutLine(state.cur_bot_line, bar_index)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+            if not na(state.maj_h) and state.maj_h != 0 and val_h > state.maj_h and val_c <= state.maj_h
+                state.maj_h := val_h
+                if show_maj
+                    UpdateLevel(state.cur_top_line, state.maj_h)
+            if not na(state.maj_h) and state.maj_h != 0 and val_c > state.maj_h
+                state.maj_tr := 1
+                state.maj_st := 0
+                state.bos_i := bar_index
+                if show_maj
+                    line.new(state.anc_i, state.anc_v, state.tmp_l_i, state.tmp_l, color=color_bear, width=2)
+                if show_vl
+                    line.new(state.anc_i, low, state.anc_i, high, color=color_vl_bear, extend=extend.both, style=line.style_dashed)
+                    line.new(state.tmp_l_i, low, state.tmp_l_i, high, color=color_vl_bear, extend=extend.both, style=line.style_dashed)
+                state.st_h.clear()
+                state.anc_i := state.tmp_l_i
+                state.anc_v := state.tmp_l
+                state.tmp_h := val_h
+                state.tmp_h_i := bar_index
+                state.maj_l := state.tmp_l
+                state.maj_l_i := state.tmp_l_i
+                state.maj_h := val_h
+                state.maj_h_i := bar_index
+                if state.has_pot_bull_minor
+                    state.DoDrawBox(state.pot_bull_start_i, state.pot_bull_end_p, state.pot_bull_start_p, color_box_bull_faint)
+                state.BxReset(state.tmp_l, val_h)
+                CutLine(state.cur_top_line, bar_index)
+                CutLine(state.cur_bot_line, bar_index)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+
+
+// --- DASHBOARD & NOTIFICATIONS ---
+show_dashboard = input.bool(true, "Show Dashboard")
+dashboard_pos = input.string("Top Right", "Dashboard Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"])
+
+table_pos = dashboard_pos == "Top Right" ? position.top_right : dashboard_pos == "Top Left" ? position.top_left : dashboard_pos == "Bottom Right" ? position.bottom_right : position.bottom_left
+
+var table info_table = table.new(table_pos, 3, 5, border_width=1)
+
+m1_close = request.security(syminfo.tickerid, "1", close)
+m1_close9 = request.security(syminfo.tickerid, "1", close[9])
+m5_close = request.security(syminfo.tickerid, "5", close)
+m5_close9 = request.security(syminfo.tickerid, "5", close[9])
+m15_close = request.security(syminfo.tickerid, "15", close)
+m15_close9 = request.security(syminfo.tickerid, "15", close[9])
+
+if show_dashboard
+    table.cell(info_table, 0, 0, "Timeframe", text_color=color.white, bgcolor=color.black)
+    table.cell(info_table, 1, 0, "Trend", text_color=color.white, bgcolor=color.black)
+    table.cell(info_table, 2, 0, "Signal", text_color=color.white, bgcolor=color.black)
+
+    table.cell(info_table, 0, 1, "M1", text_color=color.white, bgcolor=color.blue)
+    table.cell(info_table, 1, 1, m1_close > m1_close9 ? "UP" : "DOWN", text_color=m1_close > m1_close9 ? color.lime : color.red)
+
+    table.cell(info_table, 0, 2, "M5", text_color=color.white, bgcolor=color.blue)
+    table.cell(info_table, 1, 2, m5_close > m5_close9 ? "UP" : "DOWN", text_color=m5_close > m5_close9 ? color.lime : color.red)
+
+    table.cell(info_table, 0, 3, "M15", text_color=color.white, bgcolor=color.blue)
+    table.cell(info_table, 1, 3, m15_close > m15_close9 ? "UP" : "DOWN", text_color=m15_close > m15_close9 ? color.lime : color.red)
+
+// --- ALERTS ---
+int current_maj_tr = state.maj_tr
+bool choch_bull = current_maj_tr == 1 and current_maj_tr[1] == -1
+bool choch_bear = current_maj_tr == -1 and current_maj_tr[1] == 1
+
+if choch_bull
+    alert("Bullish CHoCH on " + syminfo.tickerid + " timeframe " + timeframe.period, alert.freq_once_per_bar_close)
+
+if choch_bear
+    alert("Bearish CHoCH on " + syminfo.tickerid + " timeframe " + timeframe.period, alert.freq_once_per_bar_close)
+
+alertcondition(choch_bull, title="Bullish CHoCH", message="Bullish CHoCH Deteced")
+alertcondition(choch_bear, title="Bearish CHoCH", message="Bearish CHoCH Deteced")
