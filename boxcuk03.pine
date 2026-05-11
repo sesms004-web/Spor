@@ -59,8 +59,8 @@ var int pot_bear_start_i = 0
 var float pot_bear_start_p = 0.0
 var float pot_bear_end_p = 0.0
 
-var line cur_top_line = line(na)
-var line cur_bot_line = line(na)
+var line cur_top_line = na
+var line cur_bot_line = na
 
 // Stack arrays do not rollback automatically, we must manage them!
 var array<float> st_h_vals = array.new<float>()
@@ -392,8 +392,8 @@ if not inside
             BxReset(val_l, tmp_h)
             CutLine(cur_top_line, bar_index)
             CutLine(cur_bot_line, bar_index)
-            cur_top_line := line(na)
-            cur_bot_line := line(na)
+            cur_top_line := na
+            cur_bot_line := na
     else if maj_st == 1
         if val_l < tmp_l
             tmp_l := val_l
@@ -418,8 +418,8 @@ if not inside
             BxReset(maj_l, val_h)
             CutLine(cur_top_line, bar_index)
             CutLine(cur_bot_line, bar_index)
-            cur_top_line := line(na)
-            cur_bot_line := line(na)
+            cur_top_line := na
+            cur_bot_line := na
         if not na(maj_l) and maj_l != 0 and val_l < maj_l and val_c >= maj_l
             maj_l := val_l
             if show_maj
@@ -448,8 +448,8 @@ if not inside
             BxReset(val_l, tmp_h)
             CutLine(cur_top_line, bar_index)
             CutLine(cur_bot_line, bar_index)
-            cur_top_line := line(na)
-            cur_bot_line := line(na)
+            cur_top_line := na
+            cur_bot_line := na
     else
         if val_l < tmp_l
             tmp_l := val_l
@@ -507,8 +507,8 @@ if not inside
             BxReset(tmp_l, val_h)
             CutLine(cur_top_line, bar_index)
             CutLine(cur_bot_line, bar_index)
-            cur_top_line := line(na)
-            cur_bot_line := line(na)
+            cur_top_line := na
+            cur_bot_line := na
     else if maj_st == 1
         if val_h > tmp_h
             tmp_h := val_h
@@ -533,8 +533,8 @@ if not inside
             BxReset(val_l, maj_h)
             CutLine(cur_top_line, bar_index)
             CutLine(cur_bot_line, bar_index)
-            cur_top_line := line(na)
-            cur_bot_line := line(na)
+            cur_top_line := na
+            cur_bot_line := na
         if not na(maj_h) and maj_h != 0 and val_h > maj_h and val_c <= maj_h
             maj_h := val_h
             if show_maj
@@ -563,8 +563,8 @@ if not inside
             BxReset(tmp_l, val_h)
             CutLine(cur_top_line, bar_index)
             CutLine(cur_bot_line, bar_index)
-            cur_top_line := line(na)
-            cur_bot_line := line(na)
+            cur_top_line := na
+            cur_bot_line := na
 
 // --- DASHBOARD & NOTIFICATIONS ---
 show_dashboard = input.bool(true, "Show Dashboard")
