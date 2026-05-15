@@ -1,7 +1,6 @@
 //+------------------------------------------------------------------+
 //|                                                    Structure.mq5 |
-//|                                  Copyright 2024, MetaQuotes Ltd. |
-//|                                             https://www.mql5.com |
+//|                          Sadece Görsel - Alert/Broadcast Yok     |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2024"
 #property link      "https://www.mql5.com"
@@ -9,1136 +8,841 @@
 #property indicator_chart_window
 #property indicator_plots 0
 
-//--- Input Settings for Calculation Depth (Days Back) ---
-input double InpDaysM1   = 3.0;
-input double InpDaysM3   = 10.0;
-input double InpDaysM5   = 15.0;
-input double InpDaysM15  = 45.0;
-input double InpDaysM30  = 90.0;
-input double InpDaysH1   = 180.0;
-input double InpDaysH4   = 500.0;
-input double InpDaysD1   = 1500.0;
+//--- Hesaplama Derinliği (Gün) ---
+input double InpDaysM1   = 1.0;
+input double InpDaysM3   = 3.0;
+input double InpDaysM5   = 5.0;
+input double InpDaysM15  = 15.0;
+input double InpDaysM30  = 30.0;
+input double InpDaysH1   = 60.0;
+input double InpDaysH4   = 240.0;
+input double InpDaysD1   = 1440.0;
 
-//--- Visual Options ---
-input bool   InpShowMin = true;
-input bool   InpShowMaj = true;
-input color  InpColorMin = clrRed;
+//--- CHoCH Görsel Ayarları ---
+input double InpMinPullbackPct   = 40.0;        // CHoCH Min Çekilme % (Bölge Filtresi)
+input color  InpColorChochStrong = clrPurple;   // Güçlü CHoCH Rengi
+input color  InpColorChochWeak   = clrRed;      // Zayıf CHoCH Rengi
+input color  InpColorChochPath   = clrGray;     // T1-D1-T2 İz Rengi
+input bool   InpShowChoch        = true;        // CHoCH Çizgilerini Göster
+
+//--- Majör / Minör Görsel Ayarları ---
+input bool   InpShowMin   = true;
+input bool   InpShowMaj   = true;
+input color  InpColorMin  = clrRed;
 input color  InpColorBull = clrGreen;
 input color  InpColorBear = clrRed;
 
-//--- Alert Settings ---
-input double InpTriggerLevel1    = 40.0;             // 1. Bildirim Çekilme % (örn. %40)
-input double InpTriggerLevel2    = 60.0;             // 2. Bildirim Çekilme % (örn. %60)
-input double InpGoodPullbackPct  = 40.0;
-input double InpMomentumMinPeak  = 30.0;
-input double InpMomentumMinBounce= 20.0;
-input bool   InpAlertPopup       = true;
-input bool   InpAlertPush        = false;
-input bool   InpTestMode         = false;
-
 //--- Globals ---
-int g_counter = 0;
-datetime g_last_alert_time = 0;
-int g_alert_bar_index = -1;
+int      g_counter  = 0;
 datetime g_anchor_time = 0;
 
-double g_last_alert_maj_h = 0;
-double g_last_alert_maj_l = 0;
-int g_last_alert_trend = 0;
-bool g_level1_triggered = false;
-bool g_level2_triggered = false;
+//--- Çoklu İşlem Takibi (Etiket için) ---
+double g_trade_t1_h[5];
+double g_trade_t2_h[5];
+int    g_trade_count_h  = 0;
+int    g_current_maj_h_i = 0;
 
-void DrawLine(string name, datetime time1, double price1, datetime time2, double price2, color clr, int width, ENUM_LINE_STYLE style, bool ray_right=false)
-  {
-   if(ObjectFind(0, name) < 0)
-     {
-      ObjectCreate(0, name, OBJ_TREND, 0, time1, price1, time2, price2);
-     }
-   else
-     {
-      ObjectSetInteger(0, name, OBJPROP_TIME, 0, time1);
-      ObjectSetDouble(0, name, OBJPROP_PRICE, 0, price1);
-      ObjectSetInteger(0, name, OBJPROP_TIME, 1, time2);
-      ObjectSetDouble(0, name, OBJPROP_PRICE, 1, price2);
-     }
+double g_trade_t1_l[5];
+double g_trade_t2_l[5];
+int    g_trade_count_l  = 0;
+int    g_current_maj_l_i = 0;
 
-   ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
-   ObjectSetInteger(0, name, OBJPROP_WIDTH, width);
-   ObjectSetInteger(0, name, OBJPROP_STYLE, style);
-   ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, ray_right);
-   ObjectSetInteger(0, name, OBJPROP_BACK, true);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-  }
+void ResetBearishMemory() {
+    g_trade_count_h = 0;
+    for(int i=0;i<5;i++){ g_trade_t1_h[i]=0; g_trade_t2_h[i]=0; }
+}
+void ResetBullishMemory() {
+    g_trade_count_l = 0;
+    for(int i=0;i<5;i++){ g_trade_t1_l[i]=0; g_trade_t2_l[i]=0; }
+}
+
+//+------------------------------------------------------------------+
+//| Yardımcı Fonksiyonlar                                            |
+//+------------------------------------------------------------------+
+datetime GetTimeSafe(const datetime &time_array[], int idx)
+{
+    if(idx >= 0 && idx < ArraySize(time_array)) return time_array[idx];
+    return 0;
+}
+
+void DrawLine(string name, datetime time1, double price1, datetime time2, double price2,
+              color clr, int width, ENUM_LINE_STYLE style, bool ray_right=false)
+{
+    if(ObjectFind(0, name) < 0)
+        ObjectCreate(0, name, OBJ_TREND, 0, time1, price1, time2, price2);
+    else {
+        ObjectSetInteger(0, name, OBJPROP_TIME,  0, time1);
+        ObjectSetDouble(0,  name, OBJPROP_PRICE, 0, price1);
+        ObjectSetInteger(0, name, OBJPROP_TIME,  1, time2);
+        ObjectSetDouble(0,  name, OBJPROP_PRICE, 1, price2);
+    }
+    ObjectSetInteger(0, name, OBJPROP_COLOR,     clr);
+    ObjectSetInteger(0, name, OBJPROP_WIDTH,     width);
+    ObjectSetInteger(0, name, OBJPROP_STYLE,     style);
+    ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, ray_right);
+    ObjectSetInteger(0, name, OBJPROP_BACK,      true);
+    ObjectSetInteger(0, name, OBJPROP_HIDDEN,    true);
+}
 
 void DeleteLine(string name)
-  {
-   if(ObjectFind(0, name) >= 0)
-      ObjectDelete(0, name);
-  }
+{
+    if(ObjectFind(0, name) >= 0) ObjectDelete(0, name);
+}
 
 void CutLine(string name, datetime time_cut)
-  {
-   if(ObjectFind(0, name) >= 0)
-     {
-      ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, false);
-      ObjectSetInteger(0, name, OBJPROP_TIME, 1, time_cut);
-     }
-  }
+{
+    if(ObjectFind(0, name) >= 0) {
+        ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, false);
+        ObjectSetInteger(0, name, OBJPROP_TIME, 1, time_cut);
+    }
+}
 
 void UpdateLineLevel(string name, double level)
-  {
-   if(ObjectFind(0, name) >= 0)
-     {
-      ObjectSetDouble(0, name, OBJPROP_PRICE, 0, level);
-      ObjectSetDouble(0, name, OBJPROP_PRICE, 1, level);
-     }
-  }
+{
+    if(ObjectFind(0, name) >= 0) {
+        ObjectSetDouble(0, name, OBJPROP_PRICE, 0, level);
+        ObjectSetDouble(0, name, OBJPROP_PRICE, 1, level);
+    }
+}
 
+string GetUniqueName(string prefix)
+{
+    g_counter++;
+    return prefix + IntegerToString(g_counter);
+}
+
+double GetDaysForTF(ENUM_TIMEFRAMES tf)
+{
+    if(tf == PERIOD_M1)  return InpDaysM1;
+    if(tf == PERIOD_M3)  return InpDaysM3;
+    if(tf == PERIOD_M5)  return InpDaysM5;
+    if(tf == PERIOD_M15) return InpDaysM15;
+    if(tf == PERIOD_M30) return InpDaysM30;
+    if(tf == PERIOD_H1)  return InpDaysH1;
+    if(tf == PERIOD_H4)  return InpDaysH4;
+    if(tf == PERIOD_D1)  return InpDaysD1;
+    return InpDaysM1;
+}
+
+//+------------------------------------------------------------------+
+//| Stack Sınıfı                                                     |
+//+------------------------------------------------------------------+
 class CStack
-  {
+{
 private:
-   double            m_vals[];
-   int               m_idx[];
+    double m_vals[];
+    int    m_idx[];
 public:
-                     CStack() { ArrayResize(m_vals, 0); ArrayResize(m_idx, 0); }
-                    ~CStack() { }
+    CStack()  { ArrayResize(m_vals,0); ArrayResize(m_idx,0); }
+    ~CStack() {}
 
-   void              Clear() { ArrayResize(m_vals, 0); ArrayResize(m_idx, 0); }
-   int               Size() { return ArraySize(m_vals); }
+    void   Clear() { ArrayResize(m_vals,0); ArrayResize(m_idx,0); }
+    int    Size()  { return ArraySize(m_vals); }
 
-   void              Push(double val, int idx)
-     {
-      int size = ArraySize(m_vals);
-      ArrayResize(m_vals, size + 1);
-      ArrayResize(m_idx, size + 1);
-      m_vals[size] = val;
-      m_idx[size]  = idx;
-     }
+    void   Push(double val, int idx)
+    {
+        int sz = ArraySize(m_vals);
+        ArrayResize(m_vals, sz+1);
+        ArrayResize(m_idx,  sz+1);
+        m_vals[sz] = val;
+        m_idx[sz]  = idx;
+    }
 
-   void              Pop()
-     {
-      int size = ArraySize(m_vals);
-      if(size > 0)
-        {
-         ArrayResize(m_vals, size - 1);
-         ArrayResize(m_idx, size - 1);
-        }
-     }
+    void   Pop()
+    {
+        int sz = ArraySize(m_vals);
+        if(sz > 0) { ArrayResize(m_vals, sz-1); ArrayResize(m_idx, sz-1); }
+    }
 
-   double            GetVal(int index) { return m_vals[index]; }
-   int               GetIdx(int index) { return m_idx[index]; }
+    double GetVal(int index) { return m_vals[index]; }
+    int    GetIdx(int index) { return m_idx[index]; }
 
-   void              CopyFrom(CStack &source)
-     {
-      ArrayCopy(m_vals, source.m_vals);
-      ArrayCopy(m_idx, source.m_idx);
-     }
-  };
+    void   CopyFrom(CStack &src)
+    {
+        ArrayCopy(m_vals, src.m_vals);
+        ArrayCopy(m_idx,  src.m_idx);
+    }
+};
 
+//+------------------------------------------------------------------+
+//| Durum Struct                                                     |
+//+------------------------------------------------------------------+
 struct SState
-  {
-   int               min_tr;
-   int               maj_tr;
-   int               maj_st;
+{
+    int    min_tr, maj_tr, maj_st;
+    double min_h;  int min_h_i;
+    double min_l;  int min_l_i;
+    double trig_h, trig_l;
+    int    lp_i;   double lp_p;
+    double maj_h;  int maj_h_i;
+    double maj_l;  int maj_l_i;
+    double tmp_h;  int tmp_h_i;
+    double tmp_l;  int tmp_l_i;
+    int    anc_i;  double anc_v;
+    int    bos_i;
+    string cur_top_line, cur_bot_line;
 
-   double            min_h;
-   int               min_h_i;
-   double            min_l;
-   int               min_l_i;
-   double            trig_h;
-   double            trig_l;
-   int               lp_i;
-   double            lp_p;
+    // Mother Bar
+    double mb_h, mb_l;  int mb_i;
 
-   double            maj_h;
-   double            maj_l;
-   int               maj_h_i;
-   int               maj_l_i;
+    // CHoCH Tracking
+    double t1_h, t1_l;  int t1_i;
+    double d1_h, d1_l;  int d1_i;
+    double t2_h, t2_l;  int t2_i;
+    int    choch_dir;
 
-   double            tmp_h;
-   int               tmp_h_i;
-   double            tmp_l;
-   int               tmp_l_i;
-   int               anc_i;
-   double            anc_v;
-   int               bos_i;
+    // MTF CHoCH (kullanılmıyor ama CopyFrom uyumu için tutuldu)
+    int      last_choch_dir;
+    double   last_choch_level;
+    datetime last_choch_time;
+    int      last_choch_i;
 
-   string            cur_top_line;
-   string            cur_bot_line;
+    CStack st_h, st_l;
 
-   CStack            st_h;
-   CStack            st_l;
-
-   void              CopyFrom(SState &source)
-     {
-      min_tr         = source.min_tr;
-      maj_tr         = source.maj_tr;
-      maj_st         = source.maj_st;
-
-      min_h          = source.min_h;
-      min_h_i        = source.min_h_i;
-      min_l          = source.min_l;
-      min_l_i        = source.min_l_i;
-      trig_h         = source.trig_h;
-      trig_l         = source.trig_l;
-      lp_i           = source.lp_i;
-      lp_p           = source.lp_p;
-
-      maj_h          = source.maj_h;
-      maj_l          = source.maj_l;
-      maj_h_i        = source.maj_h_i;
-      maj_l_i        = source.maj_l_i;
-
-      tmp_h          = source.tmp_h;
-      tmp_h_i        = source.tmp_h_i;
-      tmp_l          = source.tmp_l;
-      tmp_l_i        = source.tmp_l_i;
-      anc_i          = source.anc_i;
-      anc_v          = source.anc_v;
-      bos_i          = source.bos_i;
-
-      cur_top_line   = source.cur_top_line;
-      cur_bot_line   = source.cur_bot_line;
-
-      st_h.CopyFrom(source.st_h);
-      st_l.CopyFrom(source.st_l);
-     }
-  };
+    void CopyFrom(SState &src)
+    {
+        min_tr = src.min_tr; maj_tr = src.maj_tr; maj_st = src.maj_st;
+        min_h = src.min_h;   min_h_i = src.min_h_i;
+        min_l = src.min_l;   min_l_i = src.min_l_i;
+        trig_h = src.trig_h; trig_l = src.trig_l;
+        lp_i = src.lp_i;     lp_p = src.lp_p;
+        maj_h = src.maj_h;   maj_h_i = src.maj_h_i;
+        maj_l = src.maj_l;   maj_l_i = src.maj_l_i;
+        tmp_h = src.tmp_h;   tmp_h_i = src.tmp_h_i;
+        tmp_l = src.tmp_l;   tmp_l_i = src.tmp_l_i;
+        anc_i = src.anc_i;   anc_v = src.anc_v;
+        bos_i = src.bos_i;
+        cur_top_line = src.cur_top_line;
+        cur_bot_line = src.cur_bot_line;
+        mb_h = src.mb_h; mb_l = src.mb_l; mb_i = src.mb_i;
+        t1_h = src.t1_h; t1_l = src.t1_l; t1_i = src.t1_i;
+        d1_h = src.d1_h; d1_l = src.d1_l; d1_i = src.d1_i;
+        t2_h = src.t2_h; t2_l = src.t2_l; t2_i = src.t2_i;
+        choch_dir = src.choch_dir;
+        last_choch_dir   = src.last_choch_dir;
+        last_choch_level = src.last_choch_level;
+        last_choch_time  = src.last_choch_time;
+        last_choch_i     = src.last_choch_i;
+        st_h.CopyFrom(src.st_h);
+        st_l.CopyFrom(src.st_l);
+    }
+};
 
 SState g_state_hist;
 SState g_state_curr;
 
-string GetUniqueName(string prefix)
-  {
-   g_counter++;
-   return prefix + "_" + IntegerToString(g_counter);
-  }
+//+------------------------------------------------------------------+
+//| Ana Bar İşleme                                                   |
+//+------------------------------------------------------------------+
+void ProcessBar(int i,
+                const double &open[],  const double &high[],
+                const double &low[],   const double &close[],
+                const datetime &time[],
+                SState &state,
+                bool is_history,
+                bool draw_ui = true)
+{
+    double val_h = high[i];
+    double val_l = low[i];
+    double val_c = close[i];
 
-double GetDaysForTF(ENUM_TIMEFRAMES tf)
-  {
-   if(tf == PERIOD_M1) return InpDaysM1;
-   if(tf == PERIOD_M3) return InpDaysM3;
-   if(tf == PERIOD_M5) return InpDaysM5;
-   if(tf == PERIOD_M15) return InpDaysM15;
-   if(tf == PERIOD_M30) return InpDaysM30;
-   if(tf == PERIOD_H1) return InpDaysH1;
-   if(tf == PERIOD_H4) return InpDaysH4;
-   if(tf == PERIOD_D1) return InpDaysD1;
-   return InpDaysM1;
-  }
+    string prefix = is_history ? "" : "Live_";
 
-void ProcessBarMathOnly(int i, const double &high[], const double &low[], const double &close[], SState &state)
-  {
-   double val_h = high[i];
-   double val_l = low[i];
-   double val_c = close[i];
+    // ── Çekilme yüzdesi hesabı (CHoCH bölge filtresi için) ──
+    double cur_maj_h = state.maj_h;
+    double cur_maj_l = state.maj_l;
 
-   if(state.min_tr == 1)
-     {
-      double old_trig = state.trig_l;
-      if(val_h > state.min_h) { state.min_h = val_h; state.min_h_i = i; state.trig_l = val_l; }
-      if(val_l < old_trig)
+    // Eğer majör yapı impuls aşamasındaysa (maj_st == 0),
+    // aktif swing'in henüz kilitlenmemiş ucunu (tmp_h / tmp_l) kullan.
+    if(state.maj_tr == 1 && state.maj_st == 0) cur_maj_h = state.tmp_h;
+    if(state.maj_tr == -1 && state.maj_st == 0) cur_maj_l = state.tmp_l;
+
+    double p_pct = 0;
+
+    if(cur_maj_h != EMPTY_VALUE && cur_maj_l != EMPTY_VALUE && cur_maj_h != cur_maj_l)
+    {
+        double range = cur_maj_h - cur_maj_l;
+        if(state.maj_tr == 1 && state.min_l >= cur_maj_l)
+            p_pct = ((cur_maj_h - state.min_l) / range) * 100.0;
+        else if(state.maj_tr == -1 && state.min_h <= cur_maj_h)
+            p_pct = ((state.min_h - cur_maj_l) / range) * 100.0;
+    }
+    bool in_pullback_zone = (p_pct >= InpMinPullbackPct);
+
+    // ══════════════════════════════════════════════════════════════
+    //  MİNÖR YAPI
+    // ══════════════════════════════════════════════════════════════
+    if(state.min_tr == 1)
+    {
+        double old_trig = state.trig_l;
+        if(val_h > state.min_h) { state.min_h = val_h; state.min_h_i = i; state.trig_l = val_l; }
+
+        if(val_l < old_trig)
         {
-         state.st_h.Push(state.min_h, state.min_h_i);
-         if(state.maj_tr == 1 && state.maj_st == 0 && state.min_h < state.tmp_h && state.st_l.Size() > 0)
-           {
-            if(state.st_l.GetIdx(state.st_l.Size() - 1) > state.bos_i) state.st_l.Pop();
-           }
-         state.min_tr = -1; state.lp_i = state.min_h_i; state.lp_p = state.min_h;
-         state.min_l = val_l; state.min_l_i = i; state.trig_h = val_h;
+            if(draw_ui && InpShowMin)
+            {
+                string name = GetUniqueName(prefix + "Minor_");
+                DrawLine(name, GetTimeSafe(time, state.lp_i), state.lp_p,
+                         GetTimeSafe(time, state.min_h_i), state.min_h, InpColorMin, 1, STYLE_SOLID);
+            }
+            state.st_h.Push(state.min_h, state.min_h_i);
+
+            if(state.maj_tr == 1 && state.maj_st == 0 && state.min_h < state.tmp_h && state.st_l.Size() > 0)
+                if(state.st_l.GetIdx(state.st_l.Size()-1) > state.bos_i) state.st_l.Pop();
+
+            // CHoCH geçersizleştirme
+            if(state.choch_dir == -1 && state.t2_h != 0)           state.choch_dir = 0;
+            if(state.choch_dir ==  1 && state.t2_l != 0 && state.min_h <= state.d1_h) state.choch_dir = 0;
+
+            // Bearish CHoCH T1-D1-T2 takibi
+            if(state.maj_tr == -1 && in_pullback_zone)
+            {
+                if(state.choch_dir == 0 || state.choch_dir == 1)
+                {
+                    state.t1_h = state.min_h; state.t1_l = state.min_l; state.t1_i = state.min_h_i;
+                    state.d1_h = 0; state.d1_l = 0; state.d1_i = 0;
+                    state.t2_h = 0; state.t2_l = 0; state.t2_i = 0;
+                    state.choch_dir = -1;
+                }
+                else if(state.choch_dir == -1)
+                {
+                    if(state.d1_l == 0) { state.d1_l = state.min_l; state.d1_i = state.min_l_i; }
+                    if(state.d1_l != 0 && state.t2_h == 0) { state.t2_h = state.min_h; state.t2_i = state.min_h_i; }
+                }
+            }
+
+            state.min_tr = -1;
+            state.lp_i   = state.min_h_i; state.lp_p = state.min_h;
+            state.min_l  = val_l;         state.min_l_i = i;
+            state.trig_h = val_h;
         }
-     }
-   else
-     {
-      double old_trig = state.trig_h;
-      if(val_l < state.min_l) { state.min_l = val_l; state.min_l_i = i; state.trig_h = val_h; }
-      if(val_h > old_trig)
+    }
+    else // min_tr == -1
+    {
+        double old_trig = state.trig_h;
+        if(val_l < state.min_l) { state.min_l = val_l; state.min_l_i = i; state.trig_h = val_h; }
+
+        if(val_h > old_trig)
         {
-         state.st_l.Push(state.min_l, state.min_l_i);
-         if(state.maj_tr == -1 && state.maj_st == 0 && state.min_l > state.tmp_l && state.st_h.Size() > 0)
-           {
-            if(state.st_h.GetIdx(state.st_h.Size() - 1) > state.bos_i) state.st_h.Pop();
-           }
-         state.min_tr = 1; state.lp_i = state.min_l_i; state.lp_p = state.min_l;
-         state.min_h = val_h; state.min_h_i = i; state.trig_l = val_l;
+            if(draw_ui && InpShowMin)
+            {
+                string name = GetUniqueName(prefix + "Minor_");
+                DrawLine(name, GetTimeSafe(time, state.lp_i), state.lp_p,
+                         GetTimeSafe(time, state.min_l_i), state.min_l, InpColorMin, 1, STYLE_SOLID);
+            }
+            state.st_l.Push(state.min_l, state.min_l_i);
+
+            if(state.maj_tr == -1 && state.maj_st == 0 && state.min_l > state.tmp_l && state.st_h.Size() > 0)
+                if(state.st_h.GetIdx(state.st_h.Size()-1) > state.bos_i) state.st_h.Pop();
+
+            // CHoCH geçersizleştirme
+            if(state.choch_dir ==  1 && state.t2_l != 0)           state.choch_dir = 0;
+            if(state.choch_dir == -1 && state.t2_h != 0 && state.min_l >= state.d1_l) state.choch_dir = 0;
+
+            // Bullish CHoCH T1-D1-T2 takibi
+            if(state.maj_tr == 1 && in_pullback_zone)
+            {
+                if(state.choch_dir == 0 || state.choch_dir == -1)
+                {
+                    state.t1_l = state.min_l; state.t1_h = state.min_h; state.t1_i = state.min_l_i;
+                    state.d1_l = 0; state.d1_h = 0; state.d1_i = 0;
+                    state.t2_l = 0; state.t2_h = 0; state.t2_i = 0;
+                    state.choch_dir = 1;
+                }
+                else if(state.choch_dir == 1)
+                {
+                    if(state.d1_h == 0) { state.d1_h = state.min_h; state.d1_i = state.min_h_i; }
+                    if(state.d1_h != 0 && state.t2_l == 0) { state.t2_l = state.min_l; state.t2_i = state.min_l_i; }
+                }
+            }
+
+            state.min_tr = 1;
+            state.lp_i   = state.min_l_i; state.lp_p = state.min_l;
+            state.min_h  = val_h;          state.min_h_i = i;
+            state.trig_l = val_l;
         }
-     }
+    }
 
-   if(state.maj_tr == 0) { state.maj_tr = 1; state.maj_l_i = state.min_l_i; }
+    // ══════════════════════════════════════════════════════════════
+    //  CHoCH TETİKLEME & ÇİZİM
+    // ══════════════════════════════════════════════════════════════
 
-   if(state.maj_tr == 1)
-     {
-      if(val_h > state.tmp_h) { state.tmp_h = val_h; state.tmp_h_i = i; }
-      if(state.maj_st == 0)
+    // --- BEARISH CHoCH ---
+    if(state.choch_dir == -1 && state.t2_h != 0 && state.d1_l != 0)
+    {
+        double range        = cur_maj_h - cur_maj_l;
+        double level_40     = cur_maj_l + range * (InpMinPullbackPct / 100.0);
+        bool   t2_valid     = (range > 0 && state.d1_l >= level_40 && state.t2_h >= level_40);
+        bool   should_break = (val_c < state.d1_l);
+
+        if(should_break)
         {
-         double act = state.st_l.Size() > 0 ? state.st_l.GetVal(state.st_l.Size() - 1) : EMPTY_VALUE;
-         if(act != EMPTY_VALUE && val_l < act)
-           {
-            state.maj_h = state.tmp_h; state.maj_h_i = state.tmp_h_i;
-            state.st_l.Clear(); state.st_h.Clear(); state.maj_st = 1;
-            state.tmp_l = val_l; state.tmp_l_i = i;
-           }
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_l < state.maj_l && val_c >= state.maj_l) state.maj_l = val_l;
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_c < state.maj_l)
-           {
-            state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
-            state.st_l.Clear(); state.tmp_l = val_l; state.tmp_l_i = i;
-            state.maj_h = state.tmp_h; state.maj_h_i = state.tmp_h_i;
-           }
+            if(!t2_valid)
+            {
+                state.choch_dir = 0;
+                state.d1_l = 0;
+                state.t2_h = 0;
+            }
+            else
+            {
+                state.last_choch_dir   = -1;
+                state.last_choch_level = state.d1_l;
+                state.last_choch_time  = time[i];
+
+                bool is_strong = (state.t2_h > state.t1_h);
+
+                if(draw_ui)
+                {
+                    static int last_d1_i_bear = 0;
+
+                    if(state.maj_h_i != g_current_maj_h_i)
+                    {
+                        ResetBearishMemory();
+                        g_current_maj_h_i = state.maj_h_i;
+                    }
+
+                    bool is_new = (state.d1_i != last_d1_i_bear);
+
+                    // Sıra takibi (etiket numarası için)
+                    int trade_idx = -1;
+                    if(is_new)
+                    {
+                        bool valid_seq = false;
+                        if(g_trade_count_h == 0) valid_seq = true;
+                        else if(g_trade_count_h < 5)
+                        {
+                            double prev_peak = MathMax(g_trade_t1_h[g_trade_count_h-1], g_trade_t2_h[g_trade_count_h-1]);
+                            if(state.t2_h > prev_peak) valid_seq = true;
+                        }
+                        if(valid_seq && g_trade_count_h < 5)
+                        {
+                            trade_idx = g_trade_count_h;
+                            g_trade_t1_h[trade_idx] = state.t1_h;
+                            g_trade_t2_h[trade_idx] = state.t2_h;
+                            g_trade_count_h++;
+                        }
+                    }
+                    else
+                    {
+                        for(int idx=0; idx<g_trade_count_h; idx++)
+                            if(g_trade_t1_h[idx]==state.t1_h && g_trade_t2_h[idx]==state.t2_h)
+                                { trade_idx = idx; break; }
+                    }
+
+                    if(is_new && trade_idx >= 0 && InpShowChoch)
+                    {
+                        color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
+
+                        string p1 = GetUniqueName(prefix+"CHoCH_Path_");
+                        DrawLine(p1, GetTimeSafe(time,state.t1_i), state.t1_h,
+                                     GetTimeSafe(time,state.d1_i), state.d1_l,
+                                     InpColorChochPath, 1, STYLE_DOT);
+
+                        string p2 = GetUniqueName(prefix+"CHoCH_Path_");
+                        DrawLine(p2, GetTimeSafe(time,state.d1_i), state.d1_l,
+                                     GetTimeSafe(time,state.t2_i), state.t2_h,
+                                     InpColorChochPath, 1, STYLE_DOT);
+
+                        string p3 = GetUniqueName(prefix+"CHoCH_Path_");
+                        DrawLine(p3, GetTimeSafe(time,state.t2_i), state.t2_h,
+                                     GetTimeSafe(time,i),           state.d1_l,
+                                     InpColorChochPath, 1, STYLE_DOT);
+
+                        string sig_name = GetUniqueName(prefix+"CHoCH_Signal_");
+                        DrawLine(sig_name,
+                                 GetTimeSafe(time,i),                         state.d1_l,
+                                 GetTimeSafe(time,i) + PeriodSeconds() * 5,   state.d1_l,
+                                 sig_color, 3, STYLE_SOLID);
+
+                        string txt_name = GetUniqueName(prefix+"CHoCH_Text_");
+                        ObjectCreate(0, txt_name, OBJ_TEXT, 0, GetTimeSafe(time,i), state.d1_l);
+                        ObjectSetString(0,  txt_name, OBJPROP_TEXT,     IntegerToString(trade_idx+1));
+                        ObjectSetInteger(0, txt_name, OBJPROP_COLOR,    sig_color);
+                        ObjectSetInteger(0, txt_name, OBJPROP_FONTSIZE, 10);
+                        ObjectSetInteger(0, txt_name, OBJPROP_ANCHOR,   ANCHOR_RIGHT_UPPER);
+                    }
+
+                    if(is_new) last_d1_i_bear = state.d1_i;
+                }
+
+                state.choch_dir = 0;
+            }
         }
-      else if(state.maj_st == 1)
+    }
+
+    // --- BULLISH CHoCH ---
+    else if(state.choch_dir == 1 && state.t2_l != 0 && state.d1_h != 0)
+    {
+        double range        = cur_maj_h - cur_maj_l;
+        double level_60     = cur_maj_l + range * (1.0 - InpMinPullbackPct / 100.0);
+        bool   t2_valid     = (range > 0 && state.d1_h <= level_60 && state.t2_l <= level_60);
+        bool   should_break = (val_c > state.d1_h);
+
+        if(should_break)
         {
-         if(val_l < state.tmp_l) { state.tmp_l = val_l; state.tmp_l_i = i; }
-         if(val_h > state.maj_h && val_c <= state.maj_h) state.maj_h = val_h;
-         if(val_c > state.maj_h)
-           {
-            state.bos_i = i; state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
-            state.st_h.Clear(); state.maj_st = 0; state.tmp_h = val_h; state.tmp_h_i = i;
-           }
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_l < state.maj_l && val_c >= state.maj_l) state.maj_l = val_l;
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_c < state.maj_l)
-           {
-            state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
-            state.st_l.Clear(); state.tmp_l = val_l; state.tmp_l_i = i;
-            state.maj_h = state.tmp_h; state.maj_h_i = state.tmp_h_i;
-           }
+            if(!t2_valid)
+            {
+                state.choch_dir = 0;
+                state.d1_h = 0;
+                state.t2_l = 0;
+            }
+            else
+            {
+                state.last_choch_dir   = 1;
+                state.last_choch_level = state.d1_h;
+                state.last_choch_time  = time[i];
+
+                bool is_strong = (state.t2_l < state.t1_l);
+
+                if(draw_ui)
+                {
+                    static int last_d1_i_bull = 0;
+
+                    if(state.maj_l_i != g_current_maj_l_i)
+                    {
+                        ResetBullishMemory();
+                        g_current_maj_l_i = state.maj_l_i;
+                    }
+
+                    bool is_new = (state.d1_i != last_d1_i_bull);
+
+                    int trade_idx = -1;
+                    if(is_new)
+                    {
+                        bool valid_seq = false;
+                        if(g_trade_count_l == 0) valid_seq = true;
+                        else if(g_trade_count_l < 5)
+                        {
+                            double prev_dip = MathMin(g_trade_t1_l[g_trade_count_l-1], g_trade_t2_l[g_trade_count_l-1]);
+                            if(state.t2_l < prev_dip) valid_seq = true;
+                        }
+                        if(valid_seq && g_trade_count_l < 5)
+                        {
+                            trade_idx = g_trade_count_l;
+                            g_trade_t1_l[trade_idx] = state.t1_l;
+                            g_trade_t2_l[trade_idx] = state.t2_l;
+                            g_trade_count_l++;
+                        }
+                    }
+                    else
+                    {
+                        for(int idx=0; idx<g_trade_count_l; idx++)
+                            if(g_trade_t1_l[idx]==state.t1_l && g_trade_t2_l[idx]==state.t2_l)
+                                { trade_idx = idx; break; }
+                    }
+
+                    if(is_new && trade_idx >= 0 && InpShowChoch)
+                    {
+                        color sig_color = is_strong ? InpColorChochStrong : InpColorChochWeak;
+
+                        string p1 = GetUniqueName(prefix+"CHoCH_Path_");
+                        DrawLine(p1, GetTimeSafe(time,state.t1_i), state.t1_l,
+                                     GetTimeSafe(time,state.d1_i), state.d1_h,
+                                     InpColorChochPath, 1, STYLE_DOT);
+
+                        string p2 = GetUniqueName(prefix+"CHoCH_Path_");
+                        DrawLine(p2, GetTimeSafe(time,state.d1_i), state.d1_h,
+                                     GetTimeSafe(time,state.t2_i), state.t2_l,
+                                     InpColorChochPath, 1, STYLE_DOT);
+
+                        string p3 = GetUniqueName(prefix+"CHoCH_Path_");
+                        DrawLine(p3, GetTimeSafe(time,state.t2_i), state.t2_l,
+                                     GetTimeSafe(time,i),           state.d1_h,
+                                     InpColorChochPath, 1, STYLE_DOT);
+
+                        string sig_name = GetUniqueName(prefix+"CHoCH_Signal_");
+                        DrawLine(sig_name,
+                                 GetTimeSafe(time,i),                         state.d1_h,
+                                 GetTimeSafe(time,i) + PeriodSeconds() * 5,   state.d1_h,
+                                 sig_color, 3, STYLE_SOLID);
+
+                        string txt_name = GetUniqueName(prefix+"CHoCH_Text_");
+                        ObjectCreate(0, txt_name, OBJ_TEXT, 0, GetTimeSafe(time,i), state.d1_h);
+                        ObjectSetString(0,  txt_name, OBJPROP_TEXT,     IntegerToString(trade_idx+1));
+                        ObjectSetInteger(0, txt_name, OBJPROP_COLOR,    sig_color);
+                        ObjectSetInteger(0, txt_name, OBJPROP_FONTSIZE, 10);
+                        ObjectSetInteger(0, txt_name, OBJPROP_ANCHOR,   ANCHOR_RIGHT_LOWER);
+                    }
+
+                    if(is_new) last_d1_i_bull = state.d1_i;
+                }
+
+                state.choch_dir = 0;
+            }
         }
-     }
-   else // maj_tr == -1
-     {
-      if(val_l < state.tmp_l) { state.tmp_l = val_l; state.tmp_l_i = i; }
-      if(state.maj_st == 0)
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  MAJÖR YAPI
+    // ══════════════════════════════════════════════════════════════
+    if(state.maj_tr == 0)
+    {
+        state.maj_tr = 1;
+        state.anc_i  = state.min_l_i;
+        state.anc_v  = state.min_l;
+        state.maj_l_i = state.min_l_i;
+    }
+
+    if(state.maj_tr == 1)
+    {
+        if(val_h > state.tmp_h) { state.tmp_h = val_h; state.tmp_h_i = i; }
+
+        if(state.maj_st == 0)
         {
-         double act = state.st_h.Size() > 0 ? state.st_h.GetVal(state.st_h.Size() - 1) : EMPTY_VALUE;
-         if(act != EMPTY_VALUE && val_h > act)
-           {
-            state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
-            state.st_l.Clear(); state.st_h.Clear(); state.maj_st = 1;
-            state.tmp_h = val_h; state.tmp_h_i = i;
-           }
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_h > state.maj_h && val_c <= state.maj_h) state.maj_h = val_h;
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_c > state.maj_h)
-           {
-            state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
-            state.st_h.Clear(); state.tmp_h = val_h; state.tmp_h_i = i;
-            state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
-           }
+            double act = state.st_l.Size() > 0 ? state.st_l.GetVal(state.st_l.Size()-1) : EMPTY_VALUE;
+            if(act != EMPTY_VALUE && val_l < act)
+            {
+                state.maj_h    = state.tmp_h;
+                state.maj_h_i  = state.tmp_h_i;
+                if(draw_ui && InpShowMaj)
+                {
+                    string name = GetUniqueName(prefix+"Major_");
+                    DrawLine(name, GetTimeSafe(time,state.anc_i), state.anc_v,
+                             GetTimeSafe(time,state.tmp_h_i), state.maj_h, InpColorBull, 2, STYLE_SOLID);
+                }
+                state.st_l.Clear(); state.st_h.Clear();
+                state.maj_st = 1;
+                state.anc_i  = state.tmp_h_i; state.anc_v = state.maj_h;
+                state.tmp_l  = val_l;          state.tmp_l_i = i;
+
+                CutLine(state.cur_top_line, GetTimeSafe(time,i));
+                CutLine(state.cur_bot_line, GetTimeSafe(time,i));
+
+                if(draw_ui && InpShowMaj)
+                {
+                    state.cur_top_line = GetUniqueName(prefix+"HLine_Top_");
+                    DrawLine(state.cur_top_line, GetTimeSafe(time,state.maj_h_i), state.maj_h,
+                             GetTimeSafe(time,i)+PeriodSeconds(), state.maj_h, InpColorBull, 1, STYLE_DASH, true);
+                    if(state.maj_l != EMPTY_VALUE && state.maj_l != 0)
+                    {
+                        state.cur_bot_line = GetUniqueName(prefix+"HLine_Bot_");
+                        DrawLine(state.cur_bot_line, GetTimeSafe(time,state.maj_l_i), state.maj_l,
+                                 GetTimeSafe(time,i)+PeriodSeconds(), state.maj_l, InpColorBull, 1, STYLE_DASH, true);
+                    }
+                }
+            }
+
+            if(state.maj_l != EMPTY_VALUE && state.maj_l != 0)
+            {
+                if(val_l < state.maj_l && val_c >= state.maj_l)
+                {
+                    state.maj_l = val_l;
+                    if(draw_ui && InpShowMaj) UpdateLineLevel(state.cur_bot_line, state.maj_l);
+                }
+                if(val_c < state.maj_l)
+                {
+                    state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
+                    if(draw_ui && InpShowMaj)
+                    {
+                        string name = GetUniqueName(prefix+"Major_");
+                        DrawLine(name, GetTimeSafe(time,state.anc_i), state.anc_v,
+                                 GetTimeSafe(time,state.tmp_h_i), state.tmp_h, InpColorBull, 2, STYLE_SOLID);
+                    }
+                    state.st_l.Clear();
+                    state.anc_i = state.tmp_h_i; state.anc_v = state.tmp_h;
+                    state.tmp_l = val_l;          state.tmp_l_i = i;
+                    state.maj_h = state.tmp_h;    state.maj_h_i = state.tmp_h_i;
+                    CutLine(state.cur_top_line, GetTimeSafe(time,i));
+                    CutLine(state.cur_bot_line, GetTimeSafe(time,i));
+                    state.cur_top_line = ""; state.cur_bot_line = "";
+                }
+            }
         }
-      else if(state.maj_st == 1)
+        else if(state.maj_st == 1)
         {
-         if(val_h > state.tmp_h) { state.tmp_h = val_h; state.tmp_h_i = i; }
-         if(val_l < state.maj_l && val_c >= state.maj_l) state.maj_l = val_l;
-         if(val_c < state.maj_l)
-           {
-            state.maj_h = state.tmp_h; state.bos_i = i; state.maj_h_i = state.tmp_h_i;
-            state.st_l.Clear(); state.maj_st = 0; state.tmp_l = val_l; state.tmp_l_i = i;
-           }
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_h > state.maj_h && val_c <= state.maj_h) state.maj_h = val_h;
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_c > state.maj_h)
-           {
-            state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
-            state.st_h.Clear(); state.tmp_h = val_h; state.tmp_h_i = i;
-            state.maj_l = state.tmp_l; state.maj_l_i = state.tmp_l_i;
-           }
+            if(val_l < state.tmp_l) { state.tmp_l = val_l; state.tmp_l_i = i; }
+
+            if(state.maj_h != EMPTY_VALUE && val_h > state.maj_h && val_c <= state.maj_h)
+            {
+                state.maj_h = val_h;
+                if(draw_ui && InpShowMaj) UpdateLineLevel(state.cur_top_line, state.maj_h);
+            }
+
+            if(val_c > state.maj_h)
+            {
+                state.bos_i   = i;
+                state.maj_l   = state.tmp_l;  state.maj_l_i = state.tmp_l_i;
+                if(draw_ui && InpShowMaj)
+                {
+                    string name = GetUniqueName(prefix+"Major_");
+                    DrawLine(name, GetTimeSafe(time,state.anc_i), state.anc_v,
+                             GetTimeSafe(time,state.tmp_l_i), state.maj_l, InpColorBull, 2, STYLE_SOLID);
+                }
+                state.st_h.Clear(); state.maj_st = 0;
+                state.anc_i = state.tmp_l_i; state.anc_v = state.maj_l;
+                state.tmp_h = val_h;          state.tmp_h_i = i;
+                CutLine(state.cur_top_line, GetTimeSafe(time,i));
+                CutLine(state.cur_bot_line, GetTimeSafe(time,i));
+                state.cur_top_line = ""; state.cur_bot_line = "";
+            }
+
+            if(state.maj_l != EMPTY_VALUE && state.maj_l != 0)
+            {
+                if(val_l < state.maj_l && val_c >= state.maj_l)
+                {
+                    state.maj_l = val_l;
+                    if(draw_ui && InpShowMaj) UpdateLineLevel(state.cur_bot_line, state.maj_l);
+                }
+                if(val_c < state.maj_l)
+                {
+                    state.maj_tr = -1; state.maj_st = 0; state.bos_i = i;
+                    if(draw_ui && InpShowMaj)
+                    {
+                        string name = GetUniqueName(prefix+"Major_");
+                        DrawLine(name, GetTimeSafe(time,state.anc_i), state.anc_v,
+                                 GetTimeSafe(time,state.tmp_h_i), state.tmp_h, InpColorBull, 2, STYLE_SOLID);
+                    }
+                    state.st_l.Clear();
+                    state.anc_i = state.tmp_h_i; state.anc_v = state.tmp_h;
+                    state.tmp_l = val_l;          state.tmp_l_i = i;
+                    state.maj_h = state.tmp_h;    state.maj_h_i = state.tmp_h_i;
+                    CutLine(state.cur_top_line, GetTimeSafe(time,i));
+                    CutLine(state.cur_bot_line, GetTimeSafe(time,i));
+                    state.cur_top_line = ""; state.cur_bot_line = "";
+                }
+            }
         }
-     }
-  }
+    }
+    else // maj_tr == -1
+    {
+        if(val_l < state.tmp_l) { state.tmp_l = val_l; state.tmp_l_i = i; }
 
-bool GetMTFPullback(ENUM_TIMEFRAMES tf, int &trend, double &pct, double &max_pct, datetime current_time,
-                    double &ref_h, double &ref_l, datetime &ref_t_h, datetime &ref_t_l)
-  {
-   MqlRates rates[];
-   ArraySetAsSeries(rates, false);
-
-   double tf_days = GetDaysForTF(tf);
-   datetime anchor_time = current_time - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
-
-   int copied = CopyRates(Symbol(), tf, anchor_time, current_time, rates);
-   if(copied < 2) return false;
-
-   double high[], low[], close[];
-   ArrayResize(high, copied);
-   ArrayResize(low, copied);
-   ArrayResize(close, copied);
-
-   for(int i=0; i<copied; i++)
-     {
-      high[i] = rates[i].high;
-      low[i]  = rates[i].low;
-      close[i] = rates[i].close;
-     }
-
-   SState st;
-   st.min_h   = high[0]; st.min_h_i = 0; st.min_l   = low[0]; st.min_l_i = 0;
-   st.trig_h  = high[0]; st.trig_l  = low[0];
-   st.tmp_h   = high[0]; st.tmp_h_i = 0; st.tmp_l   = low[0]; st.tmp_l_i = 0;
-   st.min_tr  = (close[0] > rates[0].open) ? 1 : -1;
-   st.maj_h = EMPTY_VALUE; st.maj_l = EMPTY_VALUE; st.maj_tr = 0; st.maj_st = 0; st.bos_i = 0;
-
-   for(int i = 1; i < copied; i++)
-     {
-      bool inside = (high[i] <= high[i-1]) && (low[i] >= low[i-1]);
-      if(!inside)
+        if(state.maj_st == 0)
         {
-         if(i == copied - 1)
-           {
-            double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-            close[i] = bid;
-            if(bid > high[i]) high[i] = bid;
-            if(bid < low[i]) low[i] = bid;
-           }
+            double act = state.st_h.Size() > 0 ? state.st_h.GetVal(state.st_h.Size()-1) : EMPTY_VALUE;
+            if(act != EMPTY_VALUE && val_h > act)
+            {
+                state.maj_l    = state.tmp_l;
+                state.maj_l_i  = state.tmp_l_i;
+                if(draw_ui && InpShowMaj)
+                {
+                    string name = GetUniqueName(prefix+"Major_");
+                    DrawLine(name, GetTimeSafe(time,state.anc_i), state.anc_v,
+                             GetTimeSafe(time,state.tmp_l_i), state.maj_l, InpColorBear, 2, STYLE_SOLID);
+                }
+                state.st_l.Clear(); state.st_h.Clear();
+                state.maj_st = 1;
+                state.anc_i  = state.tmp_l_i; state.anc_v = state.maj_l;
+                state.tmp_h  = val_h;          state.tmp_h_i = i;
 
-         ProcessBarMathOnly(i, high, low, close, st);
+                CutLine(state.cur_top_line, GetTimeSafe(time,i));
+                CutLine(state.cur_bot_line, GetTimeSafe(time,i));
+
+                if(draw_ui && InpShowMaj)
+                {
+                    state.cur_bot_line = GetUniqueName(prefix+"HLine_Bot_");
+                    DrawLine(state.cur_bot_line, GetTimeSafe(time,state.maj_l_i), state.maj_l,
+                             GetTimeSafe(time,i)+PeriodSeconds(), state.maj_l, InpColorBear, 1, STYLE_DASH, true);
+                    if(state.maj_h != EMPTY_VALUE && state.maj_h != 0)
+                    {
+                        state.cur_top_line = GetUniqueName(prefix+"HLine_Top_");
+                        DrawLine(state.cur_top_line, GetTimeSafe(time,state.maj_h_i), state.maj_h,
+                                 GetTimeSafe(time,i)+PeriodSeconds(), state.maj_h, InpColorBear, 1, STYLE_DASH, true);
+                    }
+                }
+            }
+
+            if(state.maj_h != EMPTY_VALUE && state.maj_h != 0)
+            {
+                if(val_h > state.maj_h && val_c <= state.maj_h)
+                {
+                    state.maj_h = val_h;
+                    if(draw_ui && InpShowMaj) UpdateLineLevel(state.cur_top_line, state.maj_h);
+                }
+                if(val_c > state.maj_h)
+                {
+                    state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
+                    if(draw_ui && InpShowMaj)
+                    {
+                        string name = GetUniqueName(prefix+"Major_");
+                        DrawLine(name, GetTimeSafe(time,state.anc_i), state.anc_v,
+                                 GetTimeSafe(time,state.tmp_l_i), state.tmp_l, InpColorBear, 2, STYLE_SOLID);
+                    }
+                    state.st_h.Clear();
+                    state.anc_i = state.tmp_l_i; state.anc_v = state.tmp_l;
+                    state.tmp_h = val_h;          state.tmp_h_i = i;
+                    state.maj_l = state.tmp_l;    state.maj_l_i = state.tmp_l_i;
+                    CutLine(state.cur_top_line, GetTimeSafe(time,i));
+                    CutLine(state.cur_bot_line, GetTimeSafe(time,i));
+                    state.cur_top_line = ""; state.cur_bot_line = "";
+                }
+            }
         }
-     }
-
-   trend = st.maj_tr;
-   pct = 0;
-   max_pct = 0;
-   double live_p = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-
-   ref_h = st.maj_h;
-   ref_l = st.maj_l;
-   if(st.maj_h_i >= 0 && st.maj_h_i < copied) ref_t_h = rates[st.maj_h_i].time; else ref_t_h = 0;
-   if(st.maj_l_i >= 0 && st.maj_l_i < copied) ref_t_l = rates[st.maj_l_i].time; else ref_t_l = 0;
-
-   if(st.maj_h != EMPTY_VALUE && st.maj_l != EMPTY_VALUE && st.maj_h != st.maj_l)
-     {
-      double range = st.maj_h - st.maj_l;
-      if(trend == 1)
+        else if(state.maj_st == 1)
         {
-         pct = ((st.maj_h - live_p) / range) * 100.0;
-         max_pct = ((st.maj_h - st.tmp_l) / range) * 100.0;
+            if(val_h > state.tmp_h) { state.tmp_h = val_h; state.tmp_h_i = i; }
+
+            if(state.maj_l != EMPTY_VALUE && val_l < state.maj_l && val_c >= state.maj_l)
+            {
+                state.maj_l = val_l;
+                if(draw_ui && InpShowMaj) UpdateLineLevel(state.cur_bot_line, state.maj_l);
+            }
+
+            if(state.maj_l != EMPTY_VALUE && val_c < state.maj_l)
+            {
+                state.maj_h   = state.tmp_h;  state.maj_h_i = state.tmp_h_i;
+                state.bos_i   = i;
+                if(draw_ui && InpShowMaj)
+                {
+                    string name = GetUniqueName(prefix+"Major_");
+                    DrawLine(name, GetTimeSafe(time,state.anc_i), state.anc_v,
+                             GetTimeSafe(time,state.tmp_h_i), state.maj_h, InpColorBear, 2, STYLE_SOLID);
+                }
+                state.st_l.Clear(); state.maj_st = 0;
+                state.anc_i = state.tmp_h_i; state.anc_v = state.maj_h;
+                state.tmp_l = val_l;          state.tmp_l_i = i;
+                CutLine(state.cur_top_line, GetTimeSafe(time,i));
+                CutLine(state.cur_bot_line, GetTimeSafe(time,i));
+                state.cur_top_line = ""; state.cur_bot_line = "";
+            }
+
+            if(state.maj_h != EMPTY_VALUE && state.maj_h != 0)
+            {
+                if(val_h > state.maj_h && val_c <= state.maj_h)
+                {
+                    state.maj_h = val_h;
+                    if(draw_ui && InpShowMaj) UpdateLineLevel(state.cur_top_line, state.maj_h);
+                }
+                if(val_c > state.maj_h)
+                {
+                    state.maj_tr = 1; state.maj_st = 0; state.bos_i = i;
+                    state.st_h.Clear();
+                    state.anc_i = state.tmp_l_i; state.anc_v = state.tmp_l;
+                    state.tmp_h = val_h;          state.tmp_h_i = i;
+                    state.maj_l = state.tmp_l;    state.maj_l_i = state.tmp_l_i;
+                }
+            }
         }
-      else if(trend == -1)
-        {
-         pct = ((live_p - st.maj_l) / range) * 100.0;
-         max_pct = ((st.tmp_h - st.maj_l) / range) * 100.0;
-        }
-     }
-
-   if(pct < 0) pct = 0;
-   if(pct > 100) pct = 100;
-   if(max_pct < 0) max_pct = 0;
-   if(max_pct > 100) max_pct = 100;
-   if(max_pct < pct) max_pct = pct; // Emniyet: Max pct her zaman en az anlık pct kadar olmalı
-
-   return true;
-  }
-
-string GetTimeAgoString(datetime past_time, datetime now_time)
-  {
-   if (past_time == 0) return "";
-   int diff = (int)(now_time - past_time);
-   if (diff < 3600) return IntegerToString(diff/60) + " Dk Önce";
-   if (diff < 86400)
-     {
-      int h = diff/3600;
-      int m = (diff%3600)/60;
-      if (m > 0) return IntegerToString(h) + " Saat " + IntegerToString(m) + " Dk Önce";
-      return IntegerToString(h) + " Saat Önce";
-     }
-   int d = diff/86400;
-   int hd = (diff%86400)/3600;
-   if (hd > 0) return IntegerToString(d) + " Gün " + IntegerToString(hd) + " Saat Önce";
-   return IntegerToString(d) + " Gün Önce";
-  }
-
-string PctToText(double pct, double max_pct, datetime swing_time, datetime current_time)
-  {
-   string age = "\n   └ Oluşum: " + GetTimeAgoString(swing_time, current_time);
-   string base_str = "(Çekilme: %" + DoubleToString(pct, 0) + " ↑↑%" + DoubleToString(max_pct, 0);
-
-   if(pct <= 10.0)
-     {
-      // Fiyat zirvedeyse veya yeni kırılmışsa geçmiş pullback aranmaz. Şişkindir.
-      if(max_pct <= 10.0) return " (Trend Şişkin, Düzeltme Bekleniyor)" + age;
-      else return base_str + " - Kırılıma Hazırlanıyor)" + age;
-     }
-   if(pct >= InpGoodPullbackPct && pct <= 75.0) return base_str + " - İdeal Düzeltme)" + age;
-   if(pct > 85.0) return base_str + " - Dönüş Riski)" + age;
-   return base_str + ")" + age;
-  }
+    }
+}
 
 //+------------------------------------------------------------------+
-//| MTF Alert System (Smart Algorithmic Decision Engine)             |
-//+------------------------------------------------------------------+
-bool TriggerMTFAlert(int current_bar_i, datetime t, double live_price, int triggered_level)
-  {
-
-   int t_m1=0, t_m3=0, t_m5=0, t_m15=0, t_m30=0, t_h1=0;
-   double p_m1=0, p_m3=0, p_m5=0, p_m15=0, p_m30=0, p_h1=0;
-   double mp_m1=0, mp_m3=0, mp_m5=0, mp_m15=0, mp_m30=0, mp_h1=0;
-   double h_m1, l_m1; datetime th_m1, tl_m1;
-   double dmy_h, dmy_l; datetime th_m3, tl_m3, th_m5, tl_m5, th_m15, tl_m15, th_m30, tl_m30, th_h1, tl_h1;
-
-   bool hm1 = GetMTFPullback(PERIOD_M1, t_m1, p_m1, mp_m1, t, h_m1, l_m1, th_m1, tl_m1);
-   bool hm3 = GetMTFPullback(PERIOD_M3, t_m3, p_m3, mp_m3, t, dmy_h, dmy_l, th_m3, tl_m3);
-   bool hm5 = GetMTFPullback(PERIOD_M5, t_m5, p_m5, mp_m5, t, dmy_h, dmy_l, th_m5, tl_m5);
-   bool hm15 = GetMTFPullback(PERIOD_M15, t_m15, p_m15, mp_m15, t, dmy_h, dmy_l, th_m15, tl_m15);
-   bool hm30 = GetMTFPullback(PERIOD_M30, t_m30, p_m30, mp_m30, t, dmy_h, dmy_l, th_m30, tl_m30);
-   bool hh1 = GetMTFPullback(PERIOD_H1, t_h1, p_h1, mp_h1, t, dmy_h, dmy_l, th_h1, tl_h1);
-
-   if(!hm1 || !hm3 || !hm5 || !hm15 || !hm30 || !hh1) return false;
-
-// --- Trend Baskınlık Analizi (Trend Dominance Analysis) ---
-   // Büyük Zaman Aralığı (Macro/Core: H1, M30, M15)
-   int macro_score = 0;
-   if(t_h1 == 1) macro_score += 5; else macro_score -= 5;
-   if(t_m30 == 1) macro_score += 4; else macro_score -= 4;
-   if(t_m15 == 1) macro_score += 3; else macro_score -= 3;
-
-   double macro_bull_pct = ((macro_score + 12.0) / 24.0) * 100.0;
-   double macro_bear_pct = 100.0 - macro_bull_pct;
-
-   // Küçük Zaman Aralığı (Micro/Trigger: M5, M3, M1)
-   int micro_score = 0;
-   if(t_m5 == 1) micro_score += 3; else micro_score -= 3;
-   if(t_m3 == 1) micro_score += 2; else micro_score -= 2;
-   if(t_m1 == 1) micro_score += 1; else micro_score -= 1;
-
-   double micro_bull_pct = ((micro_score + 6.0) / 12.0) * 100.0;
-   double micro_bear_pct = 100.0 - micro_bull_pct;
-
-   int total_score = (t_h1 * 5) + (t_m30 * 4) + (t_m15 * 3) + (t_m5 * 2) + (t_m3 * 1) + (t_m1 * 1);
-   double bull_pressure = ((total_score + 16.0) / 32.0) * 100.0;
-   if (bull_pressure < 0) bull_pressure = 0;
-   if (bull_pressure > 100) bull_pressure = 100;
-
-   string lvl_text = (triggered_level == 2) ? DoubleToString(InpTriggerLevel2,0) : DoubleToString(InpTriggerLevel1,0);
-   string msg1 = "🚨 [" + Symbol() + "] M1 Hedef Seviyede! (BÖLÜM 1/2)\n";
-   if(InpTestMode) msg1 = "🧪 [TEST MODU - " + Symbol() + "] (BÖLÜM 1/2)\n";
-
-   string swing_dir = t_m1 == 1 ? "🟢 YUKARI" : "🔴 AŞAĞI";
-   datetime start_t = t_m1 == 1 ? tl_m1 : th_m1;
-   string swing_start_str = TimeToString(start_t, TIME_DATE|TIME_MINUTES);
-   string ago_str = GetTimeAgoString(start_t, t);
-
-   msg1 += "📌 REFERANS SWING (M1):\n";
-   msg1 += "- Yön: " + swing_dir + "\n";
-   msg1 += "- Başlangıç: " + swing_start_str + "\n";
-   msg1 += "  └ Süre: " + ago_str + "\n";
-   msg1 += "- Swing High: " + DoubleToString(h_m1, _Digits) + "\n";
-   msg1 += "- Swing Low: " + DoubleToString(l_m1, _Digits) + "\n";
-   if(p_m1 <= 10.0 && mp_m1 <= 10.0) msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Trend Şişkin, Düzeltme Bekleniyor)\n";
-   else msg1 += "- Güncel Fiyat: " + DoubleToString(live_price, _Digits) + " (Çekilme: %" + DoubleToString(p_m1, 0) + " ↑↑%" + DoubleToString(mp_m1, 0) + ")\n\n";
-
-   msg1 += "🧭 MAKRO TREND (H1/M30)\n";
-   msg1 += "Durum: " + (bull_pressure >= 50 ? "🟢 YÜKSELİŞ" : "🔴 DÜŞÜŞ") + " (%" + DoubleToString(bull_pressure, 0) + " Boğa Baskısı)\n";
-   msg1 += "H1:  " + (t_h1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_h1, mp_h1, (t_h1==1?tl_h1:th_h1), t) + "\n";
-   msg1 += "M30: " + (t_m30 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m30, mp_m30, (t_m30==1?tl_m30:th_m30), t) + "\n\n";
-
-   msg1 += "🔬 DÜZELTME VE HEDEF (M15/M5)\n";
-   msg1 += "M15: " + (t_m15 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m15, mp_m15, (t_m15==1?tl_m15:th_m15), t) + "\n";
-   msg1 += "M5:  " + (t_m5 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m5, mp_m5, (t_m5==1?tl_m5:th_m5), t) + "\n\n";
-
-   msg1 += "🎯 TETİK VE ONAY GRUBU (M3/M1)\n";
-   msg1 += "M3:  " + (t_m3 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m3, mp_m3, (t_m3==1?tl_m3:th_m3), t) + "\n";
-   msg1 += "M1:  " + (t_m1 == 1 ? "🟢 YUKARI " : "🔴 AŞAĞI  ") + PctToText(p_m1, mp_m1, (t_m1==1?tl_m1:th_m1), t) + "\n\n";
-
-   msg1 += "📊 Baskınlık: Makro=↑%" + DoubleToString(macro_bull_pct, 0) + " ↓%" + DoubleToString(macro_bear_pct, 0) + " | Mikro=↑%" + DoubleToString(micro_bull_pct, 0) + " ↓%" + DoubleToString(micro_bear_pct, 0) + "\n";
-  bool macro_bull = (t_h1 == 1 && t_m30 == 1);
-   bool macro_bear = (t_h1 == -1 && t_m30 == -1);
-
-   string decision = "";
-   string detail = "";
-
-   bool m15_pullback_down = (t_m15 == 1 && t_m5 == -1);
-   bool m15_pullback_up   = (t_m15 == -1 && t_m5 == 1);
-
-   if (macro_bull)
-     {
-      if (t_m15 == -1) // M15 is in a Pullback (Down) against Macro
-        {
-         if (p_m15 >= InpGoodPullbackPct && t_m1 == 1 && t_m3 == 1)
-           {
-            decision = "✅ YAPISAL UYUM: İdeal Düzeltme Tamamlandı";
-            detail = "Makro trend YUKARI. M15 yapısı yeterli ucuzluk bölgesine (discount) indi. Alt zaman dilimi tetikleyicileri (M1/M3) ana trend yönüne dönüş sinyali üretiyor. Trendin devam etme ihtimali istatistiksel olarak yüksek.";
-           }
-         else if (t_m1 == -1 && t_m3 == -1 && p_m15 < 30.0)
-           {
-            decision = "⚡ YAPISAL UYUM: Derin Düzeltme Başlangıcı";
-            detail = "Makro trend YUKARI olmasına rağmen, M15 yapısı aşağı yönlü kırıldı ve henüz yeterli ucuzluk bölgesine inmedi. Kısa vadeli aşağı yönlü (Counter-Trend) momentum güçlü, ancak bu hareket makro trende terstir.";
-           }
-         else
-           {
-            decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-            detail = "M15 aşağı yönlü düzeltme aşamasında, ancak M1 ve M3 zıt yönde veya henüz kalıcı bir dönüş yapısı oluşturmadı. Fiyatta anlamlı bir trend yönü yok, izlemek en mantıklısı.";
-           }
-        }
-      else if (t_m15 == 1) // M15 is UP (Aligned with Macro)
-        {
-         if (t_m5 == -1) // M5 is pulling back down
-           {
-            if (p_m15 >= InpGoodPullbackPct && t_m1 == 1 && t_m3 == 1)
-              {
-               decision = "✅ YAPISAL UYUM: Güçlü Trend Devamı";
-               detail = "M15 Yukarı yönde ve yeterli ucuzluk bölgesinde. M5 düzeltmesini bitirmek üzereyken, M1/M3 tetik grubu ana yöne uyum sağladı. Yapı yukarı yönlü genişlemeyi destekliyor.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Kısa Süreli Tepki";
-               detail = "M15 Yukarı ancak M5 şu an fiyatı aşağı çekiyor. M1 yukarı kırmış olsa da M3 yapısı henüz onay vermedi. Bu hareket kalıcı bir dönüş değil, iç yapı düzeltmesidir.";
-              }
-           }
-         else // M15 UP, M5 UP
-           {
-            if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 <= 10.0)
-              {
-               decision = "⚠️ RİSKLİ YAPI: Aşırı Şişkin (Overextended)";
-               detail = "Ana zaman dilimlerinde (M15 ve M5) fiyat son kırılımdan bu yana hiç geri çekilme (pullback) yapmadı. Bu seviyelerden trend yönlü beklentiye girmek yapısal olarak mantıksızdır. Fiyatın dengelenmesi beklenmeli.";
-              }
-            else if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 > 10.0)
-              {
-               decision = "✅ YAPISAL UYUM: Kırılım Gerçekleşiyor (Breakout)";
-               detail = "M15 daha önce düzeltmesini (pullback) tamamlamış ve şu an yapısal direnci kırmak üzere ivmeleniyor. Makro ve mikro trendler tamamen aynı yönde.";
-              }
-            else if (t_m1 == 1 && t_m3 == 1)
-              {
-               decision = "✅ YAPISAL UYUM: Ara Düzeltme Devamı";
-               detail = "Makro ve M15 uyumlu. Fiyat M15'te sığ bir düzeltme yaptıktan sonra tekrar yukarı kırılım sinyali veriyor. Trend ivmesi oldukça güçlü.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-               detail = "Ana yön Yukarı ancak M1 ve M3 kendi içlerinde uyumsuz dalgalanıyor. Net bir yapı onayı gelene kadar işlem yapmak riskli.";
-              }
-           }
-        }
-     }
-   else if (macro_bear)
-     {
-      if (t_m15 == 1) // M15 is in a Pullback (Up) against Macro
-        {
-         if (p_m15 >= InpGoodPullbackPct && t_m1 == -1 && t_m3 == -1)
-           {
-            decision = "✅ YAPISAL UYUM: İdeal Düzeltme Tamamlandı";
-            detail = "Makro trend AŞAĞI. M15 yapısı yeterli pahalılık bölgesine (premium) ulaştı. Alt zaman dilimi tetikleyicileri (M1/M3) ana trend yönüne dönüş sinyali üretiyor. Trendin devam etme ihtimali yüksek.";
-           }
-         else if (t_m1 == 1 && t_m3 == 1 && p_m15 < 30.0)
-           {
-            decision = "⚡ YAPISAL UYUM: Derin Düzeltme Başlangıcı";
-            detail = "Makro trend AŞAĞI olmasına rağmen, M15 yapısı yukarı yönlü kırıldı ve henüz pahalılık bölgesine ulaşmadı. Kısa vadeli yukarı yönlü (Counter-Trend) momentum güçlü, ancak bu makro trende terstir.";
-           }
-         else
-           {
-            decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-            detail = "M15 yukarı çıkıyor (düzeltme). Ancak M1 ve M3 kendi aralarında uyumsuz. Bu bir trend başlangıcı değil, fiyatın denge arayışıdır.";
-           }
-        }
-      else if (t_m15 == -1) // M15 is DOWN (Aligned with Macro)
-        {
-         if (t_m5 == 1) // M5 is pulling back up
-           {
-            if (p_m15 >= InpGoodPullbackPct && t_m1 == -1 && t_m3 == -1)
-              {
-               decision = "✅ YAPISAL UYUM: Güçlü Trend Devamı";
-               detail = "M15 Aşağı yönde ve pahalılık bölgesinde. M5 düzeltmesini bitirirken Tetik Grubu (M1/M3) asıl yöne uyum sağladı. Aşağı yönlü genişleme devam edebilir.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Kısa Süreli Tepki";
-               detail = "M15 Aşağı iniyor ancak M5 şu an fiyatı yukarı çekiyor. M1 ve M3 yapısı dönüş için yeterli onayı vermedi. Henüz asıl trende girilmiş değil.";
-              }
-           }
-         else // M15 DOWN, M5 DOWN
-           {
-            if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 <= 10.0)
-              {
-               decision = "⚠️ RİSKLİ YAPI: Aşırı Şişkin (Overextended)";
-               detail = "Ana zaman dilimlerinde (M15 ve M5) fiyat son kırılımdan bu yana hiç geri çekilme (pullback) yapmadı. Bu seviyelerden ana trend yönlü beklentiye girmek yapısal olarak mantıksızdır, düzeltme beklenmeli.";
-              }
-            else if (p_m15 <= 10.0 && p_m5 <= 10.0 && mp_m15 > 10.0)
-              {
-               decision = "✅ YAPISAL UYUM: Kırılım Gerçekleşiyor (Breakout)";
-               detail = "M15 daha önce düzeltmesini (pullback) tamamlamış ve şu an yapısal desteği kırmak üzere ivmeleniyor. Makro ve mikro trendler tamamen aynı yönde.";
-              }
-            else if (t_m1 == -1 && t_m3 == -1)
-              {
-               decision = "✅ YAPISAL UYUM: Ara Düzeltme Devamı";
-               detail = "Makro ve M15 uyumlu. Fiyat M15'te sığ bir tepki verdikten sonra tekrar aşağı kırılım sinyali veriyor. Ayı momentumu devam ediyor.";
-              }
-            else
-              {
-               decision = "❌ YAPISAL UYUMSUZLUK: Düzensiz Fiyat Hareketi (Gürültü)";
-               detail = "Ana yön Aşağı ancak M1 ve M3 kendi içlerinde uyumsuz dalgalanıyor. Piyasanın yön bulması beklenmeli.";
-              }
-           }
-        }
-     }
-   else
-     {
-      decision = "⚠️ YAPISAL KARARSIZLIK (Range / Testere)";
-      detail = "Makro trendler (H1 ve M30) birbiriyle uyumsuz durumda. Piyasa konsolidasyon (yatay) sürecinde, büyük zaman diliminde net bir yön tayini yok.";
-     }
-
-   // --- MOMENTUM REJECTION NOTU ---
-   string momentum_note = "";
-
-   if (mp_h1 >= InpMomentumMinPeak && (mp_h1 - p_h1) >= InpMomentumMinBounce) momentum_note += "  └ [H1] Zirveden %" + DoubleToString(mp_h1 - p_h1, 0) + " döndü. " + (t_h1 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m30 >= InpMomentumMinPeak && (mp_m30 - p_m30) >= InpMomentumMinBounce) momentum_note += "  └ [M30] Zirveden %" + DoubleToString(mp_m30 - p_m30, 0) + " döndü. " + (t_m30 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m15 >= InpMomentumMinPeak && (mp_m15 - p_m15) >= InpMomentumMinBounce) momentum_note += "  └ [M15] Zirveden %" + DoubleToString(mp_m15 - p_m15, 0) + " döndü. " + (t_m15 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m5 >= InpMomentumMinPeak && (mp_m5 - p_m5) >= InpMomentumMinBounce) momentum_note += "  └ [M5] Zirveden %" + DoubleToString(mp_m5 - p_m5, 0) + " döndü. " + (t_m5 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-   if (mp_m3 >= InpMomentumMinPeak && (mp_m3 - p_m3) >= InpMomentumMinBounce) momentum_note += "  └ [M3] Zirveden %" + DoubleToString(mp_m3 - p_m3, 0) + " döndü. " + (t_m3 == 1 ? "YUKARI" : "AŞAĞI") + " ivme kazandı!\n";
-
-   string final_momentum_str = "";
-   if (momentum_note != "")
-     {
-      final_momentum_str = "🚀 İVME (MOMENTUM):\n" + momentum_note + "  * Fiyat düzeltmeyi sert reddetti, ana trend yönünde tepki güçlü!\n\n";
-     }
-
-   string risk_advice = "";
-   if (StringFind(decision, "Aşırı Şişkin") != -1)
-     {
-      risk_advice = "🔴 RİSKLİ BÖLGE: Mevcut seviyeden trend yönünde beklentiye girmek yapısal olarak yanlıştır. Fiyatın sağlıklı bir düzeltme (pullback) yapması beklenmelidir.";
-     }
-   else if (StringFind(decision, "İdeal Düzeltme") != -1 || StringFind(decision, "Güçlü Trend") != -1)
-     {
-      risk_advice = "🟢 OPTİMAL BÖLGE: Zaman dilimleri tam uyum içinde. Fiyat ideal iskontoda ve trendin devam etme olasılığı çok yüksek.";
-     }
-   else if (StringFind(decision, "Kırılım Gerçekleşiyor") != -1 || StringFind(decision, "Ara Düzeltme") != -1)
-     {
-      risk_advice = "🟡 KABUL EDİLEBİLİR RİSK: Fiyat halihazırda düzeltmesini yapmış ve yapıyı kırmak üzere. Momentum yönlü hareket izlenebilir.";
-     }
-   else if (StringFind(decision, "Derin Düzeltme") != -1)
-     {
-      risk_advice = "🟠 YÜKSEK RİSK (Counter-Trend): Kısa zaman diliminde oluşan momentuma karşı işlem almak (Scalp) mümkündür ancak ana trende terstir. Düşük lot tavsiye edilir.";
-     }
-   else if (StringFind(decision, "Düzensiz Fiyat Hareketi") != -1 || StringFind(decision, "Kısa Süreli Tepki") != -1)
-     {
-      risk_advice = "🔴 UYUMSUZLUK: Yapılar birbiriyle çelişiyor. Trend henüz olgunlaşmadı veya fake-out (sahte kırılım) riski var. İzlemede kalın.";
-     }
-   else
-     {
-      risk_advice = "🔴 BEKLEME ZAMANI: Piyasa yapısında netlik yok. Yeni bir impulsif hareketin oluşumu beklenmelidir.";
-     }
-
-   string msg2 = "🚨 [" + Symbol() + "] BÖLÜM 2/2\n\n";
-   if(InpTestMode) msg2 = "🧪 [TEST MODU - " + Symbol() + "] BÖLÜM 2/2\n\n";
-
-   msg2 += final_momentum_str;
-   msg2 += "🤖 PİYASA DURUMU:\n  " + decision + "\n\n";
-   msg2 += "📝 YAPI ANALİZİ:\n  " + detail + "\n\n";
-   msg2 += "⚠️ ALGORİTMİK SONUÇ:\n  " + risk_advice;
-
-   if(InpAlertPopup)
-     {
-      Alert(msg1);
-      Alert(msg2);
-     }
-   if(InpAlertPush)
-     {
-      SendNotification(msg1);
-      SendNotification(msg2);
-     }
-
-   g_alert_bar_index = current_bar_i;
-   return true;
-  }
-
-//+------------------------------------------------------------------+
-//| Custom indicator initialization function                         |
+//| OnInit                                                           |
 //+------------------------------------------------------------------+
 int OnInit()
-  {
-   IndicatorSetString(INDICATOR_SHORTNAME, "Structure");
-   return(INIT_SUCCEEDED);
-  }
+{
+    IndicatorSetString(INDICATOR_SHORTNAME, "Structure");
+    return INIT_SUCCEEDED;
+}
 
 //+------------------------------------------------------------------+
-//| Custom indicator deinitialization function                       |
+//| OnDeinit                                                         |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
-  {
-   ObjectsDeleteAll(0, "Structure_");
-   ObjectsDeleteAll(0, "Minor_");
-   ObjectsDeleteAll(0, "Major_");
-   ObjectsDeleteAll(0, "HLine_");
-   ObjectsDeleteAll(0, "LiveLeg_");
-  }
+{
+    ObjectsDeleteAll(0, "Minor_");
+    ObjectsDeleteAll(0, "Major_");
+    ObjectsDeleteAll(0, "HLine_");
+    ObjectsDeleteAll(0, "Live_");
+    ObjectsDeleteAll(0, "CHoCH_Path_");
+    ObjectsDeleteAll(0, "CHoCH_Signal_");
+    ObjectsDeleteAll(0, "CHoCH_Text_");
+    DeleteLine("LiveLeg");
+    Comment("");
+}
 
 //+------------------------------------------------------------------+
-//| Main Logic Execution                                             |
-//+------------------------------------------------------------------+
-void ProcessBar(int i, const double &open[], const double &high[], const double &low[], const double &close[], const datetime &time[], SState &state, bool is_history)
-  {
-   double val_h = high[i];
-   double val_l = low[i];
-   double val_c = close[i];
-
-   string prefix = is_history ? "" : "Live_";
-
-   // MINOR STRUCTURE
-   if(state.min_tr == 1)
-     {
-      double old_trig = state.trig_l;
-      if(val_h > state.min_h)
-        {
-         state.min_h = val_h;
-         state.min_h_i = i;
-         state.trig_l = val_l;
-        }
-
-      if(val_l < old_trig)
-        {
-         if(InpShowMin)
-           {
-            string name = GetUniqueName(prefix + "Minor_");
-            DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_h_i], state.min_h, InpColorMin, 1, STYLE_SOLID);
-           }
-         state.st_h.Push(state.min_h, state.min_h_i);
-
-         if(state.maj_tr == 1 && state.maj_st == 0 && state.min_h < state.tmp_h && state.st_l.Size() > 0)
-           {
-            if(state.st_l.GetIdx(state.st_l.Size() - 1) > state.bos_i)
-              {
-               state.st_l.Pop();
-              }
-           }
-         state.min_tr = -1;
-         state.lp_i = state.min_h_i;
-         state.lp_p = state.min_h;
-         state.min_l = val_l;
-         state.min_l_i = i;
-         state.trig_h = val_h;
-        }
-     }
-   else
-     {
-      double old_trig = state.trig_h;
-      if(val_l < state.min_l)
-        {
-         state.min_l = val_l;
-         state.min_l_i = i;
-         state.trig_h = val_h;
-        }
-
-      if(val_h > old_trig)
-        {
-         if(InpShowMin)
-           {
-            string name = GetUniqueName(prefix + "Minor_");
-            DrawLine(name, time[state.lp_i], state.lp_p, time[state.min_l_i], state.min_l, InpColorMin, 1, STYLE_SOLID);
-           }
-         state.st_l.Push(state.min_l, state.min_l_i);
-
-         if(state.maj_tr == -1 && state.maj_st == 0 && state.min_l > state.tmp_l && state.st_h.Size() > 0)
-           {
-            if(state.st_h.GetIdx(state.st_h.Size() - 1) > state.bos_i)
-              {
-               state.st_h.Pop();
-              }
-           }
-         state.min_tr = 1;
-         state.lp_i = state.min_l_i;
-         state.lp_p = state.min_l;
-         state.min_h = val_h;
-         state.min_h_i = i;
-         state.trig_l = val_l;
-        }
-     }
-
-   // MAJOR STRUCTURE
-   if(state.maj_tr == 0)
-     {
-      state.maj_tr = 1;
-      state.anc_i = state.min_l_i;
-      state.anc_v = state.min_l;
-      state.maj_l_i = state.min_l_i;
-     }
-
-   if(state.maj_tr == 1)
-     {
-      if(val_h > state.tmp_h)
-        {
-         state.tmp_h = val_h;
-         state.tmp_h_i = i;
-        }
-
-      if(state.maj_st == 0)
-        {
-         double act = state.st_l.Size() > 0 ? state.st_l.GetVal(state.st_l.Size() - 1) : EMPTY_VALUE;
-         if(act != EMPTY_VALUE && val_l < act)
-           {
-            state.maj_h = state.tmp_h;
-            state.maj_h_i = state.tmp_h_i;
-            if(InpShowMaj)
-              {
-               string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBull, 2, STYLE_SOLID);
-              }
-
-            state.st_l.Clear();
-            state.st_h.Clear();
-            state.maj_st = 1;
-            state.anc_i = state.tmp_h_i;
-            state.anc_v = state.maj_h;
-            state.tmp_l = val_l;
-            state.tmp_l_i = i;
-
-            CutLine(state.cur_top_line, time[i]);
-            CutLine(state.cur_bot_line, time[i]);
-
-            if(InpShowMaj)
-              {
-               state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
-               DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBull, 1, STYLE_DASH, true);
-
-               if(state.maj_l != EMPTY_VALUE && state.maj_l != 0)
-                 {
-                  state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
-                  DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBull, 1, STYLE_DASH, true);
-                 }
-              }
-           }
-
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_l < state.maj_l && val_c >= state.maj_l)
-           {
-            state.maj_l = val_l;
-            if(InpShowMaj)
-               UpdateLineLevel(state.cur_bot_line, state.maj_l);
-           }
-
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_c < state.maj_l)
-           {
-            state.maj_tr = -1;
-            state.maj_st = 0;
-            state.bos_i = i;
-            if(InpShowMaj)
-              {
-               string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
-              }
-
-            state.st_l.Clear();
-            state.anc_i = state.tmp_h_i;
-            state.anc_v = state.tmp_h;
-            state.tmp_l = val_l;
-            state.tmp_l_i = i;
-            state.maj_h = state.tmp_h;
-            state.maj_h_i = state.tmp_h_i;
-
-            CutLine(state.cur_top_line, time[i]);
-            CutLine(state.cur_bot_line, time[i]);
-            state.cur_top_line = "";
-            state.cur_bot_line = "";
-           }
-        }
-      else if(state.maj_st == 1)
-        {
-         if(val_l < state.tmp_l)
-           {
-            state.tmp_l = val_l;
-            state.tmp_l_i = i;
-           }
-
-         if(val_h > state.maj_h && val_c <= state.maj_h)
-           {
-            state.maj_h = val_h;
-            if(InpShowMaj)
-               UpdateLineLevel(state.cur_top_line, state.maj_h);
-           }
-
-         if(val_c > state.maj_h)
-           {
-            state.bos_i = i;
-            state.maj_l = state.tmp_l;
-            state.maj_l_i = state.tmp_l_i;
-            if(InpShowMaj)
-              {
-               string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBull, 2, STYLE_SOLID);
-              }
-
-            state.st_h.Clear();
-            state.maj_st = 0;
-            state.anc_i = state.tmp_l_i;
-            state.anc_v = state.maj_l;
-            state.tmp_h = val_h;
-            state.tmp_h_i = i;
-
-            CutLine(state.cur_top_line, time[i]);
-            CutLine(state.cur_bot_line, time[i]);
-            state.cur_top_line = "";
-            state.cur_bot_line = "";
-           }
-
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_l < state.maj_l && val_c >= state.maj_l)
-           {
-            state.maj_l = val_l;
-            if(InpShowMaj)
-               UpdateLineLevel(state.cur_bot_line, state.maj_l);
-           }
-
-         if(state.maj_l != EMPTY_VALUE && state.maj_l != 0 && val_c < state.maj_l)
-           {
-            state.maj_tr = -1;
-            state.maj_st = 0;
-            state.bos_i = i;
-            if(InpShowMaj)
-              {
-               string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.tmp_h, InpColorBull, 2, STYLE_SOLID);
-              }
-
-            state.st_l.Clear();
-            state.anc_i = state.tmp_h_i;
-            state.anc_v = state.tmp_h;
-            state.tmp_l = val_l;
-            state.tmp_l_i = i;
-            state.maj_h = state.tmp_h;
-            state.maj_h_i = state.tmp_h_i;
-
-            CutLine(state.cur_top_line, time[i]);
-            CutLine(state.cur_bot_line, time[i]);
-            state.cur_top_line = "";
-            state.cur_bot_line = "";
-           }
-        }
-     }
-   else // maj_tr == -1
-     {
-      if(val_l < state.tmp_l)
-        {
-         state.tmp_l = val_l;
-         state.tmp_l_i = i;
-        }
-
-      if(state.maj_st == 0)
-        {
-         double act = state.st_h.Size() > 0 ? state.st_h.GetVal(state.st_h.Size() - 1) : EMPTY_VALUE;
-         if(act != EMPTY_VALUE && val_h > act)
-           {
-            state.maj_l = state.tmp_l;
-            state.maj_l_i = state.tmp_l_i;
-            if(InpShowMaj)
-              {
-               string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.maj_l, InpColorBear, 2, STYLE_SOLID);
-              }
-
-            state.st_l.Clear();
-            state.st_h.Clear();
-            state.maj_st = 1;
-            state.anc_i = state.tmp_l_i;
-            state.anc_v = state.maj_l;
-            state.tmp_h = val_h;
-            state.tmp_h_i = i;
-
-            CutLine(state.cur_top_line, time[i]);
-            CutLine(state.cur_bot_line, time[i]);
-
-            if(InpShowMaj)
-              {
-               state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
-               DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBear, 1, STYLE_DASH, true);
-
-               if(state.maj_h != EMPTY_VALUE && state.maj_h != 0)
-                 {
-                  state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
-                  DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBear, 1, STYLE_DASH, true);
-                 }
-              }
-           }
-
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_h > state.maj_h && val_c <= state.maj_h)
-           {
-            state.maj_h = val_h;
-            if(InpShowMaj)
-               UpdateLineLevel(state.cur_top_line, state.maj_h);
-           }
-
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_c > state.maj_h)
-           {
-            state.maj_tr = 1;
-            state.maj_st = 0;
-            state.bos_i = i;
-            if(InpShowMaj)
-              {
-               string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_l_i], state.tmp_l, InpColorBear, 2, STYLE_SOLID);
-              }
-
-            state.st_h.Clear();
-            state.anc_i = state.tmp_l_i;
-            state.anc_v = state.tmp_l;
-            state.tmp_h = val_h;
-            state.tmp_h_i = i;
-            state.maj_l = state.tmp_l;
-            state.maj_l_i = state.tmp_l_i;
-
-            CutLine(state.cur_top_line, time[i]);
-            CutLine(state.cur_bot_line, time[i]);
-            state.cur_top_line = "";
-            state.cur_bot_line = "";
-           }
-        }
-      else if(state.maj_st == 1)
-        {
-         if(val_h > state.tmp_h)
-           {
-            state.tmp_h = val_h;
-            state.tmp_h_i = i;
-           }
-
-         if(val_l < state.maj_l && val_c >= state.maj_l)
-           {
-            state.maj_l = val_l;
-            if(InpShowMaj)
-               UpdateLineLevel(state.cur_bot_line, state.maj_l);
-           }
-
-         if(val_c < state.maj_l)
-           {
-            state.maj_h = state.tmp_h;
-            state.bos_i = i;
-            state.maj_h_i = state.tmp_h_i;
-            if(InpShowMaj)
-              {
-               string name = GetUniqueName(prefix + "Major_");
-               DrawLine(name, time[state.anc_i], state.anc_v, time[state.tmp_h_i], state.maj_h, InpColorBear, 2, STYLE_SOLID);
-              }
-
-            state.st_l.Clear();
-            state.maj_st = 0;
-            state.anc_i = state.tmp_h_i;
-            state.anc_v = state.maj_h;
-            state.tmp_l = val_l;
-            state.tmp_l_i = i;
-
-            CutLine(state.cur_top_line, time[i]);
-            CutLine(state.cur_bot_line, time[i]);
-            state.cur_top_line = "";
-            state.cur_bot_line = "";
-           }
-
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_h > state.maj_h && val_c <= state.maj_h)
-           {
-            state.maj_h = val_h;
-            if(InpShowMaj)
-               UpdateLineLevel(state.cur_top_line, state.maj_h);
-           }
-
-         if(state.maj_h != EMPTY_VALUE && state.maj_h != 0 && val_c > state.maj_h)
-           {
-            state.maj_tr = 1;
-            state.maj_st = 0;
-            state.bos_i = i;
-
-            state.st_h.Clear();
-            state.anc_i = state.tmp_l_i;
-            state.anc_v = state.tmp_l;
-            state.tmp_h = val_h;
-            state.tmp_h_i = i;
-            state.maj_l = state.tmp_l;
-            state.maj_l_i = state.tmp_l_i;
-           }
-        }
-     }
-  }
-
-//+------------------------------------------------------------------+
-//| Custom indicator iteration function                              |
+//| OnCalculate                                                      |
 //+------------------------------------------------------------------+
 int OnCalculate(const int rates_total,
                 const int prev_calculated,
@@ -1150,143 +854,127 @@ int OnCalculate(const int rates_total,
                 const long &tick_volume[],
                 const long &volume[],
                 const int &spread[])
-  {
-   if(rates_total < 2) return(0);
+{
+    if(rates_total < 2) return 0;
 
-   int limit;
+    static datetime last_calc_time = 0;
+    int virtual_prev = prev_calculated;
 
-   if(prev_calculated == 0)
-     {
-      double tf_days = GetDaysForTF(Period());
-      g_anchor_time = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
+    if(prev_calculated == 0 && last_calc_time == time[rates_total-1])
+        virtual_prev = rates_total - 1;
 
-      g_counter = 0;
-      g_last_alert_maj_h = 0;
-      g_last_alert_maj_l = 0;
-      g_last_alert_trend = 0;
-      g_level1_triggered = false;
-      g_level2_triggered = false;
+    int limit;
 
-      ObjectsDeleteAll(0, "Structure_");
-      ObjectsDeleteAll(0, "Minor_");
-      ObjectsDeleteAll(0, "Major_");
-      ObjectsDeleteAll(0, "HLine_");
-      ObjectsDeleteAll(0, "LiveLeg_");
+    if(virtual_prev == 0)
+    {
+        last_calc_time = time[rates_total-1];
 
-      int start_idx = 0;
-      for(int k=0; k<rates_total; k++) {
-         if(time[k] >= g_anchor_time) {
-            start_idx = k;
-            break;
-         }
-      }
+        double tf_days  = GetDaysForTF(Period());
+        g_anchor_time   = TimeCurrent() - (datetime)(tf_days * 24.0 * 60.0 * 60.0);
+        g_counter       = 0;
 
-      g_state_hist.min_h   = high[start_idx];
-      g_state_hist.min_h_i = start_idx;
-      g_state_hist.min_l   = low[start_idx];
-      g_state_hist.min_l_i = start_idx;
-      g_state_hist.trig_h  = high[start_idx];
-      g_state_hist.trig_l  = low[start_idx];
-      g_state_hist.tmp_h   = high[start_idx];
-      g_state_hist.tmp_h_i = start_idx;
-      g_state_hist.tmp_l   = low[start_idx];
-      g_state_hist.tmp_l_i = start_idx;
-      g_state_hist.min_tr  = (close[start_idx] > open[start_idx]) ? 1 : -1;
-      g_state_hist.anc_i   = start_idx;
-      g_state_hist.anc_v   = close[start_idx];
-      g_state_hist.lp_i    = start_idx;
-      g_state_hist.lp_p    = close[start_idx];
+        ObjectsDeleteAll(0, "Minor_");
+        ObjectsDeleteAll(0, "Major_");
+        ObjectsDeleteAll(0, "HLine_");
+        ObjectsDeleteAll(0, "Live_");
+        ObjectsDeleteAll(0, "CHoCH_Path_");
+        ObjectsDeleteAll(0, "CHoCH_Signal_");
+        ObjectsDeleteAll(0, "CHoCH_Text_");
 
-      g_state_hist.maj_h = EMPTY_VALUE;
-      g_state_hist.maj_l = EMPTY_VALUE;
-      g_state_hist.maj_tr = 0;
-      g_state_hist.maj_st = 0;
-      g_state_hist.bos_i = start_idx;
+        int start_idx = 0;
+        // Always start calculation from index 0 for consistent swing structures
+        // We will only use g_anchor_time to determine whether to draw UI elements
 
-      limit = start_idx + 1;
-     }
-   else
-     {
-      limit = prev_calculated - 1;
-     }
+        g_state_hist.min_h   = high[start_idx];  g_state_hist.min_h_i = start_idx;
+        g_state_hist.min_l   = low[start_idx];   g_state_hist.min_l_i = start_idx;
+        g_state_hist.trig_h  = high[start_idx];  g_state_hist.trig_l  = low[start_idx];
+        g_state_hist.tmp_h   = high[start_idx];  g_state_hist.tmp_h_i = start_idx;
+        g_state_hist.tmp_l   = low[start_idx];   g_state_hist.tmp_l_i = start_idx;
+        g_state_hist.min_tr  = (close[start_idx] > open[start_idx]) ? 1 : -1;
+        g_state_hist.anc_i   = start_idx;        g_state_hist.anc_v   = close[start_idx];
+        g_state_hist.lp_i    = start_idx;        g_state_hist.lp_p    = close[start_idx];
+        g_state_hist.mb_h    = high[start_idx];  g_state_hist.mb_l    = low[start_idx];
+        g_state_hist.mb_i    = start_idx;
 
-   for(int i = limit; i < rates_total - 1; i++)
-     {
-      bool inside = (high[i] <= high[i-1]) && (low[i] >= low[i-1]);
-      if(!inside)
+        g_state_hist.t1_h = 0; g_state_hist.t1_l = 0; g_state_hist.t1_i = 0;
+        g_state_hist.d1_h = 0; g_state_hist.d1_l = 0; g_state_hist.d1_i = 0;
+        g_state_hist.t2_h = 0; g_state_hist.t2_l = 0; g_state_hist.t2_i = 0;
+        g_state_hist.choch_dir = 0;
+        g_state_hist.last_choch_dir = 0;
+        g_state_hist.last_choch_level = 0;
+        g_state_hist.last_choch_time  = 0;
+
+        double atr   = (high[start_idx] - low[start_idx]);
+        if(atr == 0) atr = Point() * 10;
+        double tiny  = atr * 0.1;
+
+        g_state_hist.maj_h   = high[start_idx] + tiny;
+        g_state_hist.maj_l   = low[start_idx]  - tiny;
+        g_state_hist.maj_tr  = g_state_hist.min_tr;
+        g_state_hist.maj_st  = 1;
+        g_state_hist.bos_i   = start_idx;
+        g_state_hist.maj_h_i = start_idx;
+        g_state_hist.maj_l_i = start_idx;
+
+        limit = start_idx + 1;
+    }
+    else
+    {
+        limit = virtual_prev - 1;
+    }
+
+    // Mother bar başlangıç değeri
+    if(virtual_prev == 0 && limit < rates_total)
+    {
+        g_state_hist.mb_h = high[limit-1];
+        g_state_hist.mb_l = low[limit-1];
+        g_state_hist.mb_i = limit-1;
+    }
+
+    // ── Tarihsel tarama ──
+    for(int i = limit; i < rates_total - 1; i++)
+    {
+        bool inside = (high[i] <= g_state_hist.mb_h) && (low[i] >= g_state_hist.mb_l);
+        if(!inside)
         {
-         ProcessBar(i, open, high, low, close, time, g_state_hist, true);
-        }
-     }
-
-   ObjectsDeleteAll(0, "Live_");
-   DeleteLine("LiveLeg");
-
-   g_state_curr.CopyFrom(g_state_hist);
-
-   int last_idx = rates_total - 1;
-   bool inside_last = false;
-   if(last_idx > 0)
-     {
-      inside_last = (high[last_idx] <= high[last_idx-1]) && (low[last_idx] >= low[last_idx-1]);
-     }
-
-   if(!inside_last && last_idx > 0)
-     {
-      ProcessBar(last_idx, open, high, low, close, time, g_state_curr, false);
-     }
-
-   if(InpShowMin)
-     {
-      int leg_i;
-      double leg_p;
-      if(g_state_curr.min_tr == 1)
-        {
-         leg_i = g_state_curr.min_h_i;
-         leg_p = g_state_curr.min_h;
-        }
-      else
-        {
-         leg_i = g_state_curr.min_l_i;
-         leg_p = g_state_curr.min_l;
-        }
-      DrawLine("LiveLeg", time[g_state_curr.lp_i], g_state_curr.lp_p, time[leg_i], leg_p, InpColorMin, 1, STYLE_DOT);
-     }
-
-   if(last_idx > 0 && (Period() == PERIOD_M1 || InpTestMode))
-     {
-      int live_trend = 0;
-      double live_pct = 0.0;
-      double dmy_h, dmy_l; datetime dmy_th, dmy_tl;
-      double dmy_mpct;
-      if (GetMTFPullback(PERIOD_M1, live_trend, live_pct, dmy_mpct, time[last_idx], dmy_h, dmy_l, dmy_th, dmy_tl))
-        {
-         // Reset triggers if swing changed
-         if (g_state_curr.maj_h != g_last_alert_maj_h ||
-             g_state_curr.maj_l != g_last_alert_maj_l ||
-             g_state_curr.maj_tr != g_last_alert_trend)
-           {
-            g_level1_triggered = false;
-            g_level2_triggered = false;
-            g_last_alert_maj_h = g_state_curr.maj_h;
-            g_last_alert_maj_l = g_state_curr.maj_l;
-            g_last_alert_trend = g_state_curr.maj_tr;
-           }
-
-         bool trig1 = (live_pct >= InpTriggerLevel1 && live_pct < 100.0 && !g_level1_triggered);
-         bool trig2 = (live_pct >= InpTriggerLevel2 && live_pct < 100.0 && !g_level2_triggered);
-
-         if(trig1 || trig2 || InpTestMode)
-           {
-            int trigger_lvl = trig2 ? 2 : 1;
-            bool success = TriggerMTFAlert(last_idx, time[last_idx], close[last_idx], trigger_lvl);
-            if(success && !InpTestMode) {
-               if(trig1) g_level1_triggered = true;
-               if(trig2) g_level2_triggered = true;
+            if(high[i] > g_state_hist.mb_h || low[i] < g_state_hist.mb_l)
+            {
+                g_state_hist.mb_h = high[i];
+                g_state_hist.mb_l = low[i];
+                g_state_hist.mb_i = i;
             }
-           }
+            bool should_draw = (time[i] >= g_anchor_time);
+            ProcessBar(i, open, high, low, close, time, g_state_hist, true, should_draw);
         }
-     }
+    }
 
-   return(rates_total);
-  }
+    // ── Canlı bar ──
+    ObjectsDeleteAll(0, "Live_");
+    DeleteLine("LiveLeg");
+
+    g_state_curr.CopyFrom(g_state_hist);
+
+    int last_idx = rates_total - 1;
+    if(last_idx > 0)
+    {
+        bool inside_last = (high[last_idx] <= g_state_curr.mb_h) && (low[last_idx] >= g_state_curr.mb_l);
+        if(!inside_last)
+        {
+            bool should_draw = (time[last_idx] >= g_anchor_time);
+            ProcessBar(last_idx, open, high, low, close, time, g_state_curr, false, should_draw);
+        }
+    }
+
+    // Canlı minör bacak çizgisi
+    if(InpShowMin && last_idx > 0)
+    {
+        int    leg_i = (g_state_curr.min_tr == 1) ? g_state_curr.min_h_i : g_state_curr.min_l_i;
+        double leg_p = (g_state_curr.min_tr == 1) ? g_state_curr.min_h   : g_state_curr.min_l;
+        DrawLine("LiveLeg",
+                 GetTimeSafe(time, g_state_curr.lp_i), g_state_curr.lp_p,
+                 GetTimeSafe(time, leg_i),              leg_p,
+                 InpColorMin, 1, STYLE_DOT);
+    }
+
+    return rates_total;
+}
