@@ -689,8 +689,8 @@ void CheckMTFBoxNotifications()
     static bool test_notif_sent = false;
     if(!InpNotifTest || test_notif_sent) return;
 
-    ENUM_TIMEFRAMES tfs[] = {PERIOD_M15, PERIOD_M30, PERIOD_H1};
-    string tfs_names[] = {"M15", "M30", "H1"};
+    ENUM_TIMEFRAMES tfs[] = {PERIOD_M30, PERIOD_H1, PERIOD_H4};
+    string tfs_names[] = {"M30", "H1", "H4"};
     string msg = "KUTU TEST ANALİZİ:\n";
 
     for(int i=0; i<3; i++){
