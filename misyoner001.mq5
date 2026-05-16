@@ -530,12 +530,12 @@ void ProcessBar(int i,
                             // Asagi yonlu CHoCH icin kutulari inceleyelim
                             bool box_supports_down = false;
                             string res = "";
+                            string reason = "";
                             int target_k = -1;
 
                             int found_boxes = 0;
                             int kutu_indexler[4];
 
-                            // Ilk 4 guncel kutuyu bul
                             for(int k=g_bx_cnt-1; k>=0 && found_boxes < 4; k--) {
                                 if(g_bx_state[k] > 0) {
                                     kutu_indexler[found_boxes] = k;
@@ -543,27 +543,33 @@ void ProcessBar(int i,
                                 }
                             }
 
-                            if(found_boxes > 0) {
-                                // 1. kutuyu kontrol et
+                            string all_boxes_str = "";
+                            for(int f=0; f<found_boxes; f++) {
+                                int tk = kutu_indexler[f];
+                                string stat = GetBoxStatusStr(g_bx_touch_state[tk], g_bx_approach[tk], g_bx_brk[tk]);
+                                all_boxes_str += "📦 " + IntegerToString(f+1) + ". Kutu: " + stat + "\n";
+                            }
+
+                            if(found_boxes == 0) {
+                                reason = "Piyasada aktif kutu bulunamadi.";
+                            } else {
                                 int first_k = kutu_indexler[0];
                                 string stat1 = GetBoxStatusStr(g_bx_touch_state[first_k], g_bx_approach[first_k], g_bx_brk[first_k]);
                                 bool yatay1 = (StringFind(stat1, "Yataya Bagladi") >= 0);
                                 bool supports_down1 = (StringFind(stat1, "Asagi") >= 0 || StringFind(stat1, "Alti Deldi") >= 0 || StringFind(stat1, "Alttan Girdi") >= 0);
 
+                                if(yatay1) reason = "1. Kutu Yataya Bagladi.";
+                                else if(!supports_down1) reason = "1. Kutu ASAGI yonunu desteklemiyor.";
+
                                 if(!yatay1 && supports_down1) {
-                                    // 1. kutu destekliyor, bitti.
                                     box_supports_down = true;
                                     target_k = first_k;
-                                    res = "1. Kutu: " + stat1;
+                                    res = "✅ 1. Kutu onaylandi!\n" + all_boxes_str;
                                 } else {
-                                    // 1. Kutu desteklemiyor ise, kullanicinin yeni senaryosu:
-                                    // "2. Kutu yon destekliyorsa, 3. ve 4. kutu yon destegi varsa o zaman isleme dahil olabilir"
-                                    // Yani 2, 3 ve 4. kutularin HEPSI yon desteklemelidir.
                                     if(found_boxes >= 4) {
                                         bool all_support = true;
-                                        string detay_res = "";
 
-                                        for(int b=1; b<4; b++) { // 1, 2, 3 indeksleri (2., 3., 4. kutular)
+                                        for(int b=1; b<4; b++) {
                                             int k_idx = kutu_indexler[b];
                                             string stat = GetBoxStatusStr(g_bx_touch_state[k_idx], g_bx_approach[k_idx], g_bx_brk[k_idx]);
                                             bool yatay = (StringFind(stat, "Yataya Bagladi") >= 0);
@@ -571,41 +577,53 @@ void ProcessBar(int i,
 
                                             if(yatay || !supports_down) {
                                                 all_support = false;
+                                                reason = "1. Kutu desteklemedigi icin 2,3,4. kutulara bakildi ancak en az biri yatay veya ASAGI yonu desteklemiyor.";
                                                 break;
                                             }
-                                            detay_res += IntegerToString(b+1) + ". Kutu: " + stat + "\n";
                                         }
 
                                         if(all_support) {
                                             box_supports_down = true;
-                                            // En yakin temas suresini kontrol etmek icin 2. kutuyu (index 1) hedef alalim
                                             target_k = kutu_indexler[1];
-                                            res = "1. Kutu desteklemiyor. Ancak 2., 3. ve 4. kutularin HEPSI ASAGI yonu destekliyor.\n" + detay_res;
+                                            res = "✅ 1. Kutu desteklemese de 2., 3. ve 4. kutularin HEPSI ASAGI yonu destekledi!\n" + all_boxes_str;
                                         }
+                                    } else {
+                                        reason = "1. Kutu desteklemiyor ve kontrol icin 4 adet guncel kutu yok.";
                                     }
                                 }
                             }
 
-                            if(box_supports_down && target_k >= 0) {
-                                int mum_ps = PeriodSeconds(Period());
-                                int mums = (mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((time[i] - g_bx_event_time[target_k]) / mum_ps) : 0;
+                            int mum_ps = PeriodSeconds(Period());
+                            int mums = (target_k >= 0 && mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((time[i] - g_bx_event_time[target_k]) / mum_ps) : 0;
 
-                                if(mums >= 25 || g_bx_event_time[target_k] == 0) {
-                                    // Bu bir isleme giris firsati degildir
+                            if(box_supports_down && (mums >= 25 || g_bx_event_time[target_k] == 0)) {
+                                box_supports_down = false;
+                                reason = "Onaylanan kutuya son " + IntegerToString(mums) + " mumdur temas edilmedi (Gecersiz: 25 Mum Kurali).";
+                            }
+
+                            if(!is_history) {
+                                string msg = "";
+                                if(box_supports_down) {
+                                    msg = "🟢 === İŞLEME DAHİL OLABİLİR === 🟢\n";
+                                    msg += "📉 Yön: AŞAĞI (Short)\n";
+                                    msg += "📌 Sembol: " + Symbol() + " | " + EnumToString(Period()) + "\n";
+                                    msg += "🔔 CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n\n";
+                                    msg += res;
                                 } else {
-                                    string msg = "=== ISLEME DAHIL OLABILIR (YON ASAGI) ===\n";
-                                    msg += Symbol() + " | " + EnumToString(Period()) + "\n";
-                                    msg += "CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n";
-                                    msg += "Kutu Durumu: " + res;
-                                    if(!is_history) {
-                                        if(InpAlertPopup) Alert(msg);
-                                        if(InpAlertPush) SendNotification(msg);
-                                    }
-
-                                    if(tn != "") {
-                                        ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
-                                    }
+                                    msg = "🔴 === İŞLEM GEÇERSİZ / İPTAL === 🔴\n";
+                                    msg += "📉 Yön: AŞAĞI (Short)\n";
+                                    msg += "📌 Sembol: " + Symbol() + " | " + EnumToString(Period()) + "\n";
+                                    msg += "🔔 CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n\n";
+                                    msg += "⚠️ Neden: " + reason + "\n\n";
+                                    msg += "Kutu Durumlari:\n" + all_boxes_str;
                                 }
+
+                                if(InpAlertPopup) Alert(msg);
+                                if(InpAlertPush) SendNotification(msg);
+                            }
+
+                            if(box_supports_down && tn != "") {
+                                ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
                             }
                         }
                     }
@@ -655,6 +673,7 @@ void ProcessBar(int i,
                             // Yukari yonlu CHoCH icin kutulari inceleyelim
                             bool box_supports_up = false;
                             string res = "";
+                            string reason = "";
                             int target_k = -1;
 
                             int found_boxes = 0;
@@ -667,25 +686,33 @@ void ProcessBar(int i,
                                 }
                             }
 
-                            if(found_boxes > 0) {
+                            string all_boxes_str = "";
+                            for(int f=0; f<found_boxes; f++) {
+                                int tk = kutu_indexler[f];
+                                string stat = GetBoxStatusStr(g_bx_touch_state[tk], g_bx_approach[tk], g_bx_brk[tk]);
+                                all_boxes_str += "📦 " + IntegerToString(f+1) + ". Kutu: " + stat + "\n";
+                            }
+
+                            if(found_boxes == 0) {
+                                reason = "Piyasada aktif kutu bulunamadi.";
+                            } else {
                                 int first_k = kutu_indexler[0];
                                 string stat1 = GetBoxStatusStr(g_bx_touch_state[first_k], g_bx_approach[first_k], g_bx_brk[first_k]);
                                 bool yatay1 = (StringFind(stat1, "Yataya Bagladi") >= 0);
                                 bool supports_up1 = (StringFind(stat1, "Yukari") >= 0 || StringFind(stat1, "Ustten Girdi") >= 0);
 
+                                if(yatay1) reason = "1. Kutu Yataya Bagladi.";
+                                else if(!supports_up1) reason = "1. Kutu YUKARI yonunu desteklemiyor.";
+
                                 if(!yatay1 && supports_up1) {
-                                    // 1. kutu destekliyor, bitti.
                                     box_supports_up = true;
                                     target_k = first_k;
-                                    res = "1. Kutu: " + stat1;
+                                    res = "✅ 1. Kutu onaylandi!\n" + all_boxes_str;
                                 } else {
-                                    // 1. Kutu desteklemiyor ise, kullanicinin yeni senaryosu:
-                                    // 2, 3 ve 4. kutularin HEPSI YUKARI yonu desteklemelidir.
                                     if(found_boxes >= 4) {
                                         bool all_support = true;
-                                        string detay_res = "";
 
-                                        for(int b=1; b<4; b++) { // 1, 2, 3 indeksleri (2., 3., 4. kutular)
+                                        for(int b=1; b<4; b++) {
                                             int k_idx = kutu_indexler[b];
                                             string stat = GetBoxStatusStr(g_bx_touch_state[k_idx], g_bx_approach[k_idx], g_bx_brk[k_idx]);
                                             bool yatay = (StringFind(stat, "Yataya Bagladi") >= 0);
@@ -693,41 +720,53 @@ void ProcessBar(int i,
 
                                             if(yatay || !supports_up) {
                                                 all_support = false;
+                                                reason = "1. Kutu desteklemedigi icin 2,3,4. kutulara bakildi ancak en az biri yatay veya YUKARI yonu desteklemiyor.";
                                                 break;
                                             }
-                                            detay_res += IntegerToString(b+1) + ". Kutu: " + stat + "\n";
                                         }
 
                                         if(all_support) {
                                             box_supports_up = true;
-                                            // En yakin temas suresini kontrol etmek icin 2. kutuyu (index 1) hedef alalim
                                             target_k = kutu_indexler[1];
-                                            res = "1. Kutu desteklemiyor. Ancak 2., 3. ve 4. kutularin HEPSI YUKARI yonu destekliyor.\n" + detay_res;
+                                            res = "✅ 1. Kutu desteklemese de 2., 3. ve 4. kutularin HEPSI YUKARI yonu destekledi!\n" + all_boxes_str;
                                         }
+                                    } else {
+                                        reason = "1. Kutu desteklemiyor ve kontrol icin 4 adet guncel kutu yok.";
                                     }
                                 }
                             }
 
-                            if(box_supports_up && target_k >= 0) {
-                                int mum_ps = PeriodSeconds(Period());
-                                int mums = (mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((time[i] - g_bx_event_time[target_k]) / mum_ps) : 0;
+                            int mum_ps = PeriodSeconds(Period());
+                            int mums = (target_k >= 0 && mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((time[i] - g_bx_event_time[target_k]) / mum_ps) : 0;
 
-                                if(mums >= 25 || g_bx_event_time[target_k] == 0) {
-                                    // Bu bir isleme giris firsati degildir
+                            if(box_supports_up && (mums >= 25 || g_bx_event_time[target_k] == 0)) {
+                                box_supports_up = false;
+                                reason = "Onaylanan kutuya son " + IntegerToString(mums) + " mumdur temas edilmedi (Gecersiz: 25 Mum Kurali).";
+                            }
+
+                            if(!is_history) {
+                                string msg = "";
+                                if(box_supports_up) {
+                                    msg = "🟢 === İŞLEME DAHİL OLABİLİR === 🟢\n";
+                                    msg += "📈 Yön: YUKARI (Long)\n";
+                                    msg += "📌 Sembol: " + Symbol() + " | " + EnumToString(Period()) + "\n";
+                                    msg += "🔔 CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n\n";
+                                    msg += res;
                                 } else {
-                                    string msg = "=== ISLEME DAHIL OLABILIR (YON YUKARI) ===\n";
-                                    msg += Symbol() + " | " + EnumToString(Period()) + "\n";
-                                    msg += "CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n";
-                                    msg += "Kutu Durumu: " + res;
-                                    if(!is_history) {
-                                        if(InpAlertPopup) Alert(msg);
-                                        if(InpAlertPush) SendNotification(msg);
-                                    }
-
-                                    if(tn != "") {
-                                        ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
-                                    }
+                                    msg = "🔴 === İŞLEM GEÇERSİZ / İPTAL === 🔴\n";
+                                    msg += "📈 Yön: YUKARI (Long)\n";
+                                    msg += "📌 Sembol: " + Symbol() + " | " + EnumToString(Period()) + "\n";
+                                    msg += "🔔 CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n\n";
+                                    msg += "⚠️ Neden: " + reason + "\n\n";
+                                    msg += "Kutu Durumlari:\n" + all_boxes_str;
                                 }
+
+                                if(InpAlertPopup) Alert(msg);
+                                if(InpAlertPush) SendNotification(msg);
+                            }
+
+                            if(box_supports_up && tn != "") {
+                                ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
                             }
                         }
                     }
@@ -962,15 +1001,50 @@ string AnalyzeTFBoxes(ENUM_TIMEFRAMES tf, double days_inp, datetime &out_ev_t)
 // ─── Test Bildirimi ────────────────────────────────────────────────
 void SendTestNotif()
 {
-    string msg = "=== ISLEME DAHIL OLABILIR (TEST) ===\n";
-    msg += Symbol() + " | " + EnumToString(Period()) + "\n";
-    msg += "CHoCH Sinyali: TEST Sinyali (Grafikte Onaylananlar 'W' Alir)\n";
+    string nl = "\n";
+    string msg = "🟢 === İŞLEME DAHİL OLABİLİR (TEST) === 🟢" + nl;
+    msg += "📉 Yön: MOCK TEST" + nl;
+    msg += "📌 Sembol: " + Symbol() + " | " + TimeToString(TimeCurrent(),TIME_DATE|TIME_MINUTES) + nl;
+    msg += "🔔 CHoCH Sinyali: TEST Sinyal (Grafikte 'W' Alir)" + nl + nl;
+    msg += "✅ Test Senaryosu Onaylandi!" + nl;
 
-    datetime ev=0;
-    string res_tf = AnalyzeTFBoxes(Period(), GetDaysForTF(Period()), ev);
+    // Aktif TF listesi
+    ENUM_TIMEFRAMES tfs[7]   = {PERIOD_M1,  PERIOD_M5,  PERIOD_M15, PERIOD_M30, PERIOD_H1,  PERIOD_H4,  PERIOD_D1};
+    double          days[7]  = {InpDaysM1,  InpDaysM5,  InpDaysM15, InpDaysM30, InpDaysH1,  InpDaysH4,  InpDaysD1};
+    bool            akt[7]   = {InpTF_M1,   InpTF_M5,   InpTF_M15,  InpTF_M30,  InpTF_H1,   InpTF_H4,   InpTF_D1};
+    string          res[7];
+    datetime        evt[7];
+    int             idx[7];
+    int             cnt = 0;
 
-    msg += "Kutu Durumu: " + res_tf + "\n\n";
-    msg += "Not: Gecmiste gerceklesen basarili sinyallerin (1 veya 2) yanina 'W' isareti (1W, 2W) eklenecek sekilde kod guncellendi.";
+    for(int i=0;i<7;i++)
+    {
+        evt[i]=0; res[i]=""; idx[i]=i;
+        if(!akt[i]) continue;
+        datetime ev=0;
+        res[i] = AnalyzeTFBoxes(tfs[i], days[i], ev);
+        evt[i] = ev;
+        cnt++;
+    }
+
+    for(int a=0;a<7-1;a++)
+        for(int b=a+1;b<7;b++)
+        {
+            if(!akt[idx[a]] && !akt[idx[b]]) continue;
+            if(!akt[idx[a]]){int t=idx[a];idx[a]=idx[b];idx[b]=t;continue;}
+            if(!akt[idx[b]]) continue;
+            if(evt[idx[b]] > evt[idx[a]]){int t=idx[a];idx[a]=idx[b];idx[b]=t;}
+        }
+
+    msg += "Tüm Aktif TF Kutu Durumları:" + nl;
+    int sira = 1;
+    for(int i=0;i<7;i++)
+    {
+        int k = idx[i];
+        if(!akt[k]) continue;
+        msg += "📦 " + res[k] + nl;
+        sira++;
+    }
 
     if(InpAlertPopup) Alert(msg);
     if(InpAlertPush)  SendNotification(msg);
