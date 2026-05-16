@@ -962,23 +962,14 @@ string AnalyzeTFBoxes(ENUM_TIMEFRAMES tf, double days_inp, datetime &out_ev_t)
 // ─── Test Bildirimi ────────────────────────────────────────────────
 void SendTestNotif()
 {
-    // Test bildirimini kullanicinin istedigi gibi guncelleyelim
-    // Amacimiz sadece o anki aktif m1/m5 falan neyse, "ISLEME DAHIL OLABILIR" yapisini taklit edip
-    // sistemin sorunsuz mesaj atabildigini gostermek.
-    string msg = "=== ISLEME DAHIL OLABILIR (TEST) ===
-";
-    msg += Symbol() + " | " + EnumToString(Period()) + "
-";
-    msg += "CHoCH Sinyali: TEST Sinyali (Grafikte Onaylananlar 'W' Alir)
-";
+    string msg = "=== ISLEME DAHIL OLABILIR (TEST) ===\n";
+    msg += Symbol() + " | " + EnumToString(Period()) + "\n";
+    msg += "CHoCH Sinyali: TEST Sinyali (Grafikte Onaylananlar 'W' Alir)\n";
 
-    // Rastgele bir kutu durumu cekelim ki calistigini anlasin
     datetime ev=0;
     string res_tf = AnalyzeTFBoxes(Period(), GetDaysForTF(Period()), ev);
 
-    msg += "Kutu Durumu: " + res_tf + "
-
-";
+    msg += "Kutu Durumu: " + res_tf + "\n\n";
     msg += "Not: Gecmiste gerceklesen basarili sinyallerin (1 veya 2) yanina 'W' isareti (1W, 2W) eklenecek sekilde kod guncellendi.";
 
     if(InpAlertPopup) Alert(msg);
