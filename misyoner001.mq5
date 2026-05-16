@@ -525,48 +525,62 @@ void ProcessBar(int i,
                     }
                     if(isn) {
                         ld1b=state.d1_i;
-                        if(!is_history) {
-                            // Asagi yonlu CHoCH icin kutulari inceleyelim (maks 4 kutu)
+                        if(!is_history && (tdx == 0 || tdx == 1)) {
+                            // Asagi yonlu CHoCH icin kutulari inceleyelim
                             bool box_supports_down = false;
                             string res = "";
-                            int k_checked = 0;
-
-                            // Gecmise dogru 4 kutuya bakalim. g_bx dizisi siralidir.
-                            // Ancak biz AnalyzeTFBoxes ile ayni shadow mantigini kullanip
-                            // g_shd dizisindeki son aktif kutulari taramamiz daha dogru.
-                            // Bunun icin kendi icimizde g_shd_state, vb. dizileri okuyalim
-
-                            // Shadow verileri su an canli barda guncellenmez. O yuzden canli kutu verisi g_bx dizisinde
-                            int found_boxes = 0;
                             int target_k = -1;
 
+                            int found_boxes = 0;
+                            int kutu_indexler[4];
+
+                            // Ilk 4 guncel kutuyu bul
                             for(int k=g_bx_cnt-1; k>=0 && found_boxes < 4; k--) {
                                 if(g_bx_state[k] > 0) {
+                                    kutu_indexler[found_boxes] = k;
                                     found_boxes++;
-                                    // Asagi yonu destekliyor mu?
-                                    // Kutu tepkisinden (ayilar) bakabiliriz.
-                                    // Ancak daha basiti: eger kutu ayi kutusu (InpColorBoxBear) veya
-                                    // son dokunusta asagi tepki verdiyse (exit == -1, vb)
-                                    // Biz en guzeli basliktaki (kutu rengine) bakalim ya da g_bx_touch_state'e bakalim.
-                                    // "Ustten girdi icinde" veya "Alttan geldi asagi tepki aldi" asagi yonludur.
-                                    // Biz kullanicinin istegine gore: "yon asagi destekliyor ise"
+                                }
+                            }
 
-                                    // Genelde "Alttan Girdi - Icinde" veya "Alttan Geldi - Icinden Tepki Asagi"
-                                    // veya eger hic dokunulmadiysa vs
-                                    string stat = GetBoxStatusStr(g_bx_touch_state[k], g_bx_approach[k], g_bx_brk[k]);
+                            if(found_boxes > 0) {
+                                // 1. kutuyu kontrol et
+                                int first_k = kutu_indexler[0];
+                                string stat1 = GetBoxStatusStr(g_bx_touch_state[first_k], g_bx_approach[first_k], g_bx_brk[first_k]);
+                                bool yatay1 = (StringFind(stat1, "Yataya Bagladi") >= 0);
+                                bool supports_down1 = (StringFind(stat1, "Asagi") >= 0 || StringFind(stat1, "Alti Deldi") >= 0 || StringFind(stat1, "Alttan Girdi") >= 0);
 
-                                    bool yatay = (StringFind(stat, "Yataya Bagladi") >= 0);
-                                    if(yatay) continue;
+                                if(!yatay1 && supports_down1) {
+                                    // 1. kutu destekliyor, bitti.
+                                    box_supports_down = true;
+                                    target_k = first_k;
+                                    res = "1. Kutu: " + stat1;
+                                } else {
+                                    // 1. Kutu desteklemiyor ise, kullanicinin yeni senaryosu:
+                                    // "2. Kutu yon destekliyorsa, 3. ve 4. kutu yon destegi varsa o zaman isleme dahil olabilir"
+                                    // Yani 2, 3 ve 4. kutularin HEPSI yon desteklemelidir.
+                                    if(found_boxes >= 4) {
+                                        bool all_support = true;
+                                        string detay_res = "";
 
-                                    // Asagi yonlu destekliyor demek: Ustten Geldi Alti Deldi veya Alttan Geldi Asagi Tepki
-                                    // Veya sadece "Asagi" kelimesi geciyorsa:
-                                    // Veya Bearish bir eylem varsa
-                                    // Daha genel bir yontem: eger "Asagi" kelimesi varsa, "Alti Deldi" varsa
-                                    if(StringFind(stat, "Asagi") >= 0 || StringFind(stat, "Alti Deldi") >= 0 || StringFind(stat, "Alttan Girdi") >= 0) {
-                                        box_supports_down = true;
-                                        target_k = k;
-                                        res = stat;
-                                        break; // Destekleyen kutuyu bulduk
+                                        for(int b=1; b<4; b++) { // 1, 2, 3 indeksleri (2., 3., 4. kutular)
+                                            int k_idx = kutu_indexler[b];
+                                            string stat = GetBoxStatusStr(g_bx_touch_state[k_idx], g_bx_approach[k_idx], g_bx_brk[k_idx]);
+                                            bool yatay = (StringFind(stat, "Yataya Bagladi") >= 0);
+                                            bool supports_down = (StringFind(stat, "Asagi") >= 0 || StringFind(stat, "Alti Deldi") >= 0 || StringFind(stat, "Alttan Girdi") >= 0);
+
+                                            if(yatay || !supports_down) {
+                                                all_support = false;
+                                                break;
+                                            }
+                                            detay_res += IntegerToString(b+1) + ". Kutu: " + stat + "\n";
+                                        }
+
+                                        if(all_support) {
+                                            box_supports_down = true;
+                                            // En yakin temas suresini kontrol etmek icin 2. kutuyu (index 1) hedef alalim
+                                            target_k = kutu_indexler[1];
+                                            res = "1. Kutu desteklemiyor. Ancak 2., 3. ve 4. kutularin HEPSI ASAGI yonu destekliyor.\n" + detay_res;
+                                        }
                                     }
                                 }
                             }
@@ -576,10 +590,11 @@ void ProcessBar(int i,
                                 int mums = (mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((TimeCurrent() - g_bx_event_time[target_k]) / mum_ps) : 0;
 
                                 if(mums >= 25 || g_bx_event_time[target_k] == 0) {
-                                    // Bu bir isleme giris firsati degildir, bildirim atmaz.
+                                    // Bu bir isleme giris firsati degildir
                                 } else {
                                     string msg = "=== ISLEME DAHIL OLABILIR (YON ASAGI) ===\n";
                                     msg += Symbol() + " | " + EnumToString(Period()) + "\n";
+                                    msg += "CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n";
                                     msg += "Kutu Durumu: " + res;
                                     if(InpAlertPopup) Alert(msg);
                                     if(InpAlertPush) SendNotification(msg);
@@ -628,30 +643,59 @@ void ProcessBar(int i,
                     }
                     if(isn) {
                         ld1l=state.d1_i;
-                        if(!is_history) {
-                            // Yukari yonlu CHoCH icin kutulari inceleyelim (maks 4 kutu)
+                        if(!is_history && (tdx == 0 || tdx == 1)) {
+                            // Yukari yonlu CHoCH icin kutulari inceleyelim
                             bool box_supports_up = false;
                             string res = "";
-                            int k_checked = 0;
+                            int target_k = -1;
 
                             int found_boxes = 0;
-                            int target_k = -1;
+                            int kutu_indexler[4];
 
                             for(int k=g_bx_cnt-1; k>=0 && found_boxes < 4; k--) {
                                 if(g_bx_state[k] > 0) {
+                                    kutu_indexler[found_boxes] = k;
                                     found_boxes++;
+                                }
+                            }
 
-                                    string stat = GetBoxStatusStr(g_bx_touch_state[k], g_bx_approach[k], g_bx_brk[k]);
+                            if(found_boxes > 0) {
+                                int first_k = kutu_indexler[0];
+                                string stat1 = GetBoxStatusStr(g_bx_touch_state[first_k], g_bx_approach[first_k], g_bx_brk[first_k]);
+                                bool yatay1 = (StringFind(stat1, "Yataya Bagladi") >= 0);
+                                bool supports_up1 = (StringFind(stat1, "Yukari") >= 0 || StringFind(stat1, "Ustten Girdi") >= 0);
 
-                                    bool yatay = (StringFind(stat, "Yataya Bagladi") >= 0);
-                                    if(yatay) continue;
+                                if(!yatay1 && supports_up1) {
+                                    // 1. kutu destekliyor, bitti.
+                                    box_supports_up = true;
+                                    target_k = first_k;
+                                    res = "1. Kutu: " + stat1;
+                                } else {
+                                    // 1. Kutu desteklemiyor ise, kullanicinin yeni senaryosu:
+                                    // 2, 3 ve 4. kutularin HEPSI YUKARI yonu desteklemelidir.
+                                    if(found_boxes >= 4) {
+                                        bool all_support = true;
+                                        string detay_res = "";
 
-                                    // Yukari yonlu destekliyor demek: Yukari Deldi, Yukari Tepki, Ustten Girdi
-                                    if(StringFind(stat, "Yukari") >= 0 || StringFind(stat, "Ustten Girdi") >= 0) {
-                                        box_supports_up = true;
-                                        target_k = k;
-                                        res = stat;
-                                        break; // Destekleyen kutuyu bulduk
+                                        for(int b=1; b<4; b++) { // 1, 2, 3 indeksleri (2., 3., 4. kutular)
+                                            int k_idx = kutu_indexler[b];
+                                            string stat = GetBoxStatusStr(g_bx_touch_state[k_idx], g_bx_approach[k_idx], g_bx_brk[k_idx]);
+                                            bool yatay = (StringFind(stat, "Yataya Bagladi") >= 0);
+                                            bool supports_up = (StringFind(stat, "Yukari") >= 0 || StringFind(stat, "Ustten Girdi") >= 0);
+
+                                            if(yatay || !supports_up) {
+                                                all_support = false;
+                                                break;
+                                            }
+                                            detay_res += IntegerToString(b+1) + ". Kutu: " + stat + "\n";
+                                        }
+
+                                        if(all_support) {
+                                            box_supports_up = true;
+                                            // En yakin temas suresini kontrol etmek icin 2. kutuyu (index 1) hedef alalim
+                                            target_k = kutu_indexler[1];
+                                            res = "1. Kutu desteklemiyor. Ancak 2., 3. ve 4. kutularin HEPSI YUKARI yonu destekliyor.\n" + detay_res;
+                                        }
                                     }
                                 }
                             }
@@ -661,10 +705,11 @@ void ProcessBar(int i,
                                 int mums = (mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((TimeCurrent() - g_bx_event_time[target_k]) / mum_ps) : 0;
 
                                 if(mums >= 25 || g_bx_event_time[target_k] == 0) {
-                                    // Bu bir isleme giris firsati degildir, bildirim atmaz.
+                                    // Bu bir isleme giris firsati degildir
                                 } else {
                                     string msg = "=== ISLEME DAHIL OLABILIR (YON YUKARI) ===\n";
                                     msg += Symbol() + " | " + EnumToString(Period()) + "\n";
+                                    msg += "CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n";
                                     msg += "Kutu Durumu: " + res;
                                     if(InpAlertPopup) Alert(msg);
                                     if(InpAlertPush) SendNotification(msg);
