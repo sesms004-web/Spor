@@ -56,8 +56,8 @@ input bool   InpTF_M5  = false;
 input bool   InpTF_M15 = true;
 input bool   InpTF_M30 = true;
 input bool   InpTF_H1  = true;
-input bool   InpTF_H4  = false;
-input bool   InpTF_D1  = false;
+input bool   InpTF_H4  = true;
+input bool   InpTF_D1  = true;
 
 // ─── Globals ──────────────────────────────────────────────────────
 int      g_counter     = 0;
