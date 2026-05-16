@@ -510,14 +510,13 @@ void ProcessBar(int i,
                         else if(g_trade_count_h<5){double pv=MathMax(g_trade_t1_h[g_trade_count_h-1],g_trade_t2_h[g_trade_count_h-1]);if(state.t2_h>pv)vs=true;}
                         if(vs&&g_trade_count_h<5){tdx=g_trade_count_h;g_trade_t1_h[tdx]=state.t1_h;g_trade_t2_h[tdx]=state.t2_h;g_trade_count_h++;}
                     }else{for(int x=0;x<g_trade_count_h;x++)if(g_trade_t1_h[x]==state.t1_h&&g_trade_t2_h[x]==state.t2_h){tdx=x;break;}}
-                    string tn = "";
                     if(isn&&tdx>=0&&InpShowChoch){
                         color sc=is_strong?InpColorChochStrong:InpColorChochWeak;
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_h,GetTimeSafe(time,state.d1_i),state.d1_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_l,GetTimeSafe(time,state.t2_i),state.t2_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_h,GetTimeSafe(time,i),state.d1_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,STYLE_SOLID);
-                        tn=GetUniqueName(pfx+"CHoCH_Text_");
+                        string tn=GetUniqueName(pfx+"CHoCH_Text_");
                         ObjectCreate(0,tn,OBJ_TEXT,0,GetTimeSafe(time,i),state.d1_l);
                         ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1));
                         ObjectSetInteger(0,tn,OBJPROP_COLOR,sc);
@@ -621,10 +620,6 @@ void ProcessBar(int i,
                                 if(InpAlertPopup) Alert(msg);
                                 if(InpAlertPush) SendNotification(msg);
                             }
-
-                            if(box_supports_down && tn != "") {
-                                ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
-                            }
                         }
                     }
                 }
@@ -653,14 +648,13 @@ void ProcessBar(int i,
                         else if(g_trade_count_l<5){double pv=MathMin(g_trade_t1_l[g_trade_count_l-1],g_trade_t2_l[g_trade_count_l-1]);if(state.t2_l<pv)vs=true;}
                         if(vs&&g_trade_count_l<5){tdx=g_trade_count_l;g_trade_t1_l[tdx]=state.t1_l;g_trade_t2_l[tdx]=state.t2_l;g_trade_count_l++;}
                     }else{for(int x=0;x<g_trade_count_l;x++)if(g_trade_t1_l[x]==state.t1_l&&g_trade_t2_l[x]==state.t2_l){tdx=x;break;}}
-                    string tn = "";
                     if(isn&&tdx>=0&&InpShowChoch){
                         color sc=is_strong?InpColorChochStrong:InpColorChochWeak;
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_l,GetTimeSafe(time,state.d1_i),state.d1_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_h,GetTimeSafe(time,state.t2_i),state.t2_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_l,GetTimeSafe(time,i),state.d1_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,STYLE_SOLID);
-                        tn=GetUniqueName(pfx+"CHoCH_Text_");
+                        string tn=GetUniqueName(pfx+"CHoCH_Text_");
                         ObjectCreate(0,tn,OBJ_TEXT,0,GetTimeSafe(time,i),state.d1_h);
                         ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1));
                         ObjectSetInteger(0,tn,OBJPROP_COLOR,sc);
@@ -763,10 +757,6 @@ void ProcessBar(int i,
 
                                 if(InpAlertPopup) Alert(msg);
                                 if(InpAlertPush) SendNotification(msg);
-                            }
-
-                            if(box_supports_up && tn != "") {
-                                ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
                             }
                         }
                     }
@@ -1005,7 +995,7 @@ void SendTestNotif()
     string msg = "🟢 === İŞLEME DAHİL OLABİLİR (TEST) === 🟢" + nl;
     msg += "📉 Yön: MOCK TEST" + nl;
     msg += "📌 Sembol: " + Symbol() + " | " + TimeToString(TimeCurrent(),TIME_DATE|TIME_MINUTES) + nl;
-    msg += "🔔 CHoCH Sinyali: TEST Sinyal (Grafikte 'W' Alir)" + nl + nl;
+    msg += "🔔 CHoCH Sinyali: TEST Sinyal" + nl + nl;
     msg += "✅ Test Senaryosu Onaylandi!" + nl;
 
     // Aktif TF listesi
