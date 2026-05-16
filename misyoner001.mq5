@@ -48,6 +48,7 @@ input color  InpColorWeakBear     = C'55,15,0';
 input group "--- BILDIRIM TEST ---"
 input bool   InpNotifTest    = false;       // Test Bildirimi (1 kez atar - once send)
 input bool   InpAlertPush    = true;        // Push Bildirimi
+input bool   InpNotifyInvalid= true;        // Gecersiz Islem Bildirimi
 input bool   InpAlertPopup   = false;       // Popup Alert
 
 input group "--- BILDIRIM TF SECIMI ---"
@@ -510,13 +511,14 @@ void ProcessBar(int i,
                         else if(g_trade_count_h<5){double pv=MathMax(g_trade_t1_h[g_trade_count_h-1],g_trade_t2_h[g_trade_count_h-1]);if(state.t2_h>pv)vs=true;}
                         if(vs&&g_trade_count_h<5){tdx=g_trade_count_h;g_trade_t1_h[tdx]=state.t1_h;g_trade_t2_h[tdx]=state.t2_h;g_trade_count_h++;}
                     }else{for(int x=0;x<g_trade_count_h;x++)if(g_trade_t1_h[x]==state.t1_h&&g_trade_t2_h[x]==state.t2_h){tdx=x;break;}}
+                    string tn = "";
                     if(isn&&tdx>=0&&InpShowChoch){
                         color sc=is_strong?InpColorChochStrong:InpColorChochWeak;
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_h,GetTimeSafe(time,state.d1_i),state.d1_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_l,GetTimeSafe(time,state.t2_i),state.t2_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_h,GetTimeSafe(time,i),state.d1_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,STYLE_SOLID);
-                        string tn=GetUniqueName(pfx+"CHoCH_Text_");
+                        tn=GetUniqueName(pfx+"CHoCH_Text_");
                         ObjectCreate(0,tn,OBJ_TEXT,0,GetTimeSafe(time,i),state.d1_l);
                         ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1));
                         ObjectSetInteger(0,tn,OBJPROP_COLOR,sc);
@@ -525,9 +527,8 @@ void ProcessBar(int i,
                     }
                     if(isn) {
                         ld1b=state.d1_i;
-                        if((tdx == 0 || tdx == 1)) {
-                            // Asagi yonlu CHoCH icin kutulari inceleyelim
-                            bool box_supports_down = false;
+                        if(tdx == 0 || tdx == 1) {
+                            bool box_supports = false;
                             string res = "";
                             string reason = "";
                             int target_k = -1;
@@ -561,28 +562,25 @@ void ProcessBar(int i,
                                 else if(!supports_down1) reason = "1. Kutu ASAGI yonunu desteklemiyor.";
 
                                 if(!yatay1 && supports_down1) {
-                                    box_supports_down = true;
+                                    box_supports = true;
                                     target_k = first_k;
                                     res = "✅ 1. Kutu onaylandi!\n" + all_boxes_str;
                                 } else {
                                     if(found_boxes >= 4) {
                                         bool all_support = true;
-
                                         for(int b=1; b<4; b++) {
                                             int k_idx = kutu_indexler[b];
                                             string stat = GetBoxStatusStr(g_bx_touch_state[k_idx], g_bx_approach[k_idx], g_bx_brk[k_idx]);
                                             bool yatay = (StringFind(stat, "Yataya Bagladi") >= 0);
                                             bool supports_down = (StringFind(stat, "Asagi") >= 0 || StringFind(stat, "Alti Deldi") >= 0 || StringFind(stat, "Alttan Girdi") >= 0);
-
                                             if(yatay || !supports_down) {
                                                 all_support = false;
                                                 reason = "1. Kutu desteklemedigi icin 2,3,4. kutulara bakildi ancak en az biri yatay veya ASAGI yonu desteklemiyor.";
                                                 break;
                                             }
                                         }
-
                                         if(all_support) {
-                                            box_supports_down = true;
+                                            box_supports = true;
                                             target_k = kutu_indexler[1];
                                             res = "✅ 1. Kutu desteklemese de 2., 3. ve 4. kutularin HEPSI ASAGI yonu destekledi!\n" + all_boxes_str;
                                         }
@@ -595,30 +593,74 @@ void ProcessBar(int i,
                             int mum_ps = PeriodSeconds(Period());
                             int mums = (target_k >= 0 && mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((time[i] - g_bx_event_time[target_k]) / mum_ps) : 0;
 
-                            if(box_supports_down && (mums >= 25 || g_bx_event_time[target_k] == 0)) {
-                                box_supports_down = false;
+                            if(box_supports && (mums >= 25 || g_bx_event_time[target_k] == 0)) {
+                                box_supports = false;
                                 reason = "Onaylanan kutuya son " + IntegerToString(mums) + " mumdur temas edilmedi (Gecersiz: 25 Mum Kurali).";
                             }
 
                             if(!is_history) {
+                                string tf_str = "\n--- Tum Zaman Araliklari ---\n";
+                                ENUM_TIMEFRAMES tfs[7]   = {PERIOD_M1,  PERIOD_M5,  PERIOD_M15, PERIOD_M30, PERIOD_H1,  PERIOD_H4,  PERIOD_D1};
+                                double          days[7]  = {InpDaysM1,  InpDaysM5,  InpDaysM15, InpDaysM30, InpDaysH1,  InpDaysH4,  InpDaysD1};
+                                bool            akt[7]   = {InpTF_M1,   InpTF_M5,   InpTF_M15,  InpTF_M30,  InpTF_H1,   InpTF_H4,   InpTF_D1};
+                                string          res_tf[7];
+                                datetime        evt[7];
+                                int             idx[7];
+                                for(int a=0;a<7;a++) { evt[a]=0; res_tf[a]=""; idx[a]=a; }
+                                for(int a=0;a<7;a++) {
+                                    if(!akt[a]) continue;
+                                    datetime ev=0;
+                                    res_tf[a] = AnalyzeTFBoxes(tfs[a], days[a], ev);
+                                    evt[a] = ev;
+                                }
+                                for(int a=0;a<7-1;a++) {
+                                    for(int b=a+1;b<7;b++) {
+                                        if(!akt[idx[a]] && !akt[idx[b]]) continue;
+                                        if(!akt[idx[a]]){int t=idx[a];idx[a]=idx[b];idx[b]=t;continue;}
+                                        if(!akt[idx[b]]) continue;
+                                        if(evt[idx[b]] > evt[idx[a]]){int t=idx[a];idx[a]=idx[b];idx[b]=t;}
+                                    }
+                                }
+                                for(int a=0;a<7;a++) {
+                                    int k = idx[a];
+                                    if(!akt[k]) continue;
+                                    tf_str += "📦 " + res_tf[k] + "\n";
+                                }
+
                                 string msg = "";
-                                if(box_supports_down) {
+                                if(box_supports) {
                                     msg = "🟢 === İŞLEME DAHİL OLABİLİR === 🟢\n";
-                                    msg += "📉 Yön: AŞAĞI (Short)\n";
+                                    msg += "📉 Yön: ASAGI (Short)\n";
                                     msg += "📌 Sembol: " + Symbol() + " | " + EnumToString(Period()) + "\n";
                                     msg += "🔔 CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n\n";
                                     msg += res;
-                                } else {
-                                    msg = "🔴 === İŞLEM GEÇERSİZ / İPTAL === 🔴\n";
-                                    msg += "📉 Yön: AŞAĞI (Short)\n";
-                                    msg += "📌 Sembol: " + Symbol() + " | " + EnumToString(Period()) + "\n";
-                                    msg += "🔔 CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n\n";
-                                    msg += "⚠️ Neden: " + reason + "\n\n";
-                                    msg += "Kutu Durumlari:\n" + all_boxes_str;
-                                }
+                                    msg += tf_str;
 
-                                if(InpAlertPopup) Alert(msg);
-                                if(InpAlertPush) SendNotification(msg);
+                                    if(InpAlertPopup) Alert(msg);
+                                    if(InpAlertPush) SendNotification(msg);
+                                } else {
+                                    if(InpNotifyInvalid) {
+                                        msg = "🔴 === İŞLEM GEÇERSİZ / İPTAL === 🔴\n";
+                                        msg += "📉 Yön: ASAGI (Short)\n";
+                                        msg += "📌 Sembol: " + Symbol() + " | " + EnumToString(Period()) + "\n";
+                                        msg += "🔔 CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n\n";
+                                        msg += "⚠️ Neden: " + reason + "\n\n";
+                                        msg += "Kutu Durumlari:\n" + all_boxes_str;
+                                        msg += tf_str;
+
+                                        if(InpAlertPopup) Alert(msg);
+                                        if(InpAlertPush) SendNotification(msg);
+                                    }
+                                }
+                            }
+
+                            if(box_supports) {
+                                string w_name = pfx+"CHoCH_W_B_"+IntegerToString(time[i]);
+                                if(ObjectFind(0, w_name) < 0) ObjectCreate(0,w_name,OBJ_TEXT,0,GetTimeSafe(time,i),state.d1_l);
+                                ObjectSetString(0,w_name,OBJPROP_TEXT,"     W"+IntegerToString(tdx+1));
+                                ObjectSetInteger(0,w_name,OBJPROP_COLOR,clrYellow);
+                                ObjectSetInteger(0,w_name,OBJPROP_FONTSIZE,8);
+                                ObjectSetInteger(0,w_name,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
                             }
                         }
                     }
@@ -648,13 +690,14 @@ void ProcessBar(int i,
                         else if(g_trade_count_l<5){double pv=MathMin(g_trade_t1_l[g_trade_count_l-1],g_trade_t2_l[g_trade_count_l-1]);if(state.t2_l<pv)vs=true;}
                         if(vs&&g_trade_count_l<5){tdx=g_trade_count_l;g_trade_t1_l[tdx]=state.t1_l;g_trade_t2_l[tdx]=state.t2_l;g_trade_count_l++;}
                     }else{for(int x=0;x<g_trade_count_l;x++)if(g_trade_t1_l[x]==state.t1_l&&g_trade_t2_l[x]==state.t2_l){tdx=x;break;}}
+                    string tn = "";
                     if(isn&&tdx>=0&&InpShowChoch){
                         color sc=is_strong?InpColorChochStrong:InpColorChochWeak;
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_l,GetTimeSafe(time,state.d1_i),state.d1_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_h,GetTimeSafe(time,state.t2_i),state.t2_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_l,GetTimeSafe(time,i),state.d1_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,STYLE_SOLID);
-                        string tn=GetUniqueName(pfx+"CHoCH_Text_");
+                        tn=GetUniqueName(pfx+"CHoCH_Text_");
                         ObjectCreate(0,tn,OBJ_TEXT,0,GetTimeSafe(time,i),state.d1_h);
                         ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1));
                         ObjectSetInteger(0,tn,OBJPROP_COLOR,sc);
@@ -663,9 +706,8 @@ void ProcessBar(int i,
                     }
                     if(isn) {
                         ld1l=state.d1_i;
-                        if((tdx == 0 || tdx == 1)) {
-                            // Yukari yonlu CHoCH icin kutulari inceleyelim
-                            bool box_supports_up = false;
+                        if(tdx == 0 || tdx == 1) {
+                            bool box_supports = false;
                             string res = "";
                             string reason = "";
                             int target_k = -1;
@@ -699,28 +741,25 @@ void ProcessBar(int i,
                                 else if(!supports_up1) reason = "1. Kutu YUKARI yonunu desteklemiyor.";
 
                                 if(!yatay1 && supports_up1) {
-                                    box_supports_up = true;
+                                    box_supports = true;
                                     target_k = first_k;
                                     res = "✅ 1. Kutu onaylandi!\n" + all_boxes_str;
                                 } else {
                                     if(found_boxes >= 4) {
                                         bool all_support = true;
-
                                         for(int b=1; b<4; b++) {
                                             int k_idx = kutu_indexler[b];
                                             string stat = GetBoxStatusStr(g_bx_touch_state[k_idx], g_bx_approach[k_idx], g_bx_brk[k_idx]);
                                             bool yatay = (StringFind(stat, "Yataya Bagladi") >= 0);
                                             bool supports_up = (StringFind(stat, "Yukari") >= 0 || StringFind(stat, "Ustten Girdi") >= 0);
-
                                             if(yatay || !supports_up) {
                                                 all_support = false;
                                                 reason = "1. Kutu desteklemedigi icin 2,3,4. kutulara bakildi ancak en az biri yatay veya YUKARI yonu desteklemiyor.";
                                                 break;
                                             }
                                         }
-
                                         if(all_support) {
-                                            box_supports_up = true;
+                                            box_supports = true;
                                             target_k = kutu_indexler[1];
                                             res = "✅ 1. Kutu desteklemese de 2., 3. ve 4. kutularin HEPSI YUKARI yonu destekledi!\n" + all_boxes_str;
                                         }
@@ -733,30 +772,74 @@ void ProcessBar(int i,
                             int mum_ps = PeriodSeconds(Period());
                             int mums = (target_k >= 0 && mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((time[i] - g_bx_event_time[target_k]) / mum_ps) : 0;
 
-                            if(box_supports_up && (mums >= 25 || g_bx_event_time[target_k] == 0)) {
-                                box_supports_up = false;
+                            if(box_supports && (mums >= 25 || g_bx_event_time[target_k] == 0)) {
+                                box_supports = false;
                                 reason = "Onaylanan kutuya son " + IntegerToString(mums) + " mumdur temas edilmedi (Gecersiz: 25 Mum Kurali).";
                             }
 
                             if(!is_history) {
+                                string tf_str = "\n--- Tum Zaman Araliklari ---\n";
+                                ENUM_TIMEFRAMES tfs[7]   = {PERIOD_M1,  PERIOD_M5,  PERIOD_M15, PERIOD_M30, PERIOD_H1,  PERIOD_H4,  PERIOD_D1};
+                                double          days[7]  = {InpDaysM1,  InpDaysM5,  InpDaysM15, InpDaysM30, InpDaysH1,  InpDaysH4,  InpDaysD1};
+                                bool            akt[7]   = {InpTF_M1,   InpTF_M5,   InpTF_M15,  InpTF_M30,  InpTF_H1,   InpTF_H4,   InpTF_D1};
+                                string          res_tf[7];
+                                datetime        evt[7];
+                                int             idx[7];
+                                for(int a=0;a<7;a++) { evt[a]=0; res_tf[a]=""; idx[a]=a; }
+                                for(int a=0;a<7;a++) {
+                                    if(!akt[a]) continue;
+                                    datetime ev=0;
+                                    res_tf[a] = AnalyzeTFBoxes(tfs[a], days[a], ev);
+                                    evt[a] = ev;
+                                }
+                                for(int a=0;a<7-1;a++) {
+                                    for(int b=a+1;b<7;b++) {
+                                        if(!akt[idx[a]] && !akt[idx[b]]) continue;
+                                        if(!akt[idx[a]]){int t=idx[a];idx[a]=idx[b];idx[b]=t;continue;}
+                                        if(!akt[idx[b]]) continue;
+                                        if(evt[idx[b]] > evt[idx[a]]){int t=idx[a];idx[a]=idx[b];idx[b]=t;}
+                                    }
+                                }
+                                for(int a=0;a<7;a++) {
+                                    int k = idx[a];
+                                    if(!akt[k]) continue;
+                                    tf_str += "📦 " + res_tf[k] + "\n";
+                                }
+
                                 string msg = "";
-                                if(box_supports_up) {
+                                if(box_supports) {
                                     msg = "🟢 === İŞLEME DAHİL OLABİLİR === 🟢\n";
-                                    msg += "📈 Yön: YUKARI (Long)\n";
+                                    msg += "📉 Yön: YUKARI (Long)\n";
                                     msg += "📌 Sembol: " + Symbol() + " | " + EnumToString(Period()) + "\n";
                                     msg += "🔔 CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n\n";
                                     msg += res;
-                                } else {
-                                    msg = "🔴 === İŞLEM GEÇERSİZ / İPTAL === 🔴\n";
-                                    msg += "📈 Yön: YUKARI (Long)\n";
-                                    msg += "📌 Sembol: " + Symbol() + " | " + EnumToString(Period()) + "\n";
-                                    msg += "🔔 CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n\n";
-                                    msg += "⚠️ Neden: " + reason + "\n\n";
-                                    msg += "Kutu Durumlari:\n" + all_boxes_str;
-                                }
+                                    msg += tf_str;
 
-                                if(InpAlertPopup) Alert(msg);
-                                if(InpAlertPush) SendNotification(msg);
+                                    if(InpAlertPopup) Alert(msg);
+                                    if(InpAlertPush) SendNotification(msg);
+                                } else {
+                                    if(InpNotifyInvalid) {
+                                        msg = "🔴 === İŞLEM GEÇERSİZ / İPTAL === 🔴\n";
+                                        msg += "📉 Yön: YUKARI (Long)\n";
+                                        msg += "📌 Sembol: " + Symbol() + " | " + EnumToString(Period()) + "\n";
+                                        msg += "🔔 CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n\n";
+                                        msg += "⚠️ Neden: " + reason + "\n\n";
+                                        msg += "Kutu Durumlari:\n" + all_boxes_str;
+                                        msg += tf_str;
+
+                                        if(InpAlertPopup) Alert(msg);
+                                        if(InpAlertPush) SendNotification(msg);
+                                    }
+                                }
+                            }
+
+                            if(box_supports) {
+                                string w_name = pfx+"CHoCH_W_L_"+IntegerToString(time[i]);
+                                if(ObjectFind(0, w_name) < 0) ObjectCreate(0,w_name,OBJ_TEXT,0,GetTimeSafe(time,i),state.d1_h);
+                                ObjectSetString(0,w_name,OBJPROP_TEXT,"     W"+IntegerToString(tdx+1));
+                                ObjectSetInteger(0,w_name,OBJPROP_COLOR,clrYellow);
+                                ObjectSetInteger(0,w_name,OBJPROP_FONTSIZE,8);
+                                ObjectSetInteger(0,w_name,OBJPROP_ANCHOR,ANCHOR_RIGHT_LOWER);
                             }
                         }
                     }
@@ -991,14 +1074,12 @@ string AnalyzeTFBoxes(ENUM_TIMEFRAMES tf, double days_inp, datetime &out_ev_t)
 // ─── Test Bildirimi ────────────────────────────────────────────────
 void SendTestNotif()
 {
-    string nl = "\n";
-    string msg = "🟢 === İŞLEME DAHİL OLABİLİR (TEST) === 🟢" + nl;
-    msg += "📉 Yön: MOCK TEST" + nl;
-    msg += "📌 Sembol: " + Symbol() + " | " + TimeToString(TimeCurrent(),TIME_DATE|TIME_MINUTES) + nl;
-    msg += "🔔 CHoCH Sinyali: TEST Sinyal" + nl + nl;
-    msg += "✅ Test Senaryosu Onaylandi!" + nl;
+    string msg = "🟢 === İŞLEME DAHİL OLABİLİR (TEST) === 🟢\n";
+    msg += "📉 Yön: MOCK TEST\n";
+    msg += "📌 Sembol: " + Symbol() + " | " + TimeToString(TimeCurrent(),TIME_DATE|TIME_MINUTES) + "\n";
+    msg += "🔔 CHoCH Sinyali: TEST Sinyal (Grafikte 'W1' veya 'W2' Alir)\n\n";
+    msg += "✅ Test Senaryosu Onaylandi!\n\n";
 
-    // Aktif TF listesi
     ENUM_TIMEFRAMES tfs[7]   = {PERIOD_M1,  PERIOD_M5,  PERIOD_M15, PERIOD_M30, PERIOD_H1,  PERIOD_H4,  PERIOD_D1};
     double          days[7]  = {InpDaysM1,  InpDaysM5,  InpDaysM15, InpDaysM30, InpDaysH1,  InpDaysH4,  InpDaysD1};
     bool            akt[7]   = {InpTF_M1,   InpTF_M5,   InpTF_M15,  InpTF_M30,  InpTF_H1,   InpTF_H4,   InpTF_D1};
@@ -1026,13 +1107,13 @@ void SendTestNotif()
             if(evt[idx[b]] > evt[idx[a]]){int t=idx[a];idx[a]=idx[b];idx[b]=t;}
         }
 
-    msg += "Tüm Aktif TF Kutu Durumları:" + nl;
+    msg += "--- Tüm Aktif TF Kutu Durumları ---\n";
     int sira = 1;
     for(int i=0;i<7;i++)
     {
         int k = idx[i];
         if(!akt[k]) continue;
-        msg += "📦 " + res[k] + nl;
+        msg += "📦 " + res[k] + "\n";
         sira++;
     }
 
