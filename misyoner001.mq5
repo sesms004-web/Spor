@@ -510,13 +510,14 @@ void ProcessBar(int i,
                         else if(g_trade_count_h<5){double pv=MathMax(g_trade_t1_h[g_trade_count_h-1],g_trade_t2_h[g_trade_count_h-1]);if(state.t2_h>pv)vs=true;}
                         if(vs&&g_trade_count_h<5){tdx=g_trade_count_h;g_trade_t1_h[tdx]=state.t1_h;g_trade_t2_h[tdx]=state.t2_h;g_trade_count_h++;}
                     }else{for(int x=0;x<g_trade_count_h;x++)if(g_trade_t1_h[x]==state.t1_h&&g_trade_t2_h[x]==state.t2_h){tdx=x;break;}}
+                    string tn = "";
                     if(isn&&tdx>=0&&InpShowChoch){
                         color sc=is_strong?InpColorChochStrong:InpColorChochWeak;
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_h,GetTimeSafe(time,state.d1_i),state.d1_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_l,GetTimeSafe(time,state.t2_i),state.t2_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_h,GetTimeSafe(time,i),state.d1_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,STYLE_SOLID);
-                        string tn=GetUniqueName(pfx+"CHoCH_Text_");
+                        tn=GetUniqueName(pfx+"CHoCH_Text_");
                         ObjectCreate(0,tn,OBJ_TEXT,0,GetTimeSafe(time,i),state.d1_l);
                         ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1));
                         ObjectSetInteger(0,tn,OBJPROP_COLOR,sc);
@@ -525,7 +526,7 @@ void ProcessBar(int i,
                     }
                     if(isn) {
                         ld1b=state.d1_i;
-                        if(!is_history && (tdx == 0 || tdx == 1)) {
+                        if((tdx == 0 || tdx == 1)) {
                             // Asagi yonlu CHoCH icin kutulari inceleyelim
                             bool box_supports_down = false;
                             string res = "";
@@ -587,7 +588,7 @@ void ProcessBar(int i,
 
                             if(box_supports_down && target_k >= 0) {
                                 int mum_ps = PeriodSeconds(Period());
-                                int mums = (mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((TimeCurrent() - g_bx_event_time[target_k]) / mum_ps) : 0;
+                                int mums = (mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((time[i] - g_bx_event_time[target_k]) / mum_ps) : 0;
 
                                 if(mums >= 25 || g_bx_event_time[target_k] == 0) {
                                     // Bu bir isleme giris firsati degildir
@@ -596,8 +597,14 @@ void ProcessBar(int i,
                                     msg += Symbol() + " | " + EnumToString(Period()) + "\n";
                                     msg += "CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n";
                                     msg += "Kutu Durumu: " + res;
-                                    if(InpAlertPopup) Alert(msg);
-                                    if(InpAlertPush) SendNotification(msg);
+                                    if(!is_history) {
+                                        if(InpAlertPopup) Alert(msg);
+                                        if(InpAlertPush) SendNotification(msg);
+                                    }
+
+                                    if(tn != "") {
+                                        ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
+                                    }
                                 }
                             }
                         }
@@ -628,13 +635,14 @@ void ProcessBar(int i,
                         else if(g_trade_count_l<5){double pv=MathMin(g_trade_t1_l[g_trade_count_l-1],g_trade_t2_l[g_trade_count_l-1]);if(state.t2_l<pv)vs=true;}
                         if(vs&&g_trade_count_l<5){tdx=g_trade_count_l;g_trade_t1_l[tdx]=state.t1_l;g_trade_t2_l[tdx]=state.t2_l;g_trade_count_l++;}
                     }else{for(int x=0;x<g_trade_count_l;x++)if(g_trade_t1_l[x]==state.t1_l&&g_trade_t2_l[x]==state.t2_l){tdx=x;break;}}
+                    string tn = "";
                     if(isn&&tdx>=0&&InpShowChoch){
                         color sc=is_strong?InpColorChochStrong:InpColorChochWeak;
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_l,GetTimeSafe(time,state.d1_i),state.d1_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_h,GetTimeSafe(time,state.t2_i),state.t2_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_l,GetTimeSafe(time,i),state.d1_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,STYLE_SOLID);
-                        string tn=GetUniqueName(pfx+"CHoCH_Text_");
+                        tn=GetUniqueName(pfx+"CHoCH_Text_");
                         ObjectCreate(0,tn,OBJ_TEXT,0,GetTimeSafe(time,i),state.d1_h);
                         ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1));
                         ObjectSetInteger(0,tn,OBJPROP_COLOR,sc);
@@ -643,7 +651,7 @@ void ProcessBar(int i,
                     }
                     if(isn) {
                         ld1l=state.d1_i;
-                        if(!is_history && (tdx == 0 || tdx == 1)) {
+                        if((tdx == 0 || tdx == 1)) {
                             // Yukari yonlu CHoCH icin kutulari inceleyelim
                             bool box_supports_up = false;
                             string res = "";
@@ -702,7 +710,7 @@ void ProcessBar(int i,
 
                             if(box_supports_up && target_k >= 0) {
                                 int mum_ps = PeriodSeconds(Period());
-                                int mums = (mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((TimeCurrent() - g_bx_event_time[target_k]) / mum_ps) : 0;
+                                int mums = (mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((time[i] - g_bx_event_time[target_k]) / mum_ps) : 0;
 
                                 if(mums >= 25 || g_bx_event_time[target_k] == 0) {
                                     // Bu bir isleme giris firsati degildir
@@ -711,8 +719,14 @@ void ProcessBar(int i,
                                     msg += Symbol() + " | " + EnumToString(Period()) + "\n";
                                     msg += "CHoCH Sinyali: " + IntegerToString(tdx+1) + ". Sinyal\n";
                                     msg += "Kutu Durumu: " + res;
-                                    if(InpAlertPopup) Alert(msg);
-                                    if(InpAlertPush) SendNotification(msg);
+                                    if(!is_history) {
+                                        if(InpAlertPopup) Alert(msg);
+                                        if(InpAlertPush) SendNotification(msg);
+                                    }
+
+                                    if(tn != "") {
+                                        ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
+                                    }
                                 }
                             }
                         }
@@ -948,54 +962,28 @@ string AnalyzeTFBoxes(ENUM_TIMEFRAMES tf, double days_inp, datetime &out_ev_t)
 // ─── Test Bildirimi ────────────────────────────────────────────────
 void SendTestNotif()
 {
-    string nl = "\n";
+    // Test bildirimini kullanicinin istedigi gibi guncelleyelim
+    // Amacimiz sadece o anki aktif m1/m5 falan neyse, "ISLEME DAHIL OLABILIR" yapisini taklit edip
+    // sistemin sorunsuz mesaj atabildigini gostermek.
+    string msg = "=== ISLEME DAHIL OLABILIR (TEST) ===
+";
+    msg += Symbol() + " | " + EnumToString(Period()) + "
+";
+    msg += "CHoCH Sinyali: TEST Sinyali (Grafikte Onaylananlar 'W' Alir)
+";
 
-    // Aktif TF listesi
-    ENUM_TIMEFRAMES tfs[7]   = {PERIOD_M1,  PERIOD_M5,  PERIOD_M15, PERIOD_M30, PERIOD_H1,  PERIOD_H4,  PERIOD_D1};
-    double          days[7]  = {InpDaysM1,  InpDaysM5,  InpDaysM15, InpDaysM30, InpDaysH1,  InpDaysH4,  InpDaysD1};
-    bool            akt[7]   = {InpTF_M1,   InpTF_M5,   InpTF_M15,  InpTF_M30,  InpTF_H1,   InpTF_H4,   InpTF_D1};
-    string          res[7];
-    datetime        evt[7];
-    int             idx[7];
-    int             cnt = 0;
+    // Rastgele bir kutu durumu cekelim ki calistigini anlasin
+    datetime ev=0;
+    string res_tf = AnalyzeTFBoxes(Period(), GetDaysForTF(Period()), ev);
 
-    for(int i=0;i<7;i++)
-    {
-        evt[i]=0; res[i]=""; idx[i]=i;
-        if(!akt[i]) continue;
-        datetime ev=0;
-        res[i] = AnalyzeTFBoxes(tfs[i], days[i], ev);
-        evt[i] = ev;
-        cnt++;
-    }
+    msg += "Kutu Durumu: " + res_tf + "
 
-    // Aktif TF'leri event_time'a gore sirala (en yeni en uste - bubble sort)
-    for(int a=0;a<7-1;a++)
-        for(int b=a+1;b<7;b++)
-        {
-            if(!akt[idx[a]] && !akt[idx[b]]) continue;
-            if(!akt[idx[a]]){int t=idx[a];idx[a]=idx[b];idx[b]=t;continue;}
-            if(!akt[idx[b]]) continue;
-            if(evt[idx[b]] > evt[idx[a]]){int t=idx[a];idx[a]=idx[b];idx[b]=t;}
-        }
-
-    string msg = "=== KUTU ANALIZI ===" + nl;
-    msg += Symbol() + " | " + TimeToString(TimeCurrent(),TIME_DATE|TIME_MINUTES) + nl + nl;
-
-    int sira = 1;
-    for(int i=0;i<7;i++)
-    {
-        int k = idx[i];
-        if(!akt[k]) continue;
-        msg += IntegerToString(sira) + ". " + res[k] + nl;
-        sira++;
-    }
-
-    msg += nl + "Durum: Icinde | Yukari/Alti Deldi | Icinden Tepki";
+";
+    msg += "Not: Gecmiste gerceklesen basarili sinyallerin (1 veya 2) yanina 'W' isareti (1W, 2W) eklenecek sekilde kod guncellendi.";
 
     if(InpAlertPopup) Alert(msg);
     if(InpAlertPush)  SendNotification(msg);
-    Print("TEST BILDIRIMI GONDERILDI - " + IntegerToString(cnt) + " TF");
+    Print("TEST BILDIRIMI GONDERILDI");
 }
 
 // ─── OnInit ───────────────────────────────────────────────────────
