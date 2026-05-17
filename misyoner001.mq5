@@ -439,7 +439,7 @@ color GetChochColor(int tdx)
     switch(tdx)
     {
         case 0: return clrBlack;                // 1. sinyal
-        case 1: return clrYellow;               // 2. sinyal
+        case 1: return clrOrange;               // 2. sinyal
         case 2: return clrRed;                  // 3. sinyal
         case 3: return clrGray;                 // 4. sinyal
         case 4: return C'255,230,180';          // 5. sinyal - krem
@@ -682,7 +682,7 @@ void ProcessBar(int i,
                         // Trade signal validation
                         bool is_valid = EvaluateTradeSignal(-1, time[i], tdx+1, pfx);
 
-                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,is_valid ? STYLE_DASH : STYLE_SOLID);
+                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*10,state.d1_l,sc,3,is_valid ? STYLE_DASH : STYLE_SOLID);
                     }
                     if(isn)ld1b=state.d1_i;
                 }
@@ -719,7 +719,7 @@ void ProcessBar(int i,
                         // Trade signal validation
                         bool is_valid = EvaluateTradeSignal(1, time[i], tdx+1, pfx);
 
-                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,is_valid ? STYLE_DASH : STYLE_SOLID);
+                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*10,state.d1_h,sc,3,is_valid ? STYLE_DASH : STYLE_SOLID);
                     }
                     if(isn)ld1l=state.d1_i;
                 }
