@@ -79,11 +79,11 @@ void ResetBearishMemory(){g_trade_count_h=0;for(int i=0;i<5;i++){g_trade_t1_h[i]
 void ResetBullishMemory(){g_trade_count_l=0;for(int i=0;i<5;i++){g_trade_t1_l[i]=0;g_trade_t2_l[i]=0;}}
 
 // ─── Kutu Dizileri ────────────────────────────────────────────────
-#define BOX_MAX 512
+#define BOX_MAX 32000
 
 // Shadow mode
 bool g_shadow_mode = false;
-#define SHD_BOX_MAX 64
+#define SHD_BOX_MAX 4096
 int      g_shd_state[SHD_BOX_MAX];
 double   g_shd_top[SHD_BOX_MAX];
 double   g_shd_bot[SHD_BOX_MAX];
