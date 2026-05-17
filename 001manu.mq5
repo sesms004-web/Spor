@@ -36,7 +36,6 @@ input color  InpColorBear = clrRed;
 input bool   InpShowBox           = true;
 input double InpMaxBoxPct         = 20.0;
 input double InpWeakZonePct       = 50.0;
-input int    InpRangeBreakCount   = 3;          // Yatay Sayac: kac kirilimdan sonra "Yataya Bagladi"
 input color  InpColorBoxBull      = clrDodgerBlue;
 input color  InpColorBoxBear      = clrRed;
 input color  InpColorBoxBullFaint = C'0,40,90';
@@ -49,15 +48,6 @@ input group "--- BILDIRIM TEST ---"
 input bool   InpNotifTest    = false;       // Test Bildirimi (1 kez atar - once send)
 input bool   InpAlertPush    = true;        // Push Bildirimi
 input bool   InpAlertPopup   = false;       // Popup Alert
-
-input group "--- BILDIRIM TF SECIMI ---"
-input bool   InpTF_M1  = false;
-input bool   InpTF_M5  = false;
-input bool   InpTF_M15 = true;
-input bool   InpTF_M30 = true;
-input bool   InpTF_H1  = true;
-input bool   InpTF_H4  = false;
-input bool   InpTF_D1  = false;
 
 // ─── Globals ──────────────────────────────────────────────────────
 int      g_counter     = 0;
@@ -85,8 +75,6 @@ int      g_shd_touch[SHD_BOX_MAX];
 int      g_shd_appr[SHD_BOX_MAX];
 int      g_shd_cnt_in[SHD_BOX_MAX];
 datetime g_shd_ev_t[SHD_BOX_MAX];
-int      g_shd_brk[SHD_BOX_MAX];   // kirilim sayaci
-int      g_shd_exit[SHD_BOX_MAX];  // son cikis yonu (+1=ust, -1=alt)
 int      g_shd_cnt = 0;
 string   g_bx_nm[BOX_MAX];
 int      g_bx_state[BOX_MAX];
@@ -96,8 +84,6 @@ int      g_bx_touch_state[BOX_MAX];
 int      g_bx_approach[BOX_MAX];
 int      g_bx_inside_cnt[BOX_MAX];
 datetime g_bx_event_time[BOX_MAX];
-int      g_bx_brk[BOX_MAX];        // kirilim sayaci
-int      g_bx_exit[BOX_MAX];       // son cikis yonu (+1=ust, -1=alt)
 string   g_bx_wk_abv_nm[BOX_MAX];
 string   g_bx_wk_blw_nm[BOX_MAX];
 double   g_bx_wk_abv_top[BOX_MAX];
@@ -166,7 +152,7 @@ void BxAdd(string nm,double top,double bot,color box_clr,const datetime &time[],
         g_shd_state[g_shd_cnt]=2;
         g_shd_top[g_shd_cnt]=top; g_shd_bot[g_shd_cnt]=bot;
         g_shd_touch[g_shd_cnt]=0; g_shd_appr[g_shd_cnt]=0;
-        g_shd_cnt_in[g_shd_cnt]=0; g_shd_ev_t[g_shd_cnt]=0; g_shd_brk[g_shd_cnt]=0; g_shd_exit[g_shd_cnt]=0;
+        g_shd_cnt_in[g_shd_cnt]=0; g_shd_ev_t[g_shd_cnt]=0;
         g_shd_cnt++;
         return;
     }
@@ -176,7 +162,7 @@ void BxAdd(string nm,double top,double bot,color box_clr,const datetime &time[],
     g_bx_nm[g_bx_cnt]=nm; g_bx_state[g_bx_cnt]=2;
     g_bx_top[g_bx_cnt]=top; g_bx_bot[g_bx_cnt]=bot;
     g_bx_touch_state[g_bx_cnt]=0; g_bx_approach[g_bx_cnt]=0;
-    g_bx_inside_cnt[g_bx_cnt]=0;  g_bx_event_time[g_bx_cnt]=0; g_bx_brk[g_bx_cnt]=0; g_bx_exit[g_bx_cnt]=0;
+    g_bx_inside_cnt[g_bx_cnt]=0;  g_bx_event_time[g_bx_cnt]=0;
     g_bx_wk_abv_nm[g_bx_cnt]="BoxWkAbv_"+IntegerToString(g_bx_cnt);
     g_bx_wk_blw_nm[g_bx_cnt]="BoxWkBlw_"+IntegerToString(g_bx_cnt);
     g_bx_wk_abv_top[g_bx_cnt]=top+wk_sz;
@@ -198,11 +184,8 @@ void ShdBxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time
         if(ts==0){if(im){g_shd_appr[k]=(na!=0)?na:(c>(top+bot)/2.0?1:-1);g_shd_touch[k]=1;g_shd_cnt_in[k]=1;g_shd_ev_t[k]=bar_time;}}
         else if(ts==1){if(im){g_shd_cnt_in[k]++;g_shd_ev_t[k]=bar_time;}
             else{bool bd=(c<bot),bu=(c>top);int ap=g_shd_appr[k];
-                int ex=0;
-                if(ap==1){if(bd){g_shd_touch[k]=2;ex=-1;}else if(bu){g_shd_touch[k]=3;ex=1;}}
-                else{if(bu){g_shd_touch[k]=2;ex=1;}else if(bd){g_shd_touch[k]=3;ex=-1;}}
-                // Sadece zit yonde cikis olunca say
-                if(ex!=0){if(g_shd_exit[k]!=0&&ex!=g_shd_exit[k])g_shd_brk[k]++;g_shd_exit[k]=ex;}
+                if(ap==1){if(bd)g_shd_touch[k]=2;else if(bu)g_shd_touch[k]=3;}
+                else{if(bu)g_shd_touch[k]=2;else if(bd)g_shd_touch[k]=3;}
                 g_shd_ev_t[k]=bar_time;}}
         else{if(im){g_shd_appr[k]=(na!=0)?na:(c>(top+bot)/2.0?1:-1);g_shd_touch[k]=1;g_shd_cnt_in[k]=1;g_shd_ev_t[k]=bar_time;}}
     }
@@ -224,11 +207,8 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time)
         }}
         else if(ts==1){if(im){g_bx_inside_cnt[k]++;g_bx_event_time[k]=bar_time;}
             else{bool bd=(c<bot),bu=(c>top);int ap=g_bx_approach[k];
-                int ex=0;
-                if(ap==1){if(bd){g_bx_touch_state[k]=2;ex=-1;}else if(bu){g_bx_touch_state[k]=3;ex=1;}}
-                else{if(bu){g_bx_touch_state[k]=2;ex=1;}else if(bd){g_bx_touch_state[k]=3;ex=-1;}}
-                // Sadece zit yonde cikis olunca say
-                if(ex!=0){if(g_bx_exit[k]!=0&&ex!=g_bx_exit[k])g_bx_brk[k]++;g_bx_exit[k]=ex;}
+                if(ap==1){if(bd)g_bx_touch_state[k]=2;else if(bu)g_bx_touch_state[k]=3;}
+                else{if(bu)g_bx_touch_state[k]=2;else if(bd)g_bx_touch_state[k]=3;}
                 g_bx_event_time[k]=bar_time;}}
         else{if(im){
             g_bx_approach[k]=(na!=0)?na:(c>(top+bot)/2.0?1:-1);
@@ -501,111 +481,53 @@ void ProcessBar(int i,
                 bool is_strong=(state.t2_h>state.t1_h);
                 if(draw_ui){
                     static int ld1b=0;
-                    if(state.maj_h_i!=g_current_maj_h_i){ResetBearishMemory();g_current_maj_h_i=state.maj_h_i;}
-                    bool isn=(state.d1_i!=ld1b);
                     int tdx=-1;
-                    if(isn){
-                        bool vs=false;
-                        if(g_trade_count_h==0)vs=true;
-                        else if(g_trade_count_h<5){double pv=MathMax(g_trade_t1_h[g_trade_count_h-1],g_trade_t2_h[g_trade_count_h-1]);if(state.t2_h>pv)vs=true;}
-                        if(vs&&g_trade_count_h<5){tdx=g_trade_count_h;g_trade_t1_h[tdx]=state.t1_h;g_trade_t2_h[tdx]=state.t2_h;g_trade_count_h++;}
-                    }else{for(int x=0;x<g_trade_count_h;x++)if(g_trade_t1_h[x]==state.t1_h&&g_trade_t2_h[x]==state.t2_h){tdx=x;break;}}
-                    string tn = "";
-                    if(isn&&tdx>=0&&InpShowChoch){
+                    bool isn=false;
+                    if(!g_shadow_mode){
+                        if(state.maj_h_i!=g_current_maj_h_i){ResetBearishMemory();g_current_maj_h_i=state.maj_h_i;}
+                        isn=(state.d1_i!=ld1b);
+                        if(isn){
+                            bool vs=false;
+                            if(g_trade_count_h==0)vs=true;
+                            else if(g_trade_count_h<5){double pv=MathMax(g_trade_t1_h[g_trade_count_h-1],g_trade_t2_h[g_trade_count_h-1]);if(state.t2_h>pv)vs=true;}
+                            if(vs&&g_trade_count_h<5){tdx=g_trade_count_h;g_trade_t1_h[tdx]=state.t1_h;g_trade_t2_h[tdx]=state.t2_h;g_trade_count_h++;}
+                        }else{for(int x=0;x<g_trade_count_h;x++)if(g_trade_t1_h[x]==state.t1_h&&g_trade_t2_h[x]==state.t2_h){tdx=x;break;}}
+                    }
+                    if(!g_shadow_mode&&isn&&tdx>=0&&InpShowChoch){
                         color sc=is_strong?InpColorChochStrong:InpColorChochWeak;
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_h,GetTimeSafe(time,state.d1_i),state.d1_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_l,GetTimeSafe(time,state.t2_i),state.t2_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_h,GetTimeSafe(time,i),state.d1_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,STYLE_SOLID);
-                        tn=GetUniqueName(pfx+"CHoCH_Text_");
+                        string tn=GetUniqueName(pfx+"CHoCH_Text_");
                         ObjectCreate(0,tn,OBJ_TEXT,0,GetTimeSafe(time,i),state.d1_l);
                         ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1));
                         ObjectSetInteger(0,tn,OBJPROP_COLOR,sc);
                         ObjectSetInteger(0,tn,OBJPROP_FONTSIZE,10);
                         ObjectSetInteger(0,tn,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
                     }
-                    if(isn) {
-                        ld1b=state.d1_i;
-                        if((tdx == 0 || tdx == 1)) {
-                            // Asagi yonlu CHoCH icin kutulari inceleyelim
-                            bool box_supports_down = false;
-                            string res = "";
-                            int target_k = -1;
 
-                            int found_boxes = 0;
-                            int kutu_indexler[4];
-
-                            // Ilk 4 guncel kutuyu bul
-                            for(int k=g_bx_cnt-1; k>=0 && found_boxes < 4; k--) {
-                                if(g_bx_state[k] > 0) {
-                                    kutu_indexler[found_boxes] = k;
-                                    found_boxes++;
+                    // --- Bearish Kutu Kontrolu & Bildirimi ---
+                    if(!g_shadow_mode && isn && tdx >= 0 && (tdx == 0 || tdx == 1)) {
+                        int first_k = -1;
+                        for(int k=0; k<g_bx_cnt; k++) {
+                            if(g_bx_state[k] > 0 && g_bx_touch_state[k] > 0) { first_k = k; break; }
+                        }
+                        if(first_k >= 0) {
+                            string stat1 = GetBoxStatusStr(g_bx_touch_state[first_k], g_bx_approach[first_k]);
+                            bool supports_down = (StringFind(stat1, "Asagi") >= 0 || StringFind(stat1, "Alti Deldi") >= 0 || StringFind(stat1, "Alttan Girdi") >= 0);
+                            if(supports_down) {
+                                string msg = BuildMTFNotification(-1, tdx, "1. Kutu: " + stat1);
+                                if(!is_history) {
+                                    if(InpAlertPopup) Alert(msg);
+                                    if(InpAlertPush) SendNotification(msg);
                                 }
-                            }
-
-                            if(found_boxes > 0) {
-                                // 1. kutuyu kontrol et
-                                int first_k = kutu_indexler[0];
-                                string stat1 = GetBoxStatusStr(g_bx_touch_state[first_k], g_bx_approach[first_k], g_bx_brk[first_k]);
-                                bool yatay1 = (StringFind(stat1, "Yataya Bagladi") >= 0);
-                                bool supports_down1 = (StringFind(stat1, "Asagi") >= 0 || StringFind(stat1, "Alti Deldi") >= 0 || StringFind(stat1, "Alttan Girdi") >= 0);
-
-                                if(!yatay1 && supports_down1) {
-                                    // 1. kutu destekliyor, bitti.
-                                    box_supports_down = true;
-                                    target_k = first_k;
-                                    res = "1. Kutu: " + stat1;
-                                } else {
-                                    // 1. Kutu desteklemiyor ise, kullanicinin yeni senaryosu:
-                                    // "2. Kutu yon destekliyorsa, 3. ve 4. kutu yon destegi varsa o zaman isleme dahil olabilir"
-                                    // Yani 2, 3 ve 4. kutularin HEPSI yon desteklemelidir.
-                                    if(found_boxes >= 4) {
-                                        bool all_support = true;
-                                        string detay_res = "";
-
-                                        for(int b=1; b<4; b++) { // 1, 2, 3 indeksleri (2., 3., 4. kutular)
-                                            int k_idx = kutu_indexler[b];
-                                            string stat = GetBoxStatusStr(g_bx_touch_state[k_idx], g_bx_approach[k_idx], g_bx_brk[k_idx]);
-                                            bool yatay = (StringFind(stat, "Yataya Bagladi") >= 0);
-                                            bool supports_down = (StringFind(stat, "Asagi") >= 0 || StringFind(stat, "Alti Deldi") >= 0 || StringFind(stat, "Alttan Girdi") >= 0);
-
-                                            if(yatay || !supports_down) {
-                                                all_support = false;
-                                                break;
-                                            }
-                                            detay_res += IntegerToString(b+1) + ". Kutu: " + stat + "\n";
-                                        }
-
-                                        if(all_support) {
-                                            box_supports_down = true;
-                                            // En yakin temas suresini kontrol etmek icin 2. kutuyu (index 1) hedef alalim
-                                            target_k = kutu_indexler[1];
-                                            res = "1. Kutu desteklemiyor. Ancak 2., 3. ve 4. kutularin HEPSI ASAGI yonu destekliyor.\n" + detay_res;
-                                        }
-                                    }
-                                }
-                            }
-
-                            if(box_supports_down && target_k >= 0) {
-                                int mum_ps = PeriodSeconds(Period());
-                                int mums = (mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((time[i] - g_bx_event_time[target_k]) / mum_ps) : 0;
-
-                                if(mums >= 25 || g_bx_event_time[target_k] == 0) {
-                                    // Bu bir isleme giris firsati degildir
-                                } else {
-                                    string msg = BuildMTFNotification(-1, tdx, res);
-                                    if(!is_history) {
-                                        if(InpAlertPopup) Alert(msg);
-                                        if(InpAlertPush) SendNotification(msg);
-                                    }
-
-                                    if(tn != "") {
-                                        ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
-                                    }
-                                }
+                                if(tn != "") ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
                             }
                         }
                     }
+
+                    if(!g_shadow_mode && isn)ld1b=state.d1_i;
                 }
                 state.choch_dir=0;
             }
@@ -623,108 +545,53 @@ void ProcessBar(int i,
                 bool is_strong=(state.t2_l<state.t1_l);
                 if(draw_ui){
                     static int ld1l=0;
-                    if(state.maj_l_i!=g_current_maj_l_i){ResetBullishMemory();g_current_maj_l_i=state.maj_l_i;}
-                    bool isn=(state.d1_i!=ld1l);
                     int tdx=-1;
-                    if(isn){
-                        bool vs=false;
-                        if(g_trade_count_l==0)vs=true;
-                        else if(g_trade_count_l<5){double pv=MathMin(g_trade_t1_l[g_trade_count_l-1],g_trade_t2_l[g_trade_count_l-1]);if(state.t2_l<pv)vs=true;}
-                        if(vs&&g_trade_count_l<5){tdx=g_trade_count_l;g_trade_t1_l[tdx]=state.t1_l;g_trade_t2_l[tdx]=state.t2_l;g_trade_count_l++;}
-                    }else{for(int x=0;x<g_trade_count_l;x++)if(g_trade_t1_l[x]==state.t1_l&&g_trade_t2_l[x]==state.t2_l){tdx=x;break;}}
-                    string tn = "";
-                    if(isn&&tdx>=0&&InpShowChoch){
+                    bool isn=false;
+                    if(!g_shadow_mode){
+                        if(state.maj_l_i!=g_current_maj_l_i){ResetBullishMemory();g_current_maj_l_i=state.maj_l_i;}
+                        isn=(state.d1_i!=ld1l);
+                        if(isn){
+                            bool vs=false;
+                            if(g_trade_count_l==0)vs=true;
+                            else if(g_trade_count_l<5){double pv=MathMin(g_trade_t1_l[g_trade_count_l-1],g_trade_t2_l[g_trade_count_l-1]);if(state.t2_l<pv)vs=true;}
+                            if(vs&&g_trade_count_l<5){tdx=g_trade_count_l;g_trade_t1_l[tdx]=state.t1_l;g_trade_t2_l[tdx]=state.t2_l;g_trade_count_l++;}
+                        }else{for(int x=0;x<g_trade_count_l;x++)if(g_trade_t1_l[x]==state.t1_l&&g_trade_t2_l[x]==state.t2_l){tdx=x;break;}}
+                    }
+                    if(!g_shadow_mode&&isn&&tdx>=0&&InpShowChoch){
                         color sc=is_strong?InpColorChochStrong:InpColorChochWeak;
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_l,GetTimeSafe(time,state.d1_i),state.d1_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_h,GetTimeSafe(time,state.t2_i),state.t2_l,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_l,GetTimeSafe(time,i),state.d1_h,InpColorChochPath,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,STYLE_SOLID);
-                        tn=GetUniqueName(pfx+"CHoCH_Text_");
+                        string tn=GetUniqueName(pfx+"CHoCH_Text_");
                         ObjectCreate(0,tn,OBJ_TEXT,0,GetTimeSafe(time,i),state.d1_h);
                         ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1));
                         ObjectSetInteger(0,tn,OBJPROP_COLOR,sc);
                         ObjectSetInteger(0,tn,OBJPROP_FONTSIZE,10);
                         ObjectSetInteger(0,tn,OBJPROP_ANCHOR,ANCHOR_RIGHT_LOWER);
                     }
-                    if(isn) {
-                        ld1l=state.d1_i;
-                        if((tdx == 0 || tdx == 1)) {
-                            // Yukari yonlu CHoCH icin kutulari inceleyelim
-                            bool box_supports_up = false;
-                            string res = "";
-                            int target_k = -1;
 
-                            int found_boxes = 0;
-                            int kutu_indexler[4];
-
-                            for(int k=g_bx_cnt-1; k>=0 && found_boxes < 4; k--) {
-                                if(g_bx_state[k] > 0) {
-                                    kutu_indexler[found_boxes] = k;
-                                    found_boxes++;
+                    // --- Bullish Kutu Kontrolu & Bildirimi ---
+                    if(!g_shadow_mode && isn && tdx >= 0 && (tdx == 0 || tdx == 1)) {
+                        int first_k = -1;
+                        for(int k=0; k<g_bx_cnt; k++) {
+                            if(g_bx_state[k] > 0 && g_bx_touch_state[k] > 0) { first_k = k; break; }
+                        }
+                        if(first_k >= 0) {
+                            string stat1 = GetBoxStatusStr(g_bx_touch_state[first_k], g_bx_approach[first_k]);
+                            bool supports_up = (StringFind(stat1, "Yukari") >= 0 || StringFind(stat1, "Yukari Deldi") >= 0 || StringFind(stat1, "Ustten Girdi") >= 0);
+                            if(supports_up) {
+                                string msg = BuildMTFNotification(1, tdx, "1. Kutu: " + stat1);
+                                if(!is_history) {
+                                    if(InpAlertPopup) Alert(msg);
+                                    if(InpAlertPush) SendNotification(msg);
                                 }
-                            }
-
-                            if(found_boxes > 0) {
-                                int first_k = kutu_indexler[0];
-                                string stat1 = GetBoxStatusStr(g_bx_touch_state[first_k], g_bx_approach[first_k], g_bx_brk[first_k]);
-                                bool yatay1 = (StringFind(stat1, "Yataya Bagladi") >= 0);
-                                bool supports_up1 = (StringFind(stat1, "Yukari") >= 0 || StringFind(stat1, "Ustten Girdi") >= 0);
-
-                                if(!yatay1 && supports_up1) {
-                                    // 1. kutu destekliyor, bitti.
-                                    box_supports_up = true;
-                                    target_k = first_k;
-                                    res = "1. Kutu: " + stat1;
-                                } else {
-                                    // 1. Kutu desteklemiyor ise, kullanicinin yeni senaryosu:
-                                    // 2, 3 ve 4. kutularin HEPSI YUKARI yonu desteklemelidir.
-                                    if(found_boxes >= 4) {
-                                        bool all_support = true;
-                                        string detay_res = "";
-
-                                        for(int b=1; b<4; b++) { // 1, 2, 3 indeksleri (2., 3., 4. kutular)
-                                            int k_idx = kutu_indexler[b];
-                                            string stat = GetBoxStatusStr(g_bx_touch_state[k_idx], g_bx_approach[k_idx], g_bx_brk[k_idx]);
-                                            bool yatay = (StringFind(stat, "Yataya Bagladi") >= 0);
-                                            bool supports_up = (StringFind(stat, "Yukari") >= 0 || StringFind(stat, "Ustten Girdi") >= 0);
-
-                                            if(yatay || !supports_up) {
-                                                all_support = false;
-                                                break;
-                                            }
-                                            detay_res += IntegerToString(b+1) + ". Kutu: " + stat + "\n";
-                                        }
-
-                                        if(all_support) {
-                                            box_supports_up = true;
-                                            // En yakin temas suresini kontrol etmek icin 2. kutuyu (index 1) hedef alalim
-                                            target_k = kutu_indexler[1];
-                                            res = "1. Kutu desteklemiyor. Ancak 2., 3. ve 4. kutularin HEPSI YUKARI yonu destekliyor.\n" + detay_res;
-                                        }
-                                    }
-                                }
-                            }
-
-                            if(box_supports_up && target_k >= 0) {
-                                int mum_ps = PeriodSeconds(Period());
-                                int mums = (mum_ps > 0 && g_bx_event_time[target_k] > 0) ? (int)((time[i] - g_bx_event_time[target_k]) / mum_ps) : 0;
-
-                                if(mums >= 25 || g_bx_event_time[target_k] == 0) {
-                                    // Bu bir isleme giris firsati degildir
-                                } else {
-                                    string msg = BuildMTFNotification(1, tdx, res);
-                                    if(!is_history) {
-                                        if(InpAlertPopup) Alert(msg);
-                                        if(InpAlertPush) SendNotification(msg);
-                                    }
-
-                                    if(tn != "") {
-                                        ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
-                                    }
-                                }
+                                if(tn != "") ObjectSetString(0,tn,OBJPROP_TEXT,IntegerToString(tdx+1) + "W");
                             }
                         }
                     }
+
+                    if(!g_shadow_mode && isn)ld1l=state.d1_i;
                 }
                 state.choch_dir=0;
             }
@@ -841,24 +708,10 @@ void ProcessBar(int i,
     }
 }
 
-// ─── Kutu Durum Metni ─────────────────────────────────────────────
-string GetBoxStatusStr(int ts, int appr, int brk)
-{
-    // Yataya bagladi kontrolu
-    if(brk >= InpRangeBreakCount)
-        return "Yataya Bagladi (" + IntegerToString(brk) + "x kirilim)";
-    if(ts==0)return "Bekleniyor";
-    if(ts==1)return (appr==1)?"Ustten Girdi - Icinde":"Alttan Girdi - Icinde";
-    if(ts==2)return (appr==1)?"Ustten Geldi - Alti Deldi":"Alttan Geldi - Yukari Deldi";
-    if(ts==3)return (appr==1)?"Ustten Geldi - Icinden Tepki Yukari":"Alttan Geldi - Icinden Tepki Asagi";
-    return "?";
-}
-
 // ─── TF Kutu Analizi (Shadow Mode) ────────────────────────────────
-string AnalyzeTFBoxes(ENUM_TIMEFRAMES tf, double days_inp, datetime &out_ev_t)
+string AnalyzeTFBoxes(ENUM_TIMEFRAMES tf, double days_inp)
 {
     string lbl=EnumToString(tf); StringReplace(lbl,"PERIOD_","");
-    out_ev_t=0;
 
     MqlRates r[];
     datetime anc=TimeCurrent()-(datetime)(days_inp*86400.0);
@@ -921,38 +774,27 @@ string AnalyzeTFBoxes(ENUM_TIMEFRAMES tf, double days_inp, datetime &out_ev_t)
     }
     if(bk<0)return lbl+": Kutu yok";
 
-    string status=GetBoxStatusStr(g_shd_touch[bk],g_shd_appr[bk],g_shd_brk[bk]);
+    string status=GetBoxStatusStr(g_shd_touch[bk],g_shd_appr[bk]);
     string kutu=StringFormat("%.5f - %.5f",g_shd_top[bk],g_shd_bot[bk]);
     int mum_ps=PeriodSeconds(tf);
     int mums=(mum_ps>0)?(int)((TimeCurrent()-g_shd_ev_t[bk])/mum_ps):0;
-
-    // Geçen süre hesabı
-    string age_str="";
-    if(g_shd_ev_t[bk]>0){
-        int diff=(int)(TimeCurrent()-g_shd_ev_t[bk]);
-        if(diff<60)             age_str=IntegerToString(diff)+"sn";
-        else if(diff<3600)      age_str=IntegerToString(diff/60)+"dk";
-        else if(diff<86400){
-            int h=diff/3600, m=(diff%3600)/60;
-            age_str=IntegerToString(h)+"sa";
-            if(m>0)age_str+=IntegerToString(m)+"dk";
-        } else {
-            int d=diff/86400, h=(diff%86400)/3600;
-            age_str=IntegerToString(d)+"g";
-            if(h>0)age_str+=IntegerToString(h)+"sa";
-        }
-    }
-
     string cnt_str="";
-    if(g_shd_touch[bk]==1)
-        cnt_str=StringFormat(" (%d mum icinde, %s once)",g_shd_cnt_in[bk],age_str);
-    else if(g_shd_touch[bk]>=2)
-        cnt_str=StringFormat(" (+%d mum, %s once)",mums,age_str);
+    if(g_shd_touch[bk]==1)cnt_str=StringFormat(" (%d mum icinde)",g_shd_cnt_in[bk]);
+    else if(g_shd_touch[bk]>=2)cnt_str=StringFormat(" (+%d mum once)",mums);
 
-    out_ev_t = g_shd_ev_t[bk];
     return StringFormat("%s: [%s] %s%s",lbl,kutu,status,cnt_str);
 }
 
+
+// ─── Kutu Durum Metni ─────────────────────────────────────────────
+string GetBoxStatusStr(int ts, int appr)
+{
+    if(ts==0)return "Bekleniyor";
+    if(ts==1)return (appr==1)?"Ustten Girdi - Icinde":"Alttan Girdi - Icinde";
+    if(ts==2)return (appr==1)?"Ustten Geldi - Alti Deldi":"Alttan Geldi - Yukari Deldi";
+    if(ts==3)return (appr==1)?"Ustten Geldi - Icinden Tepki Yukari":"Alttan Geldi - Icinden Tepki Asagi";
+    return "?";
+}
 
 // ─── MTF Bildirim Olusturucu ─────────────────────────────────────────
 string BuildMTFNotification(int direction, int tdx, string res_detail)
@@ -972,8 +814,7 @@ string BuildMTFNotification(int direction, int tdx, string res_detail)
 
     ENUM_TIMEFRAMES tfs[] = {PERIOD_M15, PERIOD_M30, PERIOD_H1, PERIOD_H4, PERIOD_D1};
     for (int i=0; i<5; i++) {
-        datetime ev=0;
-        string tf_res = AnalyzeTFBoxes(tfs[i], GetDaysForTF(tfs[i]), ev);
+        string tf_res = AnalyzeTFBoxes(tfs[i], GetDaysForTF(tfs[i]));
 
         string lbl = EnumToString(tfs[i]); StringReplace(lbl, "PERIOD_", "");
 
@@ -1024,8 +865,6 @@ string BuildMTFNotification(int direction, int tdx, string res_detail)
 void SendTestNotif()
 {
     string msg = BuildMTFNotification(0, 0, "");
-    msg += "Not: Gecmiste gerceklesen basarili sinyallerin (1 veya 2) yanina 'W' isareti (1W, 2W) eklenecek sekilde kod guncellendi.";
-
     if(InpAlertPopup) Alert(msg);
     if(InpAlertPush)  SendNotification(msg);
     Print("TEST BILDIRIMI GONDERILDI");
