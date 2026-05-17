@@ -79,11 +79,11 @@ void ResetBearishMemory(){g_trade_count_h=0;for(int i=0;i<5;i++){g_trade_t1_h[i]
 void ResetBullishMemory(){g_trade_count_l=0;for(int i=0;i<5;i++){g_trade_t1_l[i]=0;g_trade_t2_l[i]=0;}}
 
 // ─── Kutu Dizileri ────────────────────────────────────────────────
-#define BOX_MAX 32000
+#define BOX_MAX 512
 
 // Shadow mode
 bool g_shadow_mode = false;
-#define SHD_BOX_MAX 4096
+#define SHD_BOX_MAX 64
 int      g_shd_state[SHD_BOX_MAX];
 double   g_shd_top[SHD_BOX_MAX];
 double   g_shd_bot[SHD_BOX_MAX];
@@ -94,8 +94,6 @@ datetime g_shd_ev_t[SHD_BOX_MAX];
 int      g_shd_break_up[SHD_BOX_MAX];  // alttan gelip yukarı kıran sayısı
 int      g_shd_break_dn[SHD_BOX_MAX];  // üstten gelip aşağı kıran sayısı
 int      g_shd_dir[SHD_BOX_MAX];
-int      g_shd_bars_since_touch[SHD_BOX_MAX];
-datetime g_shd_last_bar_time[SHD_BOX_MAX];
 int      g_shd_cnt = 0;
 
 string   g_bx_nm[BOX_MAX];
@@ -107,8 +105,6 @@ int      g_bx_approach[BOX_MAX];
 int      g_bx_inside_cnt[BOX_MAX];
 datetime g_bx_event_time[BOX_MAX];
 int      g_bx_dir[BOX_MAX];
-int      g_bx_bars_since_touch[BOX_MAX];
-datetime g_bx_last_bar_time[BOX_MAX];
 int      g_bx_break_up[BOX_MAX];
 int      g_bx_break_dn[BOX_MAX];
 string   g_bx_wk_abv_nm[BOX_MAX];
@@ -197,9 +193,7 @@ void BxAdd(string nm,double top,double bot,color box_clr,const datetime &time[],
         g_shd_break_up[g_shd_cnt] = 0;
         g_shd_break_dn[g_shd_cnt] = 0;
         g_shd_dir[g_shd_cnt]      = (box_clr==InpColorBoxBull||box_clr==InpColorBoxBullFaint)?1:-1;
-        g_shd_bars_since_touch[g_shd_cnt] = 0;
-        g_shd_last_bar_time[g_shd_cnt] = 0;
-        g_shd_cnt++;
+                g_shd_cnt++;
         return;
     }
     if(g_bx_cnt>=BOX_MAX)return;
@@ -210,9 +204,7 @@ void BxAdd(string nm,double top,double bot,color box_clr,const datetime &time[],
     g_bx_touch_state[g_bx_cnt]=0; g_bx_approach[g_bx_cnt]=0;
     g_bx_inside_cnt[g_bx_cnt]=0;  g_bx_event_time[g_bx_cnt]=0;
     g_bx_dir[g_bx_cnt] = (box_clr==InpColorBoxBull||box_clr==InpColorBoxBullFaint)?1:-1;
-    g_bx_bars_since_touch[g_bx_cnt] = 0;
-    g_bx_last_bar_time[g_bx_cnt] = 0;
-    g_bx_break_up[g_bx_cnt] = 0;
+        g_bx_break_up[g_bx_cnt] = 0;
     g_bx_break_dn[g_bx_cnt] = 0;
     g_bx_wk_abv_nm[g_bx_cnt]="BoxWkAbv_"+IntegerToString(g_bx_cnt);
     g_bx_wk_blw_nm[g_bx_cnt]="BoxWkBlw_"+IntegerToString(g_bx_cnt);
@@ -230,13 +222,6 @@ void ShdBxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time
         if(g_shd_state[k]==0)continue;
         double top=g_shd_top[k],bot=g_shd_bot[k];
         bool im=(h>=bot)&&(l<=top);
-        if(im) {
-            g_shd_bars_since_touch[k] = 0;
-            g_shd_last_bar_time[k] = bar_time; // Reset is always registered
-        } else if(bar_time != g_shd_last_bar_time[k]) {
-            g_shd_bars_since_touch[k]++;
-            g_shd_last_bar_time[k] = bar_time;
-        }
         int na;if(prev_c>top)na=1;else if(prev_c<bot)na=-1;else na=g_shd_appr[k];
         int ts=g_shd_touch[k];
         if(ts==0){
@@ -281,13 +266,6 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time)
         if(g_bx_state[k]==0)continue;
         double top=g_bx_top[k],bot=g_bx_bot[k];
         bool im=(h>=bot)&&(l<=top);
-        if(im) {
-            g_bx_bars_since_touch[k] = 0;
-            g_bx_last_bar_time[k] = bar_time; // Reset is always registered
-        } else if(bar_time != g_bx_last_bar_time[k]) {
-            g_bx_bars_since_touch[k]++;
-            g_bx_last_bar_time[k] = bar_time;
-        }
         int na;if(prev_c>top)na=1;else if(prev_c<bot)na=-1;else na=g_bx_approach[k];
         int ts=g_bx_touch_state[k];
         if(ts==0){if(im){
@@ -474,7 +452,8 @@ bool EvaluateTradeSignal(int signal_dir, datetime sig_time, int trade_num, strin
                                       (g_bx_break_dn[k] >= 1) &&
                                       (total_breaks >= InpExhaustionCount);
 
-            is_stale[box_count] = (g_bx_bars_since_touch[k] >= 25);
+            int bars_passed = iBarShift(Symbol(), Period(), g_bx_event_time[k]);
+            is_stale[box_count] = (bars_passed >= 25);
             box_count++;
         }
     }
