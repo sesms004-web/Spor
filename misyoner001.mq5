@@ -49,7 +49,9 @@ input int    InpExhaustionCount = 3;  // Kac kirilma sonrasi YATAY sayilir (ust+
 
 // ─── Test Bildirimi ───────────────────────────────────────────────
 input group "--- BILDIRIM TEST ---"
-input bool   InpNotifTest    = false;  // Test Bildirimi (1 kez atar)
+input bool   InpNotifTest    = false;  // Kutu Test Bildirimi (1 kez atar)
+input bool   InpTestValid    = true;   // Gecerli CHoCH Test Sinyali Gonder
+input bool   InpTestInvalid  = true;   // Gecersiz CHoCH Test Sinyali Gonder
 input bool   InpAlertPush    = true;   // Push Bildirimi
 input bool   InpAlertPopup   = false;  // Popup Alert
 
@@ -447,10 +449,10 @@ color GetChochColor(int tdx)
 
 
 // ─── İşlem Sinyal Değerlendirmesi ─────────────────────────────────
-void EvaluateTradeSignal(int signal_dir, datetime sig_time, int trade_num, string pfx)
+bool EvaluateTradeSignal(int signal_dir, datetime sig_time, int trade_num, string pfx)
 {
     // Maksimum 2 sinyal atılır (1. ve 2. CHoCH)
-    if(trade_num > 2) return;
+    if(trade_num > 2) return false;
 
     // Aktif kutuları bul (en güncelden eskiye)
     int valid_boxes[4];
@@ -477,7 +479,7 @@ void EvaluateTradeSignal(int signal_dir, datetime sig_time, int trade_num, strin
         }
     }
 
-    if(box_count == 0) return; // Kutu yoksa islem yok
+    if(box_count == 0) return false; // Kutu yoksa islem yok
 
     string sig_name = (signal_dir == 1) ? "BULLISH (Alis)" : "BEARISH (Satis)";
     bool execute = false;
@@ -545,6 +547,8 @@ void EvaluateTradeSignal(int signal_dir, datetime sig_time, int trade_num, strin
             ObjectSetInteger(0, vname, OBJPROP_BACK, true);
         }
     }
+
+    return execute;
 }
 
 
@@ -675,10 +679,10 @@ void ProcessBar(int i,
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_h,GetTimeSafe(time,state.d1_i),state.d1_l,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_l,GetTimeSafe(time,state.t2_i),state.t2_h,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_h,GetTimeSafe(time,i),state.d1_l,sc,1,STYLE_DOT);
-                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,STYLE_SOLID);
-
                         // Trade signal validation
-                        EvaluateTradeSignal(-1, time[i], tdx+1, pfx);
+                        bool is_valid = EvaluateTradeSignal(-1, time[i], tdx+1, pfx);
+
+                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,is_valid ? STYLE_DASH : STYLE_SOLID);
                     }
                     if(isn)ld1b=state.d1_i;
                 }
@@ -712,10 +716,10 @@ void ProcessBar(int i,
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_l,GetTimeSafe(time,state.d1_i),state.d1_h,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_h,GetTimeSafe(time,state.t2_i),state.t2_l,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_l,GetTimeSafe(time,i),state.d1_h,sc,1,STYLE_DOT);
-                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,STYLE_SOLID);
-
                         // Trade signal validation
-                        EvaluateTradeSignal(1, time[i], tdx+1, pfx);
+                        bool is_valid = EvaluateTradeSignal(1, time[i], tdx+1, pfx);
+
+                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,is_valid ? STYLE_DASH : STYLE_SOLID);
                     }
                     if(isn)ld1l=state.d1_i;
                 }
@@ -1000,37 +1004,45 @@ void SendTestNotif()
     if(InpAlertPush)  SendNotification(msg);
     Print("=== KUTU TEST BILDIRIMI ===" + nl + msg);
 
-    // Ayrica CHoCH sinyali formatini test etmek icin ornek bir GECERLI bildirim atalim
-    string sig_emo = "🟢";
-    string sig_name = "BULLISH (Alis)";
-    string reason = "1. Guncel Kutu yonu destekliyor.";
+    if(InpTestValid) {
+        // Gecerli Test 1 (1. Kutu onayli)
+        string test_msg1 = "📦 === ISLEME DAHIL OLABILIR (TEST) === 📦\n";
+        test_msg1 += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
+        test_msg1 += "--------------------------------------\n";
+        test_msg1 += "🟢 Sinyal: BULLISH (Alis) CHoCH\n";
+        test_msg1 += "🔢 Kacinci: 1. Sinyal\n";
+        test_msg1 += "✅ Durum/Sebep: 1. Guncel Kutu yonu destekliyor.";
+        if(InpAlertPopup) Alert(test_msg1); if(InpAlertPush) SendNotification(test_msg1); Print(test_msg1);
 
-    string test_msg = "📦 === ISLEME DAHIL OLABILIR (TEST) === 📦\n";
-    test_msg += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
-    test_msg += "--------------------------------------\n";
-    test_msg += sig_emo + " Sinyal: " + sig_name + " CHoCH\n";
-    test_msg += "🔢 Kacinci: 1. Sinyal\n";
-    test_msg += "✅ Durum/Sebep: " + reason;
+        // Gecerli Test 2 (2., 3., 4. Kutu onayli)
+        string test_msg2 = "📦 === ISLEME DAHIL OLABILIR (TEST) === 📦\n";
+        test_msg2 += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
+        test_msg2 += "--------------------------------------\n";
+        test_msg2 += "🔴 Sinyal: BEARISH (Satis) CHoCH\n";
+        test_msg2 += "🔢 Kacinci: 2. Sinyal\n";
+        test_msg2 += "✅ Durum/Sebep: 2., 3. ve 4. Kutularin hepsi yonu destekliyor.";
+        if(InpAlertPopup) Alert(test_msg2); if(InpAlertPush) SendNotification(test_msg2); Print(test_msg2);
+    }
 
-    if(InpAlertPopup) Alert(test_msg);
-    if(InpAlertPush)  SendNotification(test_msg);
-    Print(test_msg);
+    if(InpTestInvalid) {
+        // Gecersiz Test 1 (1. Kutu yatay)
+        string test_msg3 = "⚠️ === ISLEM GECERSIZ (TEST) === ⚠️\n";
+        test_msg3 += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
+        test_msg3 += "--------------------------------------\n";
+        test_msg3 += "🔴 Sinyal: BEARISH (Satis) CHoCH\n";
+        test_msg3 += "🔢 Kacinci: 1. Sinyal\n";
+        test_msg3 += "❌ Durum/Sebep: 1. Kutu yataya baglamis (Isleme giris firsati degil).";
+        if(InpAlertPopup) Alert(test_msg3); if(InpAlertPush) SendNotification(test_msg3); Print(test_msg3);
 
-    // Ornek bir GECERSIZ bildirim atalim
-    string sig_emo_inv = "🔴";
-    string sig_name_inv = "BEARISH (Satis)";
-    string reason_inv = "1. Kutu yataya baglamis (Isleme giris firsati degil).";
-
-    string test_msg_inv = "⚠️ === ISLEM GECERSIZ (TEST) === ⚠️\n";
-    test_msg_inv += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
-    test_msg_inv += "--------------------------------------\n";
-    test_msg_inv += sig_emo_inv + " Sinyal: " + sig_name_inv + " CHoCH\n";
-    test_msg_inv += "🔢 Kacinci: 2. Sinyal\n";
-    test_msg_inv += "❌ Durum/Sebep: " + reason_inv;
-
-    if(InpAlertPopup) Alert(test_msg_inv);
-    if(InpAlertPush)  SendNotification(test_msg_inv);
-    Print(test_msg_inv);
+        // Gecersiz Test 2 (2. Kutu yatay / degilmemis)
+        string test_msg4 = "⚠️ === ISLEM GECERSIZ (TEST) === ⚠️\n";
+        test_msg4 += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
+        test_msg4 += "--------------------------------------\n";
+        test_msg4 += "🟢 Sinyal: BULLISH (Alis) CHoCH\n";
+        test_msg4 += "🔢 Kacinci: 2. Sinyal\n";
+        test_msg4 += "❌ Durum/Sebep: 2. Kutu yatay veya 25 mumdur degilmemis.";
+        if(InpAlertPopup) Alert(test_msg4); if(InpAlertPush) SendNotification(test_msg4); Print(test_msg4);
+    }
 }
 
 // ─── OnInit ───────────────────────────────────────────────────────
