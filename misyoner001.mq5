@@ -45,7 +45,7 @@ input color  InpColorWeakBear     = C'55,15,0';
 
 // ─── Yatay Bölge ─────────────────────────────────────────────────
 input group "--- YATAY BOLGE ---"
-input int    InpExhaustionCount = 3;  // Kac kirilma sonrasi YATAY sayilir (ust+alt toplam, 0=kapali)
+input int    InpExhaustionCount = 4;  // Kac kirilma sonrasi YATAY sayilir (ust+alt toplam, 0=kapali)
 
 // ─── Test Bildirimi ───────────────────────────────────────────────
 input group "--- BILDIRIM TEST ---"
@@ -931,13 +931,13 @@ string AnalyzeTFBoxes(ENUM_TIMEFRAMES tf, double days_inp, datetime &out_ev_time
     // Zaman bilgisi: mum sayısı + gerçek süre
     string time_str = "";
     if(g_shd_ev_t[bk]>0){
-        int mum_ps=PeriodSeconds(tf);
-        int mums  =(mum_ps>0)?(int)((TimeCurrent()-g_shd_ev_t[bk])/mum_ps):0;
-        string ago=FormatTimeAgo(g_shd_ev_t[bk]);
+        int bars_passed = iBarShift(Symbol(), tf, g_shd_ev_t[bk]);
+        int hours_passed = (bars_passed * PeriodSeconds(tf)) / 3600;
+
         if(g_shd_touch[bk]==1)
-            time_str=StringFormat(" (%d mum icinde, %s)", g_shd_cnt_in[bk], ago);
+            time_str=StringFormat(" (%d mum icinde)", g_shd_cnt_in[bk]);
         else if(g_shd_touch[bk]>=2)
-            time_str=StringFormat(" (+%d mum once, %s)", mums, ago);
+            time_str=StringFormat(" (%d mum - %d saat once)", bars_passed, hours_passed);
     }
 
     return StringFormat("%s: [%s] %s%s", lbl, kutu, status, time_str);
