@@ -91,6 +91,9 @@ int      g_shd_cnt_in[SHD_BOX_MAX];
 datetime g_shd_ev_t[SHD_BOX_MAX];
 int      g_shd_break_up[SHD_BOX_MAX];  // alttan gelip yukarı kıran sayısı
 int      g_shd_break_dn[SHD_BOX_MAX];  // üstten gelip aşağı kıran sayısı
+int      g_shd_dir[SHD_BOX_MAX];
+int      g_shd_bars_since_touch[SHD_BOX_MAX];
+datetime g_shd_last_bar_time[SHD_BOX_MAX];
 int      g_shd_cnt = 0;
 
 string   g_bx_nm[BOX_MAX];
