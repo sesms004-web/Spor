@@ -49,9 +49,7 @@ input int    InpExhaustionCount = 3;  // Kac kirilma sonrasi YATAY sayilir (ust+
 
 // ─── Test Bildirimi ───────────────────────────────────────────────
 input group "--- BILDIRIM TEST ---"
-input bool   InpNotifTest    = false;  // Kutu Test Bildirimi (1 kez atar)
-input bool   InpTestValid    = true;   // Gecerli CHoCH Test Sinyali Gonder
-input bool   InpTestInvalid  = true;   // Gecersiz CHoCH Test Sinyali Gonder
+input bool   InpNotifTest    = false;  // Test Bildirimi (1 kez atar)
 input bool   InpAlertPush    = true;   // Push Bildirimi
 input bool   InpAlertPopup   = false;  // Popup Alert
 
@@ -93,9 +91,6 @@ int      g_shd_cnt_in[SHD_BOX_MAX];
 datetime g_shd_ev_t[SHD_BOX_MAX];
 int      g_shd_break_up[SHD_BOX_MAX];  // alttan gelip yukarı kıran sayısı
 int      g_shd_break_dn[SHD_BOX_MAX];  // üstten gelip aşağı kıran sayısı
-int      g_shd_dir[SHD_BOX_MAX];
-int      g_shd_bars_since_touch[SHD_BOX_MAX];
-datetime g_shd_last_bar_time[SHD_BOX_MAX];
 int      g_shd_cnt = 0;
 
 string   g_bx_nm[BOX_MAX];
@@ -106,11 +101,6 @@ int      g_bx_touch_state[BOX_MAX];
 int      g_bx_approach[BOX_MAX];
 int      g_bx_inside_cnt[BOX_MAX];
 datetime g_bx_event_time[BOX_MAX];
-int      g_bx_dir[BOX_MAX];
-int      g_bx_bars_since_touch[BOX_MAX];
-datetime g_bx_last_bar_time[BOX_MAX];
-int      g_bx_break_up[BOX_MAX];
-int      g_bx_break_dn[BOX_MAX];
 string   g_bx_wk_abv_nm[BOX_MAX];
 string   g_bx_wk_blw_nm[BOX_MAX];
 double   g_bx_wk_abv_top[BOX_MAX];
@@ -196,9 +186,6 @@ void BxAdd(string nm,double top,double bot,color box_clr,const datetime &time[],
         g_shd_ev_t[g_shd_cnt]     = 0;
         g_shd_break_up[g_shd_cnt] = 0;
         g_shd_break_dn[g_shd_cnt] = 0;
-        g_shd_dir[g_shd_cnt]      = (box_clr==InpColorBoxBull||box_clr==InpColorBoxBullFaint)?1:-1;
-        g_shd_bars_since_touch[g_shd_cnt] = 0;
-        g_shd_last_bar_time[g_shd_cnt] = 0;
         g_shd_cnt++;
         return;
     }
@@ -209,11 +196,6 @@ void BxAdd(string nm,double top,double bot,color box_clr,const datetime &time[],
     g_bx_top[g_bx_cnt]=top; g_bx_bot[g_bx_cnt]=bot;
     g_bx_touch_state[g_bx_cnt]=0; g_bx_approach[g_bx_cnt]=0;
     g_bx_inside_cnt[g_bx_cnt]=0;  g_bx_event_time[g_bx_cnt]=0;
-    g_bx_dir[g_bx_cnt] = (box_clr==InpColorBoxBull||box_clr==InpColorBoxBullFaint)?1:-1;
-    g_bx_bars_since_touch[g_bx_cnt] = 0;
-    g_bx_last_bar_time[g_bx_cnt] = 0;
-    g_bx_break_up[g_bx_cnt] = 0;
-    g_bx_break_dn[g_bx_cnt] = 0;
     g_bx_wk_abv_nm[g_bx_cnt]="BoxWkAbv_"+IntegerToString(g_bx_cnt);
     g_bx_wk_blw_nm[g_bx_cnt]="BoxWkBlw_"+IntegerToString(g_bx_cnt);
     g_bx_wk_abv_top[g_bx_cnt]=top+wk_sz;
@@ -230,13 +212,6 @@ void ShdBxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time
         if(g_shd_state[k]==0)continue;
         double top=g_shd_top[k],bot=g_shd_bot[k];
         bool im=(h>=bot)&&(l<=top);
-        if(im) {
-            g_shd_bars_since_touch[k] = 0;
-            g_shd_last_bar_time[k] = bar_time; // Reset is always registered
-        } else if(bar_time != g_shd_last_bar_time[k]) {
-            g_shd_bars_since_touch[k]++;
-            g_shd_last_bar_time[k] = bar_time;
-        }
         int na;if(prev_c>top)na=1;else if(prev_c<bot)na=-1;else na=g_shd_appr[k];
         int ts=g_shd_touch[k];
         if(ts==0){
@@ -281,13 +256,6 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time)
         if(g_bx_state[k]==0)continue;
         double top=g_bx_top[k],bot=g_bx_bot[k];
         bool im=(h>=bot)&&(l<=top);
-        if(im) {
-            g_bx_bars_since_touch[k] = 0;
-            g_bx_last_bar_time[k] = bar_time; // Reset is always registered
-        } else if(bar_time != g_bx_last_bar_time[k]) {
-            g_bx_bars_since_touch[k]++;
-            g_bx_last_bar_time[k] = bar_time;
-        }
         int na;if(prev_c>top)na=1;else if(prev_c<bot)na=-1;else na=g_bx_approach[k];
         int ts=g_bx_touch_state[k];
         if(ts==0){if(im){
@@ -296,14 +264,8 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time)
         }}
         else if(ts==1){if(im){g_bx_inside_cnt[k]++;g_bx_event_time[k]=bar_time;}
             else{bool bd=(c<bot),bu=(c>top);int ap=g_bx_approach[k];
-                if(ap==1){
-                    if(bd){g_bx_touch_state[k]=2; g_bx_break_dn[k]++;}
-                    else if(bu){g_bx_touch_state[k]=3; g_bx_break_up[k]++;}
-                }
-                else{
-                    if(bu){g_bx_touch_state[k]=2; g_bx_break_up[k]++;}
-                    else if(bd){g_bx_touch_state[k]=3; g_bx_break_dn[k]++;}
-                }
+                if(ap==1){if(bd)g_bx_touch_state[k]=2;else if(bu)g_bx_touch_state[k]=3;}
+                else{if(bu)g_bx_touch_state[k]=2;else if(bd)g_bx_touch_state[k]=3;}
                 g_bx_event_time[k]=bar_time;}}
         else{if(im){
             g_bx_approach[k]=(na!=0)?na:(c>(top+bot)/2.0?1:-1);
@@ -439,132 +401,13 @@ color GetChochColor(int tdx)
     switch(tdx)
     {
         case 0: return clrBlack;                // 1. sinyal
-        case 1: return clrOrange;               // 2. sinyal
+        case 1: return clrYellow;               // 2. sinyal
         case 2: return clrRed;                  // 3. sinyal
         case 3: return clrGray;                 // 4. sinyal
         case 4: return C'255,230,180';          // 5. sinyal - krem
     }
     return clrWhite;
 }
-
-
-// ─── İşlem Sinyal Değerlendirmesi ─────────────────────────────────
-bool EvaluateTradeSignal(int signal_dir, datetime sig_time, int trade_num, string pfx)
-{
-    // Maksimum 2 sinyal atılır (1. ve 2. CHoCH)
-    if(trade_num > 2) return false;
-
-    // Aktif kutuları bul (en güncelden eskiye)
-    int valid_boxes[4];
-    int valid_dirs[4];
-    bool is_exhausted[4];
-    bool is_stale[4];
-    int box_count = 0;
-
-    for(int k=g_bx_cnt-1; k>=0 && box_count<4; k--)
-    {
-        if(g_bx_state[k] > 0)
-        {
-            valid_boxes[box_count] = k;
-            valid_dirs[box_count] = g_bx_dir[k];
-
-            int total_breaks = g_bx_break_up[k] + g_bx_break_dn[k];
-            is_exhausted[box_count] = (InpExhaustionCount > 0) &&
-                                      (g_bx_break_up[k] >= 1) &&
-                                      (g_bx_break_dn[k] >= 1) &&
-                                      (total_breaks >= InpExhaustionCount);
-
-            is_stale[box_count] = (g_bx_bars_since_touch[k] >= 25);
-            box_count++;
-        }
-    }
-
-    if(box_count == 0) return false; // Kutu yoksa islem yok
-
-    string sig_name = (signal_dir == 1) ? "BULLISH (Alis)" : "BEARISH (Satis)";
-    bool execute = false;
-    string reason = "";
-
-    // Kural 1: 1. Güncel kutu yönü destekliyor mu?
-    if(valid_dirs[0] == signal_dir) {
-        if(is_exhausted[0]) {
-            reason = "1. Kutu yataya baglamis (Isleme giris firsati degil).";
-        } else if(is_stale[0]) {
-            reason = "1. Kutuya 25 mumdur degilmemis (Isleme giris firsati degil).";
-        } else {
-            execute = true;
-            reason = "1. Guncel Kutu yonu destekliyor.";
-        }
-    }
-    // Kural 2: 1. Kutu desteklemiyorsa, 2. Kutu destekliyor mu?
-    else if(box_count > 1 && valid_dirs[1] == signal_dir) {
-        // Eger 2. kutu destekliyorsa, 3. ve 4. kutuya da bakilir
-        if(is_exhausted[1] || is_stale[1]) {
-            reason = "2. Kutu yatay veya 25 mumdur degilmemis.";
-        } else if(box_count >= 4) {
-            bool box3_ok = (valid_dirs[2] == signal_dir && !is_exhausted[2] && !is_stale[2]);
-            bool box4_ok = (valid_dirs[3] == signal_dir && !is_exhausted[3] && !is_stale[3]);
-
-            if(box3_ok && box4_ok) {
-                execute = true;
-                reason = "2., 3. ve 4. Kutularin hepsi yonu destekliyor.";
-            } else {
-                reason = "2. kutu destekliyor ama 3. ve 4. kutulardan biri desteklemiyor/yatay/eskimis.";
-            }
-        } else {
-            reason = "2. kutu destekliyor ancak 3. veya 4. kutu yok.";
-        }
-    } else {
-        reason = "1. ve 2. kutular yonu desteklemiyor.";
-    }
-
-    string sig_emo = (signal_dir == 1) ? "🟢" : "🔴";
-    string header = execute ? "📦 === ISLEME DAHIL OLABILIR === 📦" : "⚠️ === ISLEM GECERSIZ === ⚠️";
-    string check_emo = execute ? "✅" : "❌";
-
-    string msg = header + "\n";
-    msg += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
-    msg += "--------------------------------------\n";
-    msg += sig_emo + " Sinyal: " + sig_name + " CHoCH\n";
-    msg += "🔢 Kacinci: " + IntegerToString(trade_num) + ". Sinyal\n";
-
-    // Kutu Durumlarini Ekle
-    msg += "--- Kutu Durumlari ---\n";
-    for(int i=0; i<box_count; i++) {
-        string b_dir = (valid_dirs[i] == 1) ? "🟢 Yukari" : "🔴 Asagi";
-        string b_state = "";
-        if(is_exhausted[i]) b_state = "⚠️ YATAY";
-        else if(is_stale[i]) b_state = "⏱️ Bayat (25+ mum)";
-        else b_state = "✅ Gecerli";
-        msg += "🔹 " + IntegerToString(i+1) + ". Kutu: " + b_dir + " | " + b_state + "\n";
-    }
-    if(box_count == 0) msg += "⚪ Hic guncel kutu yok.\n";
-
-    msg += "--------------------------------------\n";
-    msg += check_emo + " Durum/Sebep: " + reason;
-
-    // Sadece canlı piyasada bildirim at
-    if(pfx == "Live_") {
-        if(InpAlertPopup) Alert(msg);
-        if(InpAlertPush)  SendNotification(msg);
-        Print(msg);
-    }
-
-    // Geçerli ise çizgi çiz
-    if(execute) {
-        string vname = "Signal_VLine_" + IntegerToString((int)sig_time) + "_" + IntegerToString(trade_num);
-        if(ObjectFind(0, vname) < 0) {
-            ObjectCreate(0, vname, OBJ_VLINE, 0, sig_time, 0);
-            ObjectSetInteger(0, vname, OBJPROP_COLOR, (signal_dir==1)?clrGreen:clrRed);
-            ObjectSetInteger(0, vname, OBJPROP_STYLE, STYLE_DASH);
-            ObjectSetInteger(0, vname, OBJPROP_WIDTH, 1);
-            ObjectSetInteger(0, vname, OBJPROP_BACK, true);
-        }
-    }
-
-    return execute;
-}
-
 
 // ─── ProcessBar ───────────────────────────────────────────────────
 void ProcessBar(int i,
@@ -693,10 +536,7 @@ void ProcessBar(int i,
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_h,GetTimeSafe(time,state.d1_i),state.d1_l,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_l,GetTimeSafe(time,state.t2_i),state.t2_h,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_h,GetTimeSafe(time,i),state.d1_l,sc,1,STYLE_DOT);
-                        // Trade signal validation
-                        bool is_valid = EvaluateTradeSignal(-1, time[i], tdx+1, pfx);
-
-                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*10,state.d1_l,sc,3,is_valid ? STYLE_DASH : STYLE_SOLID);
+                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,STYLE_SOLID);
                     }
                     if(isn)ld1b=state.d1_i;
                 }
@@ -730,10 +570,7 @@ void ProcessBar(int i,
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_l,GetTimeSafe(time,state.d1_i),state.d1_h,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_h,GetTimeSafe(time,state.t2_i),state.t2_l,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_l,GetTimeSafe(time,i),state.d1_h,sc,1,STYLE_DOT);
-                        // Trade signal validation
-                        bool is_valid = EvaluateTradeSignal(1, time[i], tdx+1, pfx);
-
-                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*10,state.d1_h,sc,3,is_valid ? STYLE_DASH : STYLE_SOLID);
+                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,STYLE_SOLID);
                     }
                     if(isn)ld1l=state.d1_i;
                 }
@@ -1004,72 +841,19 @@ void SendTestNotif()
     string nl  = "\n";
     string sep = "--------------------";
 
-    string msg = "📦 === TEST KUTU ANALIZI === 📦" + nl;
-    msg += Symbol() + " | Zaman: " + TimeToString(TimeCurrent(),TIME_DATE|TIME_MINUTES) + nl;
+    string msg = "=== KUTU ANALIZI ===" + nl;
+    msg += Symbol() + " | " + TimeToString(TimeCurrent(),TIME_DATE|TIME_MINUTES) + nl;
     msg += sep + nl;
 
     for(int i=0;i<count;i++)
-        msg += "🔹 " + IntegerToString(i+1) + ". " + results[i] + nl;
+        msg += IntegerToString(i+1) + ". " + results[i] + nl;
 
     msg += sep + nl;
-    msg += "⚠️ Icinde | Deldi | Tepki | YATAY";
+    msg += "Icinde|Deldi|Tepki|YATAY";
 
     if(InpAlertPopup) Alert(msg);
     if(InpAlertPush)  SendNotification(msg);
     Print("=== KUTU TEST BILDIRIMI ===" + nl + msg);
-
-    if(InpTestValid) {
-        string test_msg1 = "📦 === ISLEME DAHIL OLABILIR (TEST) === 📦\n";
-        test_msg1 += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
-        test_msg1 += "--------------------------------------\n";
-        test_msg1 += "🟢 Sinyal: BULLISH (Alis) CHoCH\n";
-        test_msg1 += "🔢 Kacinci: 1. Sinyal\n";
-        test_msg1 += "--- Kutu Durumlari ---\n";
-        test_msg1 += "🔹 1. Kutu: 🟢 Yukari | ✅ Gecerli\n";
-        test_msg1 += "🔹 2. Kutu: 🔴 Asagi | ✅ Gecerli\n";
-        test_msg1 += "--------------------------------------\n";
-        test_msg1 += "✅ Durum/Sebep: 1. Guncel Kutu yonu destekliyor.";
-        if(InpAlertPopup) Alert(test_msg1); if(InpAlertPush) SendNotification(test_msg1); Print(test_msg1);
-
-        string test_msg2 = "📦 === ISLEME DAHIL OLABILIR (TEST) === 📦\n";
-        test_msg2 += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
-        test_msg2 += "--------------------------------------\n";
-        test_msg2 += "🔴 Sinyal: BEARISH (Satis) CHoCH\n";
-        test_msg2 += "🔢 Kacinci: 2. Sinyal\n";
-        test_msg2 += "--- Kutu Durumlari ---\n";
-        test_msg2 += "🔹 1. Kutu: 🟢 Yukari | ✅ Gecerli\n";
-        test_msg2 += "🔹 2. Kutu: 🔴 Asagi | ✅ Gecerli\n";
-        test_msg2 += "🔹 3. Kutu: 🔴 Asagi | ✅ Gecerli\n";
-        test_msg2 += "🔹 4. Kutu: 🔴 Asagi | ✅ Gecerli\n";
-        test_msg2 += "--------------------------------------\n";
-        test_msg2 += "✅ Durum/Sebep: 2., 3. ve 4. Kutularin hepsi yonu destekliyor.";
-        if(InpAlertPopup) Alert(test_msg2); if(InpAlertPush) SendNotification(test_msg2); Print(test_msg2);
-    }
-
-    if(InpTestInvalid) {
-        string test_msg3 = "⚠️ === ISLEM GECERSIZ (TEST) === ⚠️\n";
-        test_msg3 += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
-        test_msg3 += "--------------------------------------\n";
-        test_msg3 += "🔴 Sinyal: BEARISH (Satis) CHoCH\n";
-        test_msg3 += "🔢 Kacinci: 1. Sinyal\n";
-        test_msg3 += "--- Kutu Durumlari ---\n";
-        test_msg3 += "🔹 1. Kutu: 🔴 Asagi | ⚠️ YATAY\n";
-        test_msg3 += "--------------------------------------\n";
-        test_msg3 += "❌ Durum/Sebep: 1. Kutu yataya baglamis (Isleme giris firsati degil).";
-        if(InpAlertPopup) Alert(test_msg3); if(InpAlertPush) SendNotification(test_msg3); Print(test_msg3);
-
-        string test_msg4 = "⚠️ === ISLEM GECERSIZ (TEST) === ⚠️\n";
-        test_msg4 += Symbol() + " | Zaman Dilimi: " + EnumToString(Period()) + "\n";
-        test_msg4 += "--------------------------------------\n";
-        test_msg4 += "🟢 Sinyal: BULLISH (Alis) CHoCH\n";
-        test_msg4 += "🔢 Kacinci: 2. Sinyal\n";
-        test_msg4 += "--- Kutu Durumlari ---\n";
-        test_msg4 += "🔹 1. Kutu: 🔴 Asagi | ✅ Gecerli\n";
-        test_msg4 += "🔹 2. Kutu: 🟢 Yukari | ⏱️ Bayat (25+ mum)\n";
-        test_msg4 += "--------------------------------------\n";
-        test_msg4 += "❌ Durum/Sebep: 2. Kutu yatay veya 25 mumdur degilmemis.";
-        if(InpAlertPopup) Alert(test_msg4); if(InpAlertPush) SendNotification(test_msg4); Print(test_msg4);
-    }
 }
 
 // ─── OnInit ───────────────────────────────────────────────────────
@@ -1082,7 +866,6 @@ void OnDeinit(const int reason)
     ObjectsDeleteAll(0,"HLine_");  ObjectsDeleteAll(0,"Live_");
     ObjectsDeleteAll(0,"CHoCH_Path_");ObjectsDeleteAll(0,"CHoCH_Signal_");ObjectsDeleteAll(0,"CHoCH_Text_");
     ObjectsDeleteAll(0,"Box_");    ObjectsDeleteAll(0,"BoxWkAbv_");ObjectsDeleteAll(0,"BoxWkBlw_");
-    ObjectsDeleteAll(0,"Signal_VLine_");
     DeleteLine("LiveLeg");
     BxClear();
     Comment("");
@@ -1113,7 +896,6 @@ int OnCalculate(const int rates_total,const int prev_calculated,
         ObjectsDeleteAll(0,"Live_"); ObjectsDeleteAll(0,"CHoCH_Path_");ObjectsDeleteAll(0,"CHoCH_Signal_");
         ObjectsDeleteAll(0,"CHoCH_Text_");ObjectsDeleteAll(0,"Box_");
         ObjectsDeleteAll(0,"BoxWkAbv_");ObjectsDeleteAll(0,"BoxWkBlw_");
-    ObjectsDeleteAll(0,"Signal_VLine_");
         BxClear();
 
         int si=0;
