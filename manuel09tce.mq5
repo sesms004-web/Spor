@@ -514,7 +514,7 @@ color GetChochColor(int tdx)
     switch(tdx)
     {
         case 0: return clrBlack;
-        case 1: return clrYellow;
+        case 1: return clrDarkOrange;
         case 2: return clrRed;
         case 3: return clrGray;
         case 4: return C'255,230,180';
@@ -860,7 +860,7 @@ void ProcessBar(int i,
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_h,GetTimeSafe(time,state.d1_i),state.d1_l,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_l,GetTimeSafe(time,state.t2_i),state.t2_h,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_h,GetTimeSafe(time,i),state.d1_l,sc,1,STYLE_DOT);
-                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,(tdx<=4)?STYLE_DASH:STYLE_SOLID,true);
+                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*15,state.d1_l,sc,3,(tdx<=4)?STYLE_DASH:STYLE_SOLID);
                     }
                     // ── Tum CHoCH'larda bildirim ──
                     // isn'den bağımsız: tdx her zaman resolve edildi
@@ -906,7 +906,7 @@ void ProcessBar(int i,
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_l,GetTimeSafe(time,state.d1_i),state.d1_h,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_h,GetTimeSafe(time,state.t2_i),state.t2_l,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_l,GetTimeSafe(time,i),state.d1_h,sc,1,STYLE_DOT);
-                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,(tdx<=4)?STYLE_DASH:STYLE_SOLID,true);
+                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*15,state.d1_h,sc,3,(tdx<=4)?STYLE_DASH:STYLE_SOLID);
                     }
                     // ── Tum CHoCH'larda bildirim ──
                     {double pb_disp=(rng>0)?((cur_maj_h-state.t2_l)/rng*100.0):0;
