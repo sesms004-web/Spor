@@ -852,8 +852,8 @@ void ProcessBar(int i,
                     if(isn){
                         bool vs=false;
                         if(g_trade_count_h==0)vs=true;
-                        else if(g_trade_count_h<5){double pv=MathMax(g_trade_t1_h[g_trade_count_h-1],g_trade_t2_h[g_trade_count_h-1]);if(state.t2_h>pv)vs=true;}
-                        if(vs&&g_trade_count_h<5){tdx=g_trade_count_h;g_trade_t1_h[tdx]=state.t1_h;g_trade_t2_h[tdx]=state.t2_h;g_trade_count_h++;}
+                        else if(g_trade_count_h<2){double pv=MathMax(g_trade_t1_h[g_trade_count_h-1],g_trade_t2_h[g_trade_count_h-1]);if(state.t2_h>pv)vs=true;}
+                        if(vs&&g_trade_count_h<2){tdx=g_trade_count_h;g_trade_t1_h[tdx]=state.t1_h;g_trade_t2_h[tdx]=state.t2_h;g_trade_count_h++;}
                     }else{for(int x=0;x<g_trade_count_h;x++)if(g_trade_t1_h[x]==state.t1_h&&g_trade_t2_h[x]==state.t2_h){tdx=x;break;}}
                     if(isn&&tdx>=0&&InpShowChoch){
                         color sc=GetChochColor(tdx);
@@ -898,8 +898,8 @@ void ProcessBar(int i,
                     if(isn){
                         bool vs=false;
                         if(g_trade_count_l==0)vs=true;
-                        else if(g_trade_count_l<5){double pv=MathMin(g_trade_t1_l[g_trade_count_l-1],g_trade_t2_l[g_trade_count_l-1]);if(state.t2_l<pv)vs=true;}
-                        if(vs&&g_trade_count_l<5){tdx=g_trade_count_l;g_trade_t1_l[tdx]=state.t1_l;g_trade_t2_l[tdx]=state.t2_l;g_trade_count_l++;}
+                        else if(g_trade_count_l<2){double pv=MathMin(g_trade_t1_l[g_trade_count_l-1],g_trade_t2_l[g_trade_count_l-1]);if(state.t2_l<pv)vs=true;}
+                        if(vs&&g_trade_count_l<2){tdx=g_trade_count_l;g_trade_t1_l[tdx]=state.t1_l;g_trade_t2_l[tdx]=state.t2_l;g_trade_count_l++;}
                     }else{for(int x=0;x<g_trade_count_l;x++)if(g_trade_t1_l[x]==state.t1_l&&g_trade_t2_l[x]==state.t2_l){tdx=x;break;}}
                     if(isn&&tdx>=0&&InpShowChoch){
                         color sc=GetChochColor(tdx);
