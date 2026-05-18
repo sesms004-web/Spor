@@ -860,13 +860,13 @@ void ProcessBar(int i,
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_h,GetTimeSafe(time,state.d1_i),state.d1_l,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_l,GetTimeSafe(time,state.t2_i),state.t2_h,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_h,GetTimeSafe(time,i),state.d1_l,sc,1,STYLE_DOT);
-                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,(tdx<=4)?STYLE_DASH:STYLE_SOLID);
+                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,(tdx<=4)?STYLE_DASH:STYLE_SOLID,true);
                     }
                     // ── Tum CHoCH'larda bildirim ──
                     // isn'den bağımsız: tdx her zaman resolve edildi
                     {double pb_disp=(rng>0)?((state.t2_h-cur_maj_l)/rng*100.0):0;
                     state.last_choch_tdx=tdx;state.last_choch_strong=is_strong;state.last_choch_pb=pb_disp;}
-                    if(tdx>=0 && tdx<=4 && !g_shadow_mode && !is_history){
+                    if(isn && tdx>=0 && tdx<=4 && !g_shadow_mode && !is_history){
                         if(state.d1_i != g_last_notif_d1i_sell){
                             g_last_notif_d1i_sell = state.d1_i;
                             double pb_disp=(rng>0)?((state.t2_h-cur_maj_l)/rng*100.0):0;
@@ -906,12 +906,12 @@ void ProcessBar(int i,
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t1_i),state.t1_l,GetTimeSafe(time,state.d1_i),state.d1_h,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_h,GetTimeSafe(time,state.t2_i),state.t2_l,sc,1,STYLE_DOT);
                         DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_l,GetTimeSafe(time,i),state.d1_h,sc,1,STYLE_DOT);
-                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,(tdx<=4)?STYLE_DASH:STYLE_SOLID);
+                        DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,(tdx<=4)?STYLE_DASH:STYLE_SOLID,true);
                     }
                     // ── Tum CHoCH'larda bildirim ──
                     {double pb_disp=(rng>0)?((cur_maj_h-state.t2_l)/rng*100.0):0;
                     state.last_choch_tdx=tdx;state.last_choch_strong=is_strong;state.last_choch_pb=pb_disp;}
-                    if(tdx>=0 && tdx<=4 && !g_shadow_mode && !is_history){
+                    if(isn && tdx>=0 && tdx<=4 && !g_shadow_mode && !is_history){
                         if(state.d1_i != g_last_notif_d1i_buy){
                             g_last_notif_d1i_buy = state.d1_i;
                             double pb_disp=(rng>0)?((cur_maj_h-state.t2_l)/rng*100.0):0;
