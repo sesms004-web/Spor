@@ -26,11 +26,23 @@ input color  InpColorMin = clrRed;
 input color  InpColorBull = clrGreen;
 input color  InpColorBear = clrRed;
 
+//--- CHoCH Visuals ---
+input double InpMinPullbackPct   = 40.0;
+input color  InpColorChochStrong = clrDarkOrange;
+input color  InpColorChochWeak   = clrYellow;
+input bool   InpShowChoch        = true;
+
 
 
 //--- Globals ---
 int g_counter = 0;
 datetime g_anchor_time = 0;
+
+string GetUniqueName(string base)
+  {
+   g_counter++;
+   return base + "_" + IntegerToString(g_counter);
+  }
 
 void DrawLine(string name, datetime time1, double price1, datetime time2, double price2, color clr, int width, ENUM_LINE_STYLE style, bool ray_right=false)
   {
@@ -150,6 +162,15 @@ struct SState
    string            cur_top_line;
    string            cur_bot_line;
 
+   double            t1_h, t1_l; int t1_i;
+   double            d1_h, d1_l; int d1_i;
+   double            t2_h, t2_l; int t2_i;
+   int               choch_dir;
+   int               last_choch_dir;
+   double            last_choch_level;
+   datetime          last_choch_time;
+   int               last_choch_i;
+
    CStack            st_h;
    CStack            st_l;
 
@@ -184,6 +205,15 @@ struct SState
       cur_top_line   = source.cur_top_line;
       cur_bot_line   = source.cur_bot_line;
 
+      t1_h = source.t1_h; t1_l = source.t1_l; t1_i = source.t1_i;
+      d1_h = source.d1_h; d1_l = source.d1_l; d1_i = source.d1_i;
+      t2_h = source.t2_h; t2_l = source.t2_l; t2_i = source.t2_i;
+      choch_dir = source.choch_dir;
+      last_choch_dir = source.last_choch_dir;
+      last_choch_level = source.last_choch_level;
+      last_choch_time = source.last_choch_time;
+      last_choch_i = source.last_choch_i;
+
       st_h.CopyFrom(source.st_h);
       st_l.CopyFrom(source.st_l);
      }
@@ -192,11 +222,7 @@ struct SState
 SState g_state_hist;
 SState g_state_curr;
 
-string GetUniqueName(string prefix)
-  {
-   g_counter++;
-   return prefix + "_" + IntegerToString(g_counter);
-  }
+
 
 double GetDaysForTF(ENUM_TIMEFRAMES tf)
   {
@@ -357,6 +383,9 @@ void OnDeinit(const int reason)
    ObjectsDeleteAll(0, "Major_");
    ObjectsDeleteAll(0, "HLine_");
    ObjectsDeleteAll(0, "LiveLeg_");
+   ObjectsDeleteAll(0, "Structure_CHoCH_");
+      ObjectsDeleteAll(0, "CHoCH_");
+   ObjectsDeleteAll(0, "Live_");
   }
 
 //+------------------------------------------------------------------+
@@ -397,6 +426,18 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                state.st_l.Pop();
               }
            }
+         if(state.choch_dir==-1&&state.t2_h!=0)state.choch_dir=0;
+         if(state.choch_dir==1&&state.t2_l!=0&&state.min_h<=state.d1_h)state.choch_dir=0;
+         if(state.maj_tr==-1) {
+             if(state.choch_dir==0||state.choch_dir==1){
+                 state.t1_h=state.min_h;state.t1_l=state.min_l;state.t1_i=state.min_h_i;
+                 state.d1_h=0;state.d1_l=0;state.d1_i=0;
+                 state.t2_h=0;state.t2_l=0;state.t2_i=0;state.choch_dir=-1;
+             }else if(state.choch_dir==-1){
+                 if(state.d1_l==0){state.d1_l=state.min_l;state.d1_i=state.min_l_i;}
+                 if(state.d1_l!=0&&state.t2_h==0){state.t2_h=state.min_h;state.t2_i=state.min_h_i;}
+             }
+         }
          state.min_tr = -1;
          state.lp_i = state.min_h_i;
          state.lp_p = state.min_h;
@@ -431,6 +472,18 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                state.st_h.Pop();
               }
            }
+         if(state.choch_dir==1&&state.t2_l!=0)state.choch_dir=0;
+         if(state.choch_dir==-1&&state.t2_h!=0&&state.min_l>=state.d1_l)state.choch_dir=0;
+         if(state.maj_tr==1) {
+             if(state.choch_dir==0||state.choch_dir==-1){
+                 state.t1_l=state.min_l;state.t1_h=state.min_h;state.t1_i=state.min_l_i;
+                 state.d1_l=0;state.d1_h=0;state.d1_i=0;
+                 state.t2_l=0;state.t2_h=0;state.t2_i=0;state.choch_dir=1;
+             }else if(state.choch_dir==1){
+                 if(state.d1_h==0){state.d1_h=state.min_h;state.d1_i=state.min_h_i;}
+                 if(state.d1_h!=0&&state.t2_l==0){state.t2_l=state.min_l;state.t2_i=state.min_l_i;}
+             }
+         }
          state.min_tr = 1;
          state.lp_i = state.min_l_i;
          state.lp_p = state.min_l;
@@ -439,6 +492,55 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
          state.trig_l = val_l;
         }
      }
+
+      // ══ CHoCH TETİK & ÇİZİM ══════════════════════════════════════
+      double cur_maj_h = state.maj_h != EMPTY_VALUE ? state.maj_h : state.tmp_h;
+      double cur_maj_l = state.maj_l != EMPTY_VALUE ? state.maj_l : state.tmp_l;
+
+      // --- BEARISH ---
+      if(state.choch_dir==-1 && state.t2_h!=0 && state.d1_l!=0){
+          double rng=cur_maj_h-cur_maj_l;
+          double lvl40=cur_maj_l+rng*(InpMinPullbackPct/100.0);
+          bool tv=(rng>0 && state.d1_l>=lvl40 && state.t2_h>=lvl40);
+          if(val_c<state.d1_l){
+              if(!tv){state.choch_dir=0;state.d1_l=0;state.t2_h=0;}
+              else{
+                  state.last_choch_dir=-1;state.last_choch_level=state.d1_l;state.last_choch_time=time[i];
+                  state.last_choch_i=i;
+                  bool is_strong=(state.t2_h>state.t1_h);
+                  if(InpShowChoch){
+                      color sc = is_strong ? InpColorChochStrong : InpColorChochWeak;
+                      DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.t1_i],state.t1_h,time[state.d1_i],state.d1_l,sc,1,STYLE_DOT);
+                      DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.d1_i],state.d1_l,time[state.t2_i],state.t2_h,sc,1,STYLE_DOT);
+                      DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.t2_i],state.t2_h,time[i],state.d1_l,sc,1,STYLE_DOT);
+                      DrawLine(GetUniqueName(prefix+"CHoCH_Signal_"),time[i],state.d1_l,time[i]+PeriodSeconds()*15,state.d1_l,sc,is_strong ? 4 : 2,STYLE_DASH, true);
+                  }
+                  state.choch_dir=0;
+              }
+          }
+      }
+      // --- BULLISH ---
+      else if(state.choch_dir==1 && state.t2_l!=0 && state.d1_h!=0){
+          double rng=cur_maj_h-cur_maj_l;
+          double lvl60=cur_maj_l+rng*(1.0-InpMinPullbackPct/100.0);
+          bool tv=(rng>0 && state.d1_h<=lvl60 && state.t2_l<=lvl60);
+          if(val_c>state.d1_h){
+              if(!tv){state.choch_dir=0;state.d1_h=0;state.t2_l=0;}
+              else{
+                  state.last_choch_dir=1;state.last_choch_level=state.d1_h;state.last_choch_time=time[i];
+                  state.last_choch_i=i;
+                  bool is_strong=(state.t2_l<state.t1_l);
+                  if(InpShowChoch){
+                      color sc = is_strong ? InpColorChochStrong : InpColorChochWeak;
+                      DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.t1_i],state.t1_l,time[state.d1_i],state.d1_h,sc,1,STYLE_DOT);
+                      DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.d1_i],state.d1_h,time[state.t2_i],state.t2_l,sc,1,STYLE_DOT);
+                      DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.t2_i],state.t2_l,time[i],state.d1_h,sc,1,STYLE_DOT);
+                      DrawLine(GetUniqueName(prefix+"CHoCH_Signal_"),time[i],state.d1_h,time[i]+PeriodSeconds()*15,state.d1_h,sc,is_strong ? 4 : 2,STYLE_DASH, true);
+                  }
+                  state.choch_dir=0;
+              }
+          }
+      }
 
    // MAJOR STRUCTURE
    if(state.maj_tr == 0)
@@ -769,6 +871,8 @@ int OnCalculate(const int rates_total,
       ObjectsDeleteAll(0, "Minor_");
       ObjectsDeleteAll(0, "Major_");
       ObjectsDeleteAll(0, "HLine_");
+      ObjectsDeleteAll(0, "Structure_CHoCH_");
+      ObjectsDeleteAll(0, "CHoCH_");
       ObjectsDeleteAll(0, "LiveLeg_");
 
       int start_idx = 0;
