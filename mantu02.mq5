@@ -513,7 +513,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.t1_i],state.t1_h,time[state.d1_i],state.d1_l,sc,1,STYLE_DOT);
                       DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.d1_i],state.d1_l,time[state.t2_i],state.t2_h,sc,1,STYLE_DOT);
                       DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.t2_i],state.t2_h,time[i],state.d1_l,sc,1,STYLE_DOT);
-                      DrawLine(GetUniqueName(prefix+"CHoCH_Signal_"),time[i],state.d1_l,time[i]+PeriodSeconds()*15,state.d1_l,sc,is_strong ? 4 : 2,STYLE_DASH, true);
+                      DrawLine(GetUniqueName(prefix+"CHoCH_Signal_"),time[i],state.d1_l,time[i]+PeriodSeconds()*15,state.d1_l,clrBlack,is_strong ? 4 : 2,STYLE_SOLID, false);
                   }
                   state.choch_dir=0;
               }
@@ -535,7 +535,7 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
                       DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.t1_i],state.t1_l,time[state.d1_i],state.d1_h,sc,1,STYLE_DOT);
                       DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.d1_i],state.d1_h,time[state.t2_i],state.t2_l,sc,1,STYLE_DOT);
                       DrawLine(GetUniqueName(prefix+"CHoCH_Path_"),time[state.t2_i],state.t2_l,time[i],state.d1_h,sc,1,STYLE_DOT);
-                      DrawLine(GetUniqueName(prefix+"CHoCH_Signal_"),time[i],state.d1_h,time[i]+PeriodSeconds()*15,state.d1_h,sc,is_strong ? 4 : 2,STYLE_DASH, true);
+                      DrawLine(GetUniqueName(prefix+"CHoCH_Signal_"),time[i],state.d1_h,time[i]+PeriodSeconds()*15,state.d1_h,clrBlack,is_strong ? 4 : 2,STYLE_SOLID, false);
                   }
                   state.choch_dir=0;
               }
@@ -586,12 +586,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             if(InpShowMaj)
               {
                state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
-               DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBull, 1, STYLE_DASH, true);
+               DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds()*15, state.maj_h, clrBlack, 1, STYLE_SOLID, false);
 
                if(state.maj_l != EMPTY_VALUE && state.maj_l != 0)
                  {
                   state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
-                  DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBull, 1, STYLE_DASH, true);
+                  DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds()*15, state.maj_l, clrBlack, 1, STYLE_SOLID, false);
                  }
               }
            }
@@ -735,12 +735,12 @@ void ProcessBar(int i, const double &open[], const double &high[], const double 
             if(InpShowMaj)
               {
                state.cur_bot_line = GetUniqueName(prefix + "HLine_Bot_");
-               DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds(), state.maj_l, InpColorBear, 1, STYLE_DASH, true);
+               DrawLine(state.cur_bot_line, time[state.maj_l_i], state.maj_l, time[i] + PeriodSeconds()*15, state.maj_l, clrBlack, 1, STYLE_SOLID, false);
 
                if(state.maj_h != EMPTY_VALUE && state.maj_h != 0)
                  {
                   state.cur_top_line = GetUniqueName(prefix + "HLine_Top_");
-                  DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds(), state.maj_h, InpColorBear, 1, STYLE_DASH, true);
+                  DrawLine(state.cur_top_line, time[state.maj_h_i], state.maj_h, time[i] + PeriodSeconds()*15, state.maj_h, clrBlack, 1, STYLE_SOLID, false);
                  }
               }
            }
