@@ -712,6 +712,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             }else{for(int x=0;x<g_trade_count_h;x++)if(g_trade_t1_h[x]==state.t1_h&&g_trade_t2_h[x]==state.t2_h){tdx=x;break;}}
             if(isn&&tdx>=0&&state.d1_i!=g_last_notif_d1i_sell){
                g_last_notif_d1i_sell=state.d1_i;
+               if(InpAlertPush) SendNotification("🚨 "+Symbol()+" "+EnumToString(Period())+" ANLIK 🔴 BEARISH CHoCH ÇİZGİSİ OLUŞTU!");
                double rng=state.maj_h-state.maj_l;
                double pb_pct=(rng>0)?((state.t2_h-state.maj_l)/rng*100.0):0;
                SendChochNotif(-1,is_strong,pb_pct,time[i],Period(),tdx);
@@ -745,6 +746,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             }else{for(int x=0;x<g_trade_count_l;x++)if(g_trade_t1_l[x]==state.t1_l&&g_trade_t2_l[x]==state.t2_l){tdx=x;break;}}
             if(isn&&tdx>=0&&state.d1_i!=g_last_notif_d1i_buy){
                g_last_notif_d1i_buy=state.d1_i;
+               if(InpAlertPush) SendNotification("🚨 "+Symbol()+" "+EnumToString(Period())+" ANLIK 🟢 BULLISH CHoCH ÇİZGİSİ OLUŞTU!");
                double rng=state.maj_h-state.maj_l;
                double pb_pct=(rng>0)?((state.maj_h-state.t2_l)/rng*100.0):0;
                SendChochNotif(1,is_strong,pb_pct,time[i],Period(),tdx);
