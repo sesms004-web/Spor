@@ -9,7 +9,14 @@
 #property indicator_plots 0
 
 //--- Lookback
-input double InpDays             = 1.0;
+input double InpDaysM1  = 1.0;
+input double InpDaysM3  = 3.0;
+input double InpDaysM5  = 5.0;
+input double InpDaysM15 = 15.0;
+input double InpDaysM30 = 30.0;
+input double InpDaysH1  = 60.0;
+input double InpDaysH4  = 240.0;
+input double InpDaysD1  = 1440.0;
 
 //--- CHoCH
 input double InpMinPullbackPct   = 40.0;
@@ -36,17 +43,6 @@ input color  InpColorBoxBullFaint = C'0,40,90';
 input color  InpColorBoxBearFaint = C'90,20,0';
 input color  InpColorWeakBull     = C'0,25,55';
 input color  InpColorWeakBear     = C'55,15,0';
-
-//--- MTF Analiz Gün
-input group "--- MTF ANALIZ (GUN) ---"
-input double InpDaysM1  = 1.0;
-input double InpDaysM3  = 3.0;
-input double InpDaysM5  = 5.0;
-input double InpDaysM15 = 15.0;
-input double InpDaysM30 = 30.0;
-input double InpDaysH1  = 60.0;
-input double InpDaysH4  = 240.0;
-input double InpDaysD1  = 1440.0;
 
 //--- MTF Aktif TF
 input group "--- MTF AKTIF TF ---"
@@ -884,7 +880,8 @@ int OnCalculate(const int rates_total,const int prev_calculated,
    int limit;
 
    if(prev_calculated==0){
-      g_anchor_time=TimeCurrent()-(datetime)(InpDays*86400.0);g_counter=0;
+      double chart_days = GetDaysForTF(_Period);
+      g_anchor_time=TimeCurrent()-(datetime)(chart_days*86400.0);g_counter=0;
       ObjectsDeleteAll(0,"Minor_");ObjectsDeleteAll(0,"Major_");ObjectsDeleteAll(0,"HLine_");
       ObjectsDeleteAll(0,"Live_"); ObjectsDeleteAll(0,"CHoCH_Path_");ObjectsDeleteAll(0,"CHoCH_Signal_");
       ObjectsDeleteAll(0,"Box_");  ObjectsDeleteAll(0,"BoxWkAbv_");ObjectsDeleteAll(0,"BoxWkBlw_");BxClear();
