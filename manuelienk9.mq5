@@ -56,7 +56,7 @@ input int InpExhaustionCount = 3;
 
 //--- İşlem & Bildirim
 input group "--- ISLEM & BILDIRIM ---"
-input int  InpMaxTrades    = 2;
+input int  InpMaxTrades    = 1;
 input bool InpNotifInvalid = true;
 input bool InpAlertPush    = true;
 input bool InpAlertPopup   = false;
@@ -300,6 +300,9 @@ void BxAdvanceTrim(datetime t)
          if(ObjectFind(0,g_bx_wk_abv_nm[k])>=0)ObjectSetInteger(0,g_bx_wk_abv_nm[k],OBJPROP_TIME,1,t);
          if(ObjectFind(0,g_bx_wk_blw_nm[k])>=0)ObjectSetInteger(0,g_bx_wk_blw_nm[k],OBJPROP_TIME,1,t);
          g_bx_state[k]=0;
+         ObjectDelete(0,g_bx_nm[k]);
+         ObjectDelete(0,g_bx_wk_abv_nm[k]);
+         ObjectDelete(0,g_bx_wk_blw_nm[k]);
       }
       else if(g_bx_state[k]==2)g_bx_state[k]=1;
    }
@@ -553,7 +556,7 @@ string BuildRowStr(int num,ENUM_TIMEFRAMES tf,const TFBoxResult &res,bool enable
    return StringFormat("%d. %-4s %s  %-14s  %s\n",num,tf_lbl,emoji,time_str,status);
 }
 
-void SendChochNotif(int choch_dir,bool is_strong,double pb_pct,
+bool SendChochNotif(int choch_dir,bool is_strong,double pb_pct,
                     datetime choch_time,ENUM_TIMEFRAMES signal_tf,int tdx)
 {
    string ds=(choch_dir==-1)?"SELL":"BUY";
@@ -619,6 +622,7 @@ void SendChochNotif(int choch_dir,bool is_strong,double pb_pct,
       if(choch_dir==-1){g_m1_sell_locked_top=m1_res.box_top;g_m1_sell_locked_bot=m1_res.box_bot;}
       else             {g_m1_buy_locked_top =m1_res.box_top;g_m1_buy_locked_bot =m1_res.box_bot;}
    }
+   return trade_ok;
 }
 
 //=====================================================================
@@ -763,7 +767,9 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                      Print(msg);
                      if(InpAlertPush)SendNotification(msg);
                      if(InpAlertPopup)Alert(msg);
+                     if(SendChochNotif(-1, state.t2_h < state.t1_h, 50.0, time[i], Period(), tdx)) {
                      WriteBTSignal(-1,entry,sl,tp);
+                     }
                   }
                }
             }
@@ -854,7 +860,9 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                      Print(msg);
                      if(InpAlertPush)SendNotification(msg);
                      if(InpAlertPopup)Alert(msg);
+                     if(SendChochNotif(1, state.t2_l > state.t1_l, 50.0, time[i], Period(), tdx)) {
                      WriteBTSignal(1,entry,sl,tp);
+                     }
                   }
                }
             }
