@@ -292,6 +292,7 @@ void ShdBxAdvanceTrim()
 
 void BxAdvanceTrim(datetime t)
 {
+   if(g_live_bar_processing) return;
    if(g_shadow_mode){ShdBxAdvanceTrim();return;}
    for(int k=0;k<g_bx_cnt;k++){
       if(g_bx_state[k]==1){
@@ -300,9 +301,9 @@ void BxAdvanceTrim(datetime t)
          if(ObjectFind(0,g_bx_wk_abv_nm[k])>=0)ObjectSetInteger(0,g_bx_wk_abv_nm[k],OBJPROP_TIME,1,t);
          if(ObjectFind(0,g_bx_wk_blw_nm[k])>=0)ObjectSetInteger(0,g_bx_wk_blw_nm[k],OBJPROP_TIME,1,t);
          g_bx_state[k]=0;
-         ObjectDelete(0,g_bx_nm[k]);
-         ObjectDelete(0,g_bx_wk_abv_nm[k]);
-         ObjectDelete(0,g_bx_wk_blw_nm[k]);
+          // ObjectDelete(0,g_bx_nm[k]);
+          // ObjectDelete(0,g_bx_wk_abv_nm[k]);
+          // ObjectDelete(0,g_bx_wk_blw_nm[k]);
       }
       else if(g_bx_state[k]==2)g_bx_state[k]=1;
    }
@@ -581,14 +582,14 @@ bool SendChochNotif(int choch_dir,bool is_strong,double pb_pct,
    string m1_line=StringFormat("📍 M1 → %s %s",m1_status,m1_emoji);
    if(!m1_appr){
       if(InpNotifInvalid){string msg=header+"\n"+m1_line+"\n"+sep+"\n❌ M1 Desteklemiyor → Islem Yok";Print(msg);if(InpAlertPopup)Alert(msg);if(InpAlertPush)SendNotification(msg);}
-      return;
+      return false;
    }
    double locked_top=(choch_dir==-1)?g_m1_sell_locked_top:g_m1_buy_locked_top;
    double locked_bot=(choch_dir==-1)?g_m1_sell_locked_bot:g_m1_buy_locked_bot;
    bool same_box=(locked_top!=0&&MathAbs(m1_res.box_top-locked_top)<Point()*10&&MathAbs(m1_res.box_bot-locked_bot)<Point()*10);
    if(same_box){
       if(InpNotifInvalid){string msg=header+"\n📍 M1 → Kutu Kilitli 🔒\n"+sep+"\n🔕 Onceki Kutu Kullanımda → Islem Yok";Print(msg);if(InpAlertPopup)Alert(msg);if(InpAlertPush)SendNotification(msg);}
-      return;
+      return false;
    }
    m1_line=StringFormat("📍 M1 → %s %s (Yeni Kutu)",m1_status,m1_emoji);
    ENUM_TIMEFRAMES tfs[CASCADE_TF_COUNT]={PERIOD_M15,PERIOD_M30,PERIOD_H1,PERIOD_H4,PERIOD_D1};
