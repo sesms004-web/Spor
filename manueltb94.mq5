@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                              Structure_BT.mq5    |
+//|                                              manueltb94.mq5    |
 //|   Minor + Major + CHoCH + Kutu + MTF + BT Overlay               |
 //|   Backtest: SL=Swing/4  TP=3R (2R swing dışında)                |
 //+------------------------------------------------------------------+
@@ -978,7 +978,7 @@ void EvaluateBT(const double &high[],const double &low[],
 //=====================================================================
 // OnInit / OnDeinit / OnCalculate
 //=====================================================================
-int OnInit(){IndicatorSetString(INDICATOR_SHORTNAME,"Structure_BT");return INIT_SUCCEEDED;}
+int OnInit(){IndicatorSetString(INDICATOR_SHORTNAME,"manueltb94");return INIT_SUCCEEDED;}
 
 void OnDeinit(const int reason)
 {
