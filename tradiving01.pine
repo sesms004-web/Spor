@@ -1,0 +1,888 @@
+//@version=5
+indicator("Structure", overlay=true, max_boxes_count=500, max_lines_count=500, max_labels_count=500)
+
+// --- Lookback ---
+InpDaysM1  = input.float(1.0, "M1 Days", group="Lookback")
+InpDaysM15 = input.float(15.0, "M15 Days", group="Lookback")
+InpDaysM30 = input.float(30.0, "M30 Days", group="Lookback")
+InpDaysH1  = input.float(60.0, "H1 Days", group="Lookback")
+InpDaysH4  = input.float(240.0, "H4 Days", group="Lookback")
+InpDaysD1  = input.float(1440.0, "D1 Days", group="Lookback")
+
+// --- CHoCH ---
+InpMinPullbackPct   = input.float(40.0, "Min Pullback %", group="CHoCH")
+InpMaxPullbackPct   = input.float(100.0, "Max Pullback %", group="CHoCH")
+InpColorChochStrong = input.color(color.purple, "CHoCH Strong Color", group="CHoCH")
+InpColorChochWeak   = input.color(color.red, "CHoCH Weak Color", group="CHoCH")
+InpColorChochPath   = input.color(color.gray, "CHoCH Path Color", group="CHoCH")
+InpShowChoch        = input.bool(true, "Show CHoCH", group="CHoCH")
+
+// --- Yapı ---
+InpShowMin   = input.bool(true, "Show Minor", group="Yapı")
+InpShowMaj   = input.bool(true, "Show Major", group="Yapı")
+InpColorMin  = input.color(color.red, "Minor Color", group="Yapı")
+InpColorBull = input.color(color.green, "Bull Color", group="Yapı")
+InpColorBear = input.color(color.red, "Bear Color", group="Yapı")
+
+// --- Kutu ---
+InpShowBox           = input.bool(true, "Show Box", group="Kutu")
+InpMaxBoxPct         = input.float(20.0, "Max Box %", group="Kutu")
+InpWeakZonePct       = input.float(50.0, "Weak Zone %", group="Kutu")
+InpColorBoxBull      = input.color(color.dodgerblue, "Box Bull Color", group="Kutu")
+InpColorBoxBear      = input.color(color.red, "Box Bear Color", group="Kutu")
+InpColorBoxBullFaint = input.color(color.rgb(0,40,90), "Box Bull Faint", group="Kutu")
+InpColorBoxBearFaint = input.color(color.rgb(90,20,0), "Box Bear Faint", group="Kutu")
+InpColorWeakBull     = input.color(color.rgb(0,25,55), "Weak Bull", group="Kutu")
+InpColorWeakBear     = input.color(color.rgb(55,15,0), "Weak Bear", group="Kutu")
+
+// --- State Types ---
+type CStack
+    array<float> m_v
+    array<int> m_i
+
+method push(CStack this, float v, int i) =>
+    array.push(this.m_v, v)
+    array.push(this.m_i, i)
+
+method pop(CStack this) =>
+    if array.size(this.m_v) > 0
+        array.pop(this.m_v)
+        array.pop(this.m_i)
+
+method clear(CStack this) =>
+    array.clear(this.m_v)
+    array.clear(this.m_i)
+
+method size(CStack this) =>
+    array.size(this.m_v)
+
+method getVal(CStack this, int i) =>
+    array.size(this.m_v) > i and i >= 0 ? array.get(this.m_v, i) : na
+
+method getIdx(CStack this, int i) =>
+    array.size(this.m_i) > i and i >= 0 ? array.get(this.m_i, i) : na
+
+type SState
+    int    min_tr = 0
+    int    maj_tr = 0
+    int    maj_st = 0
+    float  min_h = na
+    int    min_h_i = 0
+    float  min_l = na
+    int    min_l_i = 0
+    float  trig_h = na
+    float  trig_l = na
+    int    lp_i = 0
+    float  lp_p = na
+    float  maj_h = na
+    int    maj_h_i = 0
+    float  maj_l = na
+    int    maj_l_i = 0
+    float  tmp_h = na
+    int    tmp_h_i = 0
+    float  tmp_l = na
+    int    tmp_l_i = 0
+    int    anc_i = 0
+    float  anc_v = na
+    int    bos_i = 0
+    line   cur_top_line = na
+    line   cur_bot_line = na
+    float  mb_h = na
+    float  mb_l = na
+    int    mb_i = 0
+    float  t1_h = na
+    float  t1_l = na
+    int    t1_i = 0
+    float  d1_h = na
+    float  d1_l = na
+    int    d1_i = 0
+    float  t2_h = na
+    float  t2_l = na
+    int    t2_i = 0
+    int    choch_dir = 0
+    int    bx_phase = 0
+    bool   bx_extreme = false
+    float  bx_swing_h = na
+    float  bx_swing_l = na
+    bool   has_pot_bull_minor = false
+    int    pot_bull_start_i = 0
+    float  pot_bull_start_p = na
+    float  pot_bull_end_p = na
+    bool   has_pot_bear_minor = false
+    int    pot_bear_start_i = 0
+    float  pot_bear_start_p = na
+    float  pot_bear_end_p = na
+    CStack st_h
+    CStack st_l
+
+method CopyFrom(SState this, SState s) =>
+    this.min_tr := s.min_tr
+    this.maj_tr := s.maj_tr
+    this.maj_st := s.maj_st
+    this.min_h := s.min_h
+    this.min_h_i := s.min_h_i
+    this.min_l := s.min_l
+    this.min_l_i := s.min_l_i
+    this.trig_h := s.trig_h
+    this.trig_l := s.trig_l
+    this.lp_i := s.lp_i
+    this.lp_p := s.lp_p
+    this.maj_h := s.maj_h
+    this.maj_h_i := s.maj_h_i
+    this.maj_l := s.maj_l
+    this.maj_l_i := s.maj_l_i
+    this.tmp_h := s.tmp_h
+    this.tmp_h_i := s.tmp_h_i
+    this.tmp_l := s.tmp_l
+    this.tmp_l_i := s.tmp_l_i
+    this.anc_i := s.anc_i
+    this.anc_v := s.anc_v
+    this.bos_i := s.bos_i
+    this.cur_top_line := s.cur_top_line
+    this.cur_bot_line := s.cur_bot_line
+    this.mb_h := s.mb_h
+    this.mb_l := s.mb_l
+    this.mb_i := s.mb_i
+    this.t1_h := s.t1_h
+    this.t1_l := s.t1_l
+    this.t1_i := s.t1_i
+    this.d1_h := s.d1_h
+    this.d1_l := s.d1_l
+    this.d1_i := s.d1_i
+    this.t2_h := s.t2_h
+    this.t2_l := s.t2_l
+    this.t2_i := s.t2_i
+    this.choch_dir := s.choch_dir
+    this.bx_phase := s.bx_phase
+    this.bx_extreme := s.bx_extreme
+    this.bx_swing_h := s.bx_swing_h
+    this.bx_swing_l := s.bx_swing_l
+    this.has_pot_bull_minor := s.has_pot_bull_minor
+    this.pot_bull_start_i := s.pot_bull_start_i
+    this.pot_bull_start_p := s.pot_bull_start_p
+    this.pot_bull_end_p := s.pot_bull_end_p
+    this.has_pot_bear_minor := s.has_pot_bear_minor
+    this.pot_bear_start_i := s.pot_bear_start_i
+    this.pot_bear_start_p := s.pot_bear_start_p
+    this.pot_bear_end_p := s.pot_bear_end_p
+    this.st_h.m_v := array.copy(s.st_h.m_v)
+    this.st_h.m_i := array.copy(s.st_h.m_i)
+    this.st_l.m_v := array.copy(s.st_l.m_v)
+    this.st_l.m_i := array.copy(s.st_l.m_i)
+
+method clone(SState this) =>
+    s = SState.new()
+    s.min_tr := this.min_tr
+    s.maj_tr := this.maj_tr
+    s.maj_st := this.maj_st
+    s.min_h := this.min_h
+    s.min_h_i := this.min_h_i
+    s.min_l := this.min_l
+    s.min_l_i := this.min_l_i
+    s.trig_h := this.trig_h
+    s.trig_l := this.trig_l
+    s.lp_i := this.lp_i
+    s.lp_p := this.lp_p
+    s.maj_h := this.maj_h
+    s.maj_h_i := this.maj_h_i
+    s.maj_l := this.maj_l
+    s.maj_l_i := this.maj_l_i
+    s.tmp_h := this.tmp_h
+    s.tmp_h_i := this.tmp_h_i
+    s.tmp_l := this.tmp_l
+    s.tmp_l_i := this.tmp_l_i
+    s.anc_i := this.anc_i
+    s.anc_v := this.anc_v
+    s.bos_i := this.bos_i
+    s.cur_top_line := this.cur_top_line
+    s.cur_bot_line := this.cur_bot_line
+    s.mb_h := this.mb_h
+    s.mb_l := this.mb_l
+    s.mb_i := this.mb_i
+    s.t1_h := this.t1_h
+    s.t1_l := this.t1_l
+    s.t1_i := this.t1_i
+    s.d1_h := this.d1_h
+    s.d1_l := this.d1_l
+    s.d1_i := this.d1_i
+    s.t2_h := this.t2_h
+    s.t2_l := this.t2_l
+    s.t2_i := this.t2_i
+    s.choch_dir := this.choch_dir
+    s.bx_phase := this.bx_phase
+    s.bx_extreme := this.bx_extreme
+    s.bx_swing_h := this.bx_swing_h
+    s.bx_swing_l := this.bx_swing_l
+    s.has_pot_bull_minor := this.has_pot_bull_minor
+    s.pot_bull_start_i := this.pot_bull_start_i
+    s.pot_bull_start_p := this.pot_bull_start_p
+    s.pot_bull_end_p := this.pot_bull_end_p
+    s.has_pot_bear_minor := this.has_pot_bear_minor
+    s.pot_bear_start_i := this.pot_bear_start_i
+    s.pot_bear_start_p := this.pot_bear_start_p
+    s.pot_bear_end_p := this.pot_bear_end_p
+    s.st_h := CStack.new(array.copy(this.st_h.m_v), array.copy(this.st_h.m_i))
+    s.st_l := CStack.new(array.copy(this.st_l.m_v), array.copy(this.st_l.m_i))
+    s
+
+bxReset(SState s, float rl, float rh) =>
+    s.bx_phase := 0
+    s.bx_extreme := false
+    s.bx_swing_l := rl
+    s.bx_swing_h := rh
+
+resetChochState(SState s) =>
+    s.choch_dir := 0
+    s.t1_h := na
+    s.t1_l := na
+    s.t1_i := 0
+    s.d1_h := na
+    s.d1_l := na
+    s.d1_i := 0
+    s.t2_h := na
+    s.t2_l := na
+    s.t2_i := 0
+
+var state_hist = SState.new(st_h = CStack.new(array.new_float(), array.new_int()), st_l = CStack.new(array.new_float(), array.new_int()))
+
+// Drawing wrappers
+draw_line(int t1, float p1, int t2, float p2, color clr, int w, string st, bool ray) =>
+    l = line.new(t1, p1, t2, p2, xloc=xloc.bar_time, color=clr, width=w, style=st == "dot" ? line.style_dotted : st == "dash" ? line.style_dashed : line.style_solid)
+    if ray
+        line.set_extend(l, extend.right)
+    l
+
+cut_line(line l, int t) =>
+    if not na(l)
+        line.set_extend(l, extend.none)
+        line.set_x2(l, t)
+
+update_line_level(line l, float v) =>
+    if not na(l)
+        line.set_y1(l, v)
+        line.set_y2(l, v)
+
+draw_rect(int t1, float top, int t2, float bot, color clr) =>
+    b = box.new(t1, top, t2, bot, xloc=xloc.bar_time, border_color=color.new(color.white,100), bgcolor=color.new(clr, 80), extend=extend.right)
+    b
+
+draw_weak_rect(int t1, float top, float bot, color clr) =>
+    b = box.new(t1, top, time, bot, xloc=xloc.bar_time, border_color=color.new(color.white,100), bgcolor=color.new(clr, 80), extend=extend.right)
+    b
+
+// Box tracking
+type BoxData
+    box b
+    box bw_abv
+    box bw_blw
+    int state
+    float top
+    float bot
+    int touch_state
+    int approach
+    int inside_cnt
+    int event_time
+    int break_up
+    int break_dn
+
+method clone(BoxData this) =>
+    BoxData.new(this.b, this.bw_abv, this.bw_blw, this.state, this.top, this.bot, this.touch_state, this.approach, this.inside_cnt, this.event_time, this.break_up, this.break_dn)
+
+deep_copy_boxes(array<BoxData> arr) =>
+    new_arr = array.new<BoxData>()
+    if array.size(arr) > 0
+        for i = 0 to array.size(arr) - 1
+            array.push(new_arr, array.get(arr, i).clone())
+    new_arr
+
+var box_arr_hist = array.new<BoxData>()
+box_arr = deep_copy_boxes(box_arr_hist)
+
+bxAdd(box b, box bw_abv, box bw_blw, float top, float bot) =>
+    array.push(box_arr, BoxData.new(b, bw_abv, bw_blw, 1, top, bot, 0, 0, 0, 0, 0, 0))
+
+bxUpdateStats(float h, float l, float c, float prev_c, int bar_time) =>
+    if array.size(box_arr) > 0
+        for k = 0 to array.size(box_arr) - 1
+            bd = array.get(box_arr, k)
+            if bd.state == 0
+                continue
+            top = bd.top
+            bot = bd.bot
+            im = h >= bot and l <= top
+            na_val = prev_c > top ? 1 : prev_c < bot ? -1 : bd.approach
+            ts = bd.touch_state
+            if ts == 0
+                if im
+                    bd.approach := na_val != 0 ? na_val : (c > (top+bot)/2.0 ? 1 : -1)
+                    bd.touch_state := 1
+                    bd.inside_cnt := 1
+                    bd.event_time := bar_time
+            else if ts == 1
+                if im
+                    bd.inside_cnt += 1
+                    bd.event_time := bar_time
+                else
+                    bd_flag = c < bot
+                    bu_flag = c > top
+                    ap = bd.approach
+                    if ap == 1
+                        if bd_flag
+                            bd.touch_state := 2
+                            bd.break_dn += 1
+                        else if bu_flag
+                            bd.touch_state := 3
+                    else
+                        if bu_flag
+                            bd.touch_state := 2
+                            bd.break_up += 1
+                        else if bd_flag
+                            bd.touch_state := 3
+                    bd.event_time := bar_time
+            else
+                if im
+                    bd.approach := na_val != 0 ? na_val : (c > (top+bot)/2.0 ? 1 : -1)
+                    bd.touch_state := 1
+                    bd.inside_cnt := 1
+                    bd.event_time := bar_time
+    if array.size(box_arr) > 100
+        for i = array.size(box_arr) - 1 to 0
+            if array.get(box_arr, i).state == 0
+                array.remove(box_arr, i)
+            if array.size(box_arr) <= 50
+                break
+
+bxAdvanceTrim(int t) =>
+    if array.size(box_arr) > 0
+        for k = 0 to array.size(box_arr) - 1
+            bd = array.get(box_arr, k)
+            if bd.state == 1
+                if not na(bd.b)
+                    box.set_extend(bd.b, extend.none)
+                    box.set_right(bd.b, t)
+                if not na(bd.bw_abv)
+                    box.set_extend(bd.bw_abv, extend.none)
+                    box.set_right(bd.bw_abv, t)
+                if not na(bd.bw_blw)
+                    box.set_extend(bd.bw_blw, extend.none)
+                    box.set_right(bd.bw_blw, t)
+                bd.state := 0
+
+doDrawBox(int t_left, SState s, float arg_top, float arg_bot, color clr) =>
+    float top = arg_top
+    float bot = arg_bot
+    if top < bot
+        tmp = top
+        top := bot
+        bot := tmp
+    maj_sz = s.maj_h - s.maj_l
+    if maj_sz > 0 and (top - bot) / maj_sz * 100.0 > InpMaxBoxPct
+        if clr == InpColorBoxBull or clr == InpColorBoxBullFaint
+            fh = -1.0
+            fi = t_left
+            if s.st_h.size() > 0
+                for k = 0 to s.st_h.size() - 1
+                    mh = s.st_h.getVal(k)
+                    if mh > bot and mh < top and (fh < 0 or mh < fh)
+                        fh := mh
+                        fi := t_left
+            if fh > 0
+                top := fh
+            else
+                top := bot + maj_sz * InpMaxBoxPct / 100.0
+        else
+            fl = -1.0
+            fi = t_left
+            if s.st_l.size() > 0
+                for k = 0 to s.st_l.size() - 1
+                    ml = s.st_l.getVal(k)
+                    if ml < top and ml > bot and (fl < 0 or ml > fl)
+                        fl := ml
+                        fi := t_left
+            if fl > 0
+                bot := fl
+            else
+                bot := top - maj_sz * InpMaxBoxPct / 100.0
+    if top > bot
+        wk_sz = (top - bot) * InpWeakZonePct / 100.0
+        wk_clr = clr == InpColorBoxBull or clr == InpColorBoxBullFaint ? InpColorWeakBull : InpColorWeakBear
+        b = draw_rect(t_left, top, time, bot, clr)
+        bw_abv = draw_weak_rect(t_left, top + wk_sz, top, wk_clr)
+        bw_blw = draw_weak_rect(t_left, bot, bot - wk_sz, wk_clr)
+        bxAdd(b, bw_abv, bw_blw, top, bot)
+
+// --- Main Logic Core ---
+state = state_hist.clone()
+
+if barstate.isfirst
+    state.min_h := high
+    state.min_h_i := time
+    state.min_l := low
+    state.min_l_i := time
+    state.trig_h := high
+    state.trig_l := low
+    state.tmp_h := high
+    state.tmp_h_i := time
+    state.tmp_l := low
+    state.tmp_l_i := time
+    state.min_tr := close > open ? 1 : -1
+    state.anc_i := time
+    state.anc_v := close
+    state.lp_i := time
+    state.lp_p := close
+    state.bos_i := time
+    state.maj_h_i := time
+    state.maj_l_i := time
+    state.mb_h := high
+    state.mb_l := low
+    state.mb_i := time
+    atr = high - low == 0 ? syminfo.mintick * 10 : high - low
+    state.maj_h := high + atr * 0.1
+    state.maj_l := low - atr * 0.1
+    state.maj_tr := state.min_tr
+    state.maj_st := 1
+    bxReset(state, low, high)
+
+// Inside Bar checking
+inside = high <= state.mb_h and low >= state.mb_l
+if not inside
+    if high > state.mb_h or low < state.mb_l
+        state.mb_h := high
+        state.mb_l := low
+        state.mb_i := time
+
+    val_h = high
+    val_l = low
+    val_c = close
+    prev_c = close[1]
+
+    bxUpdateStats(val_h, val_l, val_c, prev_c, time)
+
+    p_pct = 0.0
+    if not na(state.maj_h) and not na(state.maj_l) and state.maj_h != state.maj_l
+        rng = state.maj_h - state.maj_l
+        if state.maj_tr == 1 and val_l >= state.maj_l
+            p_pct := ((state.maj_h - val_l) / rng) * 100.0
+        if state.maj_tr == -1 and val_h <= state.maj_h
+            p_pct := ((val_h - state.maj_l) / rng) * 100.0
+
+    in_pb = p_pct >= InpMinPullbackPct and p_pct <= InpMaxPullbackPct
+
+    // Minör Bull
+    if state.min_tr == 1
+        ot = state.trig_l
+        if val_h > state.min_h
+            state.min_h := val_h
+            state.min_h_i := time
+            state.trig_l := val_l
+        if val_l < ot
+            pi = state.min_h_i
+            pp = state.min_h
+            si = state.lp_i
+            sp = state.lp_p
+            if InpShowMin
+                draw_line(si, sp, pi, pp, InpColorMin, 1, "solid", false)
+            if state.maj_tr == -1 and not state.has_pot_bull_minor and si >= state.tmp_l_i
+                state.has_pot_bull_minor := true
+                state.pot_bull_start_i := si
+                state.pot_bull_start_p := sp
+                state.pot_bull_end_p := pp
+            if InpShowBox and state.maj_st == 0 and state.maj_tr == 1
+                if state.bx_phase == 0 or state.bx_phase == 2
+                    doDrawBox(si, state, pp, sp, InpColorBoxBull)
+                    state.bx_phase := 1
+                    state.bx_extreme := false
+                    state.bx_swing_h := pp
+                    state.bx_swing_l := sp
+                else if pp > state.bx_swing_h
+                    state.bx_extreme := true
+                    state.bx_swing_h := pp
+            if state.maj_st == 0 and state.maj_tr == -1 and state.bx_phase == 1
+                if state.bx_extreme and pp > state.bx_swing_h
+                    state.bx_phase := 2
+                    state.bx_extreme := false
+                else
+                    state.bx_swing_h := pp
+
+            state.st_h.push(pp, pi)
+
+            if state.maj_tr == 1 and state.maj_st == 0 and pp < state.tmp_h and state.st_l.size() > 0
+                state.st_l.pop()
+
+            if state.choch_dir == -1 and not na(state.t2_h)
+                state.choch_dir := 0
+            if state.choch_dir == 1 and not na(state.t2_l) and state.min_h <= state.d1_h
+                state.choch_dir := 0
+            if state.choch_dir != 0 and not in_pb
+                state.choch_dir := 0
+
+            if state.maj_tr == -1 and in_pb
+                if state.choch_dir == 0 or state.choch_dir == 1
+                    state.t1_h := state.min_h
+                    state.t1_l := state.min_l
+                    state.t1_i := state.min_h_i
+                    state.d1_h := na
+                    state.d1_l := na
+                    state.d1_i := 0
+                    state.t2_h := na
+                    state.t2_l := na
+                    state.t2_i := 0
+                    state.choch_dir := -1
+                else if state.choch_dir == -1
+                    if na(state.d1_l)
+                        state.d1_l := state.min_l
+                        state.d1_i := state.min_l_i
+                    if not na(state.d1_l) and na(state.t2_h)
+                        state.t2_h := state.min_h
+                        state.t2_i := state.min_h_i
+
+            state.min_tr := -1
+            state.lp_i := pi
+            state.lp_p := pp
+            state.min_l := val_l
+            state.min_l_i := time
+            state.trig_h := val_h
+
+    // Minör Bear
+    else
+        ot = state.trig_h
+        if val_l < state.min_l
+            state.min_l := val_l
+            state.min_l_i := time
+            state.trig_h := val_h
+        if val_h > ot
+            ti = state.min_l_i
+            tp = state.min_l
+            si = state.lp_i
+            sp = state.lp_p
+            if InpShowMin
+                draw_line(si, sp, ti, tp, InpColorMin, 1, "solid", false)
+            if state.maj_tr == 1 and not state.has_pot_bear_minor and si >= state.tmp_h_i
+                state.has_pot_bear_minor := true
+                state.pot_bear_start_i := si
+                state.pot_bear_start_p := sp
+                state.pot_bear_end_p := tp
+            if InpShowBox and state.maj_st == 0 and state.maj_tr == -1
+                if state.bx_phase == 0 or state.bx_phase == 2
+                    doDrawBox(si, state, sp, tp, InpColorBoxBear)
+                    state.bx_phase := 1
+                    state.bx_extreme := false
+                    state.bx_swing_h := sp
+                    state.bx_swing_l := tp
+                else if tp < state.bx_swing_l
+                    state.bx_extreme := true
+                    state.bx_swing_l := tp
+            if state.maj_st == 0 and state.maj_tr == 1 and state.bx_phase == 1
+                if state.bx_extreme and tp < state.bx_swing_l
+                    state.bx_phase := 2
+                    state.bx_extreme := false
+                else
+                    state.bx_swing_l := tp
+
+            state.st_l.push(tp, ti)
+
+            if state.maj_tr == -1 and state.maj_st == 0 and tp > state.tmp_l and state.st_h.size() > 0
+                state.st_h.pop()
+
+            if state.choch_dir == 1 and not na(state.t2_l)
+                state.choch_dir := 0
+            if state.choch_dir == -1 and not na(state.t2_h) and state.min_l >= state.d1_l
+                state.choch_dir := 0
+            if state.choch_dir != 0 and not in_pb
+                state.choch_dir := 0
+
+            if state.maj_tr == 1 and in_pb
+                if state.choch_dir == 0 or state.choch_dir == -1
+                    state.t1_l := state.min_l
+                    state.t1_h := state.min_h
+                    state.t1_i := state.min_l_i
+                    state.d1_l := na
+                    state.d1_h := na
+                    state.d1_i := 0
+                    state.t2_l := na
+                    state.t2_h := na
+                    state.t2_i := 0
+                    state.choch_dir := 1
+                else if state.choch_dir == 1
+                    if na(state.d1_h)
+                        state.d1_h := state.min_h
+                        state.d1_i := state.min_h_i
+                    if not na(state.d1_h) and na(state.t2_l)
+                        state.t2_l := state.min_l
+                        state.t2_i := state.min_l_i
+
+            state.min_tr := 1
+            state.lp_i := ti
+            state.lp_p := tp
+            state.min_h := val_h
+            state.min_h_i := time
+            state.trig_l := val_l
+
+    // CHoCH SELL
+    if state.choch_dir == -1 and not na(state.t2_h) and not na(state.d1_l)
+        if val_c < state.d1_l and in_pb
+            is_strong = state.t2_h > state.t1_h
+            if InpShowChoch
+                sc = is_strong ? InpColorChochStrong : InpColorChochWeak
+                draw_line(state.t1_i, state.t1_h, state.d1_i, state.d1_l, InpColorChochPath, 1, "dot", false)
+                draw_line(state.d1_i, state.d1_l, state.t2_i, state.t2_h, InpColorChochPath, 1, "dot", false)
+                draw_line(state.t2_i, state.t2_h, time, state.d1_l, InpColorChochPath, 1, "dot", false)
+                draw_line(time, state.d1_l, time + 5 * 60000, state.d1_l, sc, 3, "solid", false)
+            state.choch_dir := 0
+
+    // CHoCH BUY
+    else if state.choch_dir == 1 and not na(state.t2_l) and not na(state.d1_h)
+        if val_c > state.d1_h and in_pb
+            is_strong = state.t2_l < state.t1_l
+            if InpShowChoch
+                sc = is_strong ? InpColorChochStrong : InpColorChochWeak
+                draw_line(state.t1_i, state.t1_l, state.d1_i, state.d1_h, InpColorChochPath, 1, "dot", false)
+                draw_line(state.d1_i, state.d1_h, state.t2_i, state.t2_l, InpColorChochPath, 1, "dot", false)
+                draw_line(state.t2_i, state.t2_l, time, state.d1_h, InpColorChochPath, 1, "dot", false)
+                draw_line(time, state.d1_h, time + 5 * 60000, state.d1_h, sc, 3, "solid", false)
+            state.choch_dir := 0
+
+    // Major Setup
+    if state.maj_tr == 0
+        state.maj_tr := 1
+        state.anc_i := state.min_l_i
+        state.anc_v := state.min_l
+        state.maj_l_i := state.min_l_i
+
+    if state.maj_tr == 1
+        if val_h > state.tmp_h
+            state.tmp_h := val_h
+            state.tmp_h_i := time
+            state.has_pot_bear_minor := false
+
+        if state.maj_st == 0
+            act = state.st_l.size() > 0 ? state.st_l.getVal(state.st_l.size() - 1) : na
+            if not na(act) and val_l < act
+                state.maj_h := state.tmp_h
+                state.maj_h_i := state.tmp_h_i
+                if InpShowMaj
+                    draw_line(state.anc_i, state.anc_v, state.maj_h_i, state.maj_h, InpColorBull, 2, "solid", false)
+                bxAdvanceTrim(state.maj_h_i)
+                state.st_l.clear()
+                state.st_h.clear()
+                state.maj_st := 1
+                state.anc_i := state.maj_h_i
+                state.anc_v := state.maj_h
+                state.tmp_l := val_l
+                state.tmp_l_i := time
+                cut_line(state.cur_top_line, time)
+                cut_line(state.cur_bot_line, time)
+                if InpShowMaj
+                    state.cur_top_line := draw_line(state.maj_h_i, state.maj_h, time + 60000, state.maj_h, InpColorBull, 1, "dash", true)
+                    if not na(state.maj_l) and state.maj_l != 0
+                        state.cur_bot_line := draw_line(state.maj_l_i, state.maj_l, time + 60000, state.maj_l, InpColorBull, 1, "dash", true)
+
+            if not na(state.maj_l) and state.maj_l != 0 and val_l < state.maj_l and val_c >= state.maj_l
+                state.maj_l := val_l
+                if InpShowMaj
+                    update_line_level(state.cur_bot_line, state.maj_l)
+
+            if not na(state.maj_l) and state.maj_l != 0 and val_c < state.maj_l
+                resetChochState(state)
+                bxAdvanceTrim(state.tmp_h_i)
+                state.maj_tr := -1
+                state.maj_st := 0
+                state.bos_i := time
+                if InpShowMaj
+                    draw_line(state.anc_i, state.anc_v, state.tmp_h_i, state.tmp_h, InpColorBull, 2, "solid", false)
+                state.st_l.clear()
+                state.anc_i := state.tmp_h_i
+                state.anc_v := state.tmp_h
+                state.tmp_l := val_l
+                state.tmp_l_i := time
+                state.maj_h := state.tmp_h
+                state.maj_h_i := state.tmp_h_i
+                if InpShowBox and state.has_pot_bear_minor
+                    doDrawBox(state.pot_bear_start_i, state, state.pot_bear_start_p, state.pot_bear_end_p, InpColorBoxBearFaint)
+                bxReset(state, val_l, state.tmp_h)
+                state.has_pot_bear_minor := false
+                cut_line(state.cur_top_line, time)
+                cut_line(state.cur_bot_line, time)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+
+        else if state.maj_st == 1
+            if val_l < state.tmp_l
+                state.tmp_l := val_l
+                state.tmp_l_i := time
+                state.has_pot_bull_minor := false
+            if not na(state.maj_h) and val_h > state.maj_h and val_c <= state.maj_h
+                state.maj_h := val_h
+                if InpShowMaj
+                    update_line_level(state.cur_top_line, state.maj_h)
+
+            if val_c > state.maj_h
+                resetChochState(state)
+                state.bos_i := time
+                state.maj_l := state.tmp_l
+                state.maj_l_i := state.tmp_l_i
+                if InpShowMaj
+                    draw_line(state.anc_i, state.anc_v, state.maj_l_i, state.maj_l, InpColorBull, 2, "solid", false)
+                state.st_h.clear()
+                state.maj_st := 0
+                state.anc_i := state.maj_l_i
+                state.anc_v := state.maj_l
+                state.tmp_h := val_h
+                state.tmp_h_i := time
+                bxReset(state, state.maj_l, val_h)
+                cut_line(state.cur_top_line, time)
+                cut_line(state.cur_bot_line, time)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+
+            if not na(state.maj_l) and state.maj_l != 0 and val_l < state.maj_l and val_c >= state.maj_l
+                state.maj_l := val_l
+                if InpShowMaj
+                    update_line_level(state.cur_bot_line, state.maj_l)
+
+            if not na(state.maj_l) and state.maj_l != 0 and val_c < state.maj_l
+                resetChochState(state)
+                bxAdvanceTrim(state.tmp_h_i)
+                state.maj_tr := -1
+                state.maj_st := 0
+                state.bos_i := time
+                if InpShowMaj
+                    draw_line(state.anc_i, state.anc_v, state.tmp_h_i, state.tmp_h, InpColorBull, 2, "solid", false)
+                state.st_l.clear()
+                state.anc_i := state.tmp_h_i
+                state.anc_v := state.tmp_h
+                state.tmp_l := val_l
+                state.tmp_l_i := time
+                state.maj_h := state.tmp_h
+                state.maj_h_i := state.tmp_h_i
+                if InpShowBox and state.has_pot_bear_minor
+                    doDrawBox(state.pot_bear_start_i, state, state.pot_bear_start_p, state.pot_bear_end_p, InpColorBoxBearFaint)
+                bxReset(state, val_l, state.tmp_h)
+                state.has_pot_bear_minor := false
+                cut_line(state.cur_top_line, time)
+                cut_line(state.cur_bot_line, time)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+
+    // Bear Major (maj_tr == -1)
+    else if state.maj_tr == -1
+        if val_l < state.tmp_l
+            state.tmp_l := val_l
+            state.tmp_l_i := time
+            state.has_pot_bull_minor := false
+
+        if state.maj_st == 0
+            act = state.st_h.size() > 0 ? state.st_h.getVal(state.st_h.size() - 1) : na
+            if not na(act) and val_h > act
+                state.maj_l := state.tmp_l
+                state.maj_l_i := state.tmp_l_i
+                if InpShowMaj
+                    draw_line(state.anc_i, state.anc_v, state.maj_l_i, state.maj_l, InpColorBear, 2, "solid", false)
+                bxAdvanceTrim(state.maj_l_i)
+                state.st_l.clear()
+                state.st_h.clear()
+                state.maj_st := 1
+                state.anc_i := state.maj_l_i
+                state.anc_v := state.maj_l
+                state.tmp_h := val_h
+                state.tmp_h_i := time
+                cut_line(state.cur_top_line, time)
+                cut_line(state.cur_bot_line, time)
+                if InpShowMaj
+                    state.cur_bot_line := draw_line(state.maj_l_i, state.maj_l, time + 60000, state.maj_l, InpColorBear, 1, "dash", true)
+                    if not na(state.maj_h) and state.maj_h != 0
+                        state.cur_top_line := draw_line(state.maj_h_i, state.maj_h, time + 60000, state.maj_h, InpColorBear, 1, "dash", true)
+
+            if not na(state.maj_h) and state.maj_h != 0 and val_h > state.maj_h and val_c <= state.maj_h
+                state.maj_h := val_h
+                if InpShowMaj
+                    update_line_level(state.cur_top_line, state.maj_h)
+
+            if not na(state.maj_h) and state.maj_h != 0 and val_c > state.maj_h
+                resetChochState(state)
+                bxAdvanceTrim(state.tmp_l_i)
+                state.maj_tr := 1
+                state.maj_st := 0
+                state.bos_i := time
+                if InpShowMaj
+                    draw_line(state.anc_i, state.anc_v, state.tmp_l_i, state.tmp_l, InpColorBear, 2, "solid", false)
+                state.st_h.clear()
+                state.anc_i := state.tmp_l_i
+                state.anc_v := state.tmp_l
+                state.tmp_h := val_h
+                state.tmp_h_i := time
+                state.maj_l := state.tmp_l
+                state.maj_l_i := state.tmp_l_i
+                if InpShowBox and state.has_pot_bull_minor
+                    doDrawBox(state.pot_bull_start_i, state, state.pot_bull_end_p, state.pot_bull_start_p, InpColorBoxBullFaint)
+                bxReset(state, state.tmp_l, val_h)
+                state.has_pot_bull_minor := false
+                cut_line(state.cur_top_line, time)
+                cut_line(state.cur_bot_line, time)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+
+        else if state.maj_st == 1
+            if val_h > state.tmp_h
+                state.tmp_h := val_h
+                state.tmp_h_i := time
+                state.has_pot_bear_minor := false
+            if not na(state.maj_l) and val_l < state.maj_l and val_c >= state.maj_l
+                state.maj_l := val_l
+                if InpShowMaj
+                    update_line_level(state.cur_bot_line, state.maj_l)
+
+            if not na(state.maj_l) and val_c < state.maj_l
+                resetChochState(state)
+                state.maj_h := state.tmp_h
+                state.bos_i := time
+                state.maj_h_i := state.tmp_h_i
+                if InpShowMaj
+                    draw_line(state.anc_i, state.anc_v, state.maj_h_i, state.maj_h, InpColorBear, 2, "solid", false)
+                state.st_l.clear()
+                state.maj_st := 0
+                state.anc_i := state.maj_h_i
+                state.anc_v := state.maj_h
+                state.tmp_l := val_l
+                state.tmp_l_i := time
+                bxReset(state, val_l, state.maj_h)
+                cut_line(state.cur_top_line, time)
+                cut_line(state.cur_bot_line, time)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+
+            if not na(state.maj_h) and state.maj_h != 0 and val_h > state.maj_h and val_c <= state.maj_h
+                state.maj_h := val_h
+                if InpShowMaj
+                    update_line_level(state.cur_top_line, state.maj_h)
+
+            if not na(state.maj_h) and state.maj_h != 0 and val_c > state.maj_h
+                resetChochState(state)
+                bxAdvanceTrim(state.tmp_l_i)
+                state.maj_tr := 1
+                state.maj_st := 0
+                state.bos_i := time
+                if InpShowMaj
+                    draw_line(state.anc_i, state.anc_v, state.tmp_l_i, state.tmp_l, InpColorBear, 2, "solid", false)
+                state.st_h.clear()
+                state.anc_i := state.tmp_l_i
+                state.anc_v := state.tmp_l
+                state.tmp_h := val_h
+                state.tmp_h_i := time
+                state.maj_l := state.tmp_l
+                state.maj_l_i := state.tmp_l_i
+                if InpShowBox and state.has_pot_bull_minor
+                    doDrawBox(state.pot_bull_start_i, state, state.pot_bull_end_p, state.pot_bull_start_p, InpColorBoxBullFaint)
+                bxReset(state, state.tmp_l, val_h)
+                state.has_pot_bull_minor := false
+                cut_line(state.cur_top_line, time)
+                cut_line(state.cur_bot_line, time)
+                state.cur_top_line := na
+                state.cur_bot_line := na
+else
+    double_pc = close[1]
+    bxUpdateStats(high, low, close, double_pc, time)
+
+if barstate.isconfirmed
+    state_hist := state.clone()
+    box_arr_hist := deep_copy_boxes(box_arr)
