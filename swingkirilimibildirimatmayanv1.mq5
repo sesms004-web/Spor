@@ -413,6 +413,21 @@ void DoDrawBox(const datetime &time[],string pfx,SState &s,int left_i,double top
 void ProcessBar(int i,const double &open[],const double &high[],const double &low[],
                 const double &close[],const datetime &time[],SState &state,bool is_history);
 
+bool CheckMTFDataSync()
+{
+   ENUM_TIMEFRAMES tfs[CASCADE_TF_COUNT] ={PERIOD_M15,PERIOD_M30,PERIOD_H1,PERIOD_H4,PERIOD_D1};
+   bool            ena[CASCADE_TF_COUNT] ={InpEnableM15,InpEnableM30,InpEnableH1,InpEnableH4,InpEnableD1};
+
+   if(Bars(Symbol(),PERIOD_M1)<100) return false;
+
+   for(int i=0;i<CASCADE_TF_COUNT;i++){
+      if(ena[i]){
+         if(Bars(Symbol(),tfs[i])<100) return false;
+      }
+   }
+   return true;
+}
+
 bool AnalyzeTFBoxResult(ENUM_TIMEFRAMES tf,double days_inp,TFBoxResult &res)
 {
    res.tf=tf;res.has_box=false;res.touch_state=0;res.approach=0;
@@ -477,6 +492,11 @@ string BuildRowStr(int num,ENUM_TIMEFRAMES tf,const TFBoxResult &res,bool enable
    appr_out=false;gec_out=false;
 
    if(!enabled){gec_out=true;return StringFormat("%d. %-4s ➖  Devre Disi\n",num,tf_lbl);}
+
+   if(!res.has_box){
+      gec_out=true;
+      return StringFormat("%d. %-4s ⚪  %-14s  Kutu Yok\n",num,tf_lbl,"-");
+   }
 
    bool gec=IsGecersiz(res.touch_state,res.cnt_in,res.ev_t,tf);
    bool yat=IsYatay(res.touch_state,res.break_up,res.break_dn);
@@ -915,6 +935,10 @@ int OnCalculate(const int rates_total,const int prev_calculated,
                 const long &tick_volume[],const long &volume[],const int &spread[])
 {
    if(rates_total<2)return 0;
+
+   // MTF Data check
+   if(!CheckMTFDataSync()) return 0;
+
    int limit;
    if(prev_calculated==0){
       double chart_days=GetDaysForTF(_Period);
@@ -922,6 +946,14 @@ int OnCalculate(const int rates_total,const int prev_calculated,
       ObjectsDeleteAll(0,"Minor_");ObjectsDeleteAll(0,"Major_");ObjectsDeleteAll(0,"HLine_");
       ObjectsDeleteAll(0,"Live_"); ObjectsDeleteAll(0,"CHoCH_Path_");ObjectsDeleteAll(0,"CHoCH_Signal_");
       ObjectsDeleteAll(0,"Box_");  ObjectsDeleteAll(0,"BoxWkAbv_");ObjectsDeleteAll(0,"BoxWkBlw_");BxClear();
+
+      MqlRates tr[];
+      if(InpEnableM15) CopyRates(Symbol(),PERIOD_M15,TimeCurrent()-(datetime)(InpDaysM15*86400),TimeCurrent(),tr);
+      if(InpEnableM30) CopyRates(Symbol(),PERIOD_M30,TimeCurrent()-(datetime)(InpDaysM30*86400),TimeCurrent(),tr);
+      if(InpEnableH1)  CopyRates(Symbol(),PERIOD_H1, TimeCurrent()-(datetime)(InpDaysH1 *86400),TimeCurrent(),tr);
+      if(InpEnableH4)  CopyRates(Symbol(),PERIOD_H4, TimeCurrent()-(datetime)(InpDaysH4 *86400),TimeCurrent(),tr);
+      if(InpEnableD1)  CopyRates(Symbol(),PERIOD_D1, TimeCurrent()-(datetime)(InpDaysD1 *86400),TimeCurrent(),tr);
+      CopyRates(Symbol(),PERIOD_M1,TimeCurrent()-(datetime)(InpDaysM1*86400),TimeCurrent(),tr);
 
       int si=0;for(int k=0;k<rates_total;k++)if(time[k]>=g_anchor_time){si=k;break;}
       g_state_hist.min_h=high[si];g_state_hist.min_h_i=si;g_state_hist.min_l=low[si];g_state_hist.min_l_i=si;
