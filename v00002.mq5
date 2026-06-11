@@ -98,6 +98,7 @@ void ResetBullishMemory(){
 int      g_shd_state[SHD_BOX_MAX]; double g_shd_top[SHD_BOX_MAX];  double g_shd_bot[SHD_BOX_MAX];
 int      g_shd_touch[SHD_BOX_MAX]; int    g_shd_appr[SHD_BOX_MAX]; int    g_shd_cnt_in[SHD_BOX_MAX];
 datetime g_shd_ev_t[SHD_BOX_MAX];  int    g_shd_break_up[SHD_BOX_MAX]; int g_shd_break_dn[SHD_BOX_MAX];
+bool     g_shd_is_ext[SHD_BOX_MAX];
 int      g_shd_cnt=0;
 
 //--- Ana kutu
@@ -105,6 +106,7 @@ string   g_bx_nm[BOX_MAX];       string   g_bx_wk_abv_nm[BOX_MAX]; string   g_bx
 int      g_bx_state[BOX_MAX];    double   g_bx_top[BOX_MAX];        double   g_bx_bot[BOX_MAX];
 int      g_bx_touch_state[BOX_MAX]; int   g_bx_approach[BOX_MAX];  int      g_bx_inside_cnt[BOX_MAX];
 datetime g_bx_event_time[BOX_MAX];  int   g_bx_break_up[BOX_MAX];  int      g_bx_break_dn[BOX_MAX];
+bool     g_bx_is_ext[BOX_MAX];
 int      g_bx_cnt=0;
 
 //--- TFBoxResult
@@ -235,13 +237,14 @@ void BxDeleteAll()
    g_bx_cnt=0;
 }
 
-void BxAdd(string nm,string wk_abv,string wk_blw,double top,double bot)
+void BxAdd(string nm,string wk_abv,string wk_blw,double top,double bot,bool is_ext=false)
 {
    if(g_shadow_mode){
       if(g_shd_cnt>=SHD_BOX_MAX)return;
       g_shd_state[g_shd_cnt]=2;g_shd_top[g_shd_cnt]=top;g_shd_bot[g_shd_cnt]=bot;
       g_shd_touch[g_shd_cnt]=0;g_shd_appr[g_shd_cnt]=0;g_shd_cnt_in[g_shd_cnt]=0;
       g_shd_ev_t[g_shd_cnt]=0;g_shd_break_up[g_shd_cnt]=0;g_shd_break_dn[g_shd_cnt]=0;
+      g_shd_is_ext[g_shd_cnt]=is_ext;
       g_shd_cnt++;return;
    }
    if(g_bx_cnt>=BOX_MAX)return;
@@ -250,6 +253,7 @@ void BxAdd(string nm,string wk_abv,string wk_blw,double top,double bot)
    g_bx_state[g_bx_cnt]=2;g_bx_touch_state[g_bx_cnt]=0;g_bx_approach[g_bx_cnt]=0;
    g_bx_inside_cnt[g_bx_cnt]=0;g_bx_event_time[g_bx_cnt]=0;
    g_bx_break_up[g_bx_cnt]=0;g_bx_break_dn[g_bx_cnt]=0;
+   g_bx_is_ext[g_bx_cnt]=is_ext;
    g_bx_cnt++;
 }
 
@@ -311,13 +315,13 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time)
          else{bool bd=(c<bot),bu=(c>top);int ap=g_bx_approach[k];
             if(ap==1){
                if(bd){
-                  if(g_bx_touch_state[k]!=2){DrawDot(g_bx_nm[k]+"_Dot",bar_time,bot,clrBlue);}
+                  if(g_bx_touch_state[k]!=2 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_Dot",bar_time,bot,clrBlue);}
                   g_bx_touch_state[k]=2;g_bx_break_dn[k]++;
                }else if(bu)g_bx_touch_state[k]=3;
             }
             else{
                if(bu){
-                  if(g_bx_touch_state[k]!=2){DrawDot(g_bx_nm[k]+"_Dot",bar_time,top,clrBlue);}
+                  if(g_bx_touch_state[k]!=2 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_Dot",bar_time,top,clrBlue);}
                   g_bx_touch_state[k]=2;g_bx_break_up[k]++;
                }else if(bd)g_bx_touch_state[k]=3;
             }
@@ -424,7 +428,8 @@ void DoDrawBox(const datetime &time[],string pfx,SState &s,int left_i,double top
    DrawRect(nm,t_left,top,D'2099.12.31 00:00',bot,clr);
    DrawWeakRect(wk_abv,t_left,top+wk_sz,top,wk_clr);
    DrawWeakRect(wk_blw,t_left,bot,bot-wk_sz,wk_clr);
-   BxAdd(nm,wk_abv,wk_blw,top,bot);
+   bool is_ext = (clr == InpColorBoxBullFaint || clr == InpColorBoxBearFaint);
+   BxAdd(nm,wk_abv,wk_blw,top,bot,is_ext);
 }
 
 //=====================================================================
