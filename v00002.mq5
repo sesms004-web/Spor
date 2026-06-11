@@ -260,7 +260,11 @@ void BxAdd(string nm,string wk_abv,string wk_blw,double top,double bot,bool is_e
 void ShdBxAdvanceTrim()
 {
    for(int k=0;k<g_shd_cnt;k++){
-      if(g_shd_state[k]==1){if(g_shd_touch[k]==1)continue;g_shd_state[k]=0;}
+      if(g_shd_state[k]==1){
+         if(g_shd_touch[k]==1)continue;
+         if(g_shd_is_ext[k])continue;
+         g_shd_state[k]=0;
+      }
       else if(g_shd_state[k]==2)g_shd_state[k]=1;
    }
 }
@@ -271,6 +275,7 @@ void BxAdvanceTrim(datetime t)
    for(int k=0;k<g_bx_cnt;k++){
       if(g_bx_state[k]==1){
          if(g_bx_touch_state[k]==1)continue;
+         if(g_bx_is_ext[k])continue;
          if(ObjectFind(0,g_bx_nm[k])>=0)       ObjectSetInteger(0,g_bx_nm[k],       OBJPROP_TIME,1,t);
          if(ObjectFind(0,g_bx_wk_abv_nm[k])>=0)ObjectSetInteger(0,g_bx_wk_abv_nm[k],OBJPROP_TIME,1,t);
          if(ObjectFind(0,g_bx_wk_blw_nm[k])>=0)ObjectSetInteger(0,g_bx_wk_blw_nm[k],OBJPROP_TIME,1,t);
@@ -315,19 +320,19 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time)
          else{bool bd=(c<bot),bu=(c>top);int ap=g_bx_approach[k];
             if(ap==1){
                if(bd){
-                  if(g_bx_touch_state[k]!=2 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_Dot",bar_time,bot,clrBlue);}
+                  if(g_bx_touch_state[k]!=2 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_Dot_"+IntegerToString(bar_time),bar_time,bot,clrBlue);}
                   g_bx_touch_state[k]=2;g_bx_break_dn[k]++;
                }else if(bu){
-                  if(g_bx_touch_state[k]!=3 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_RedDot",bar_time,top,clrRed);}
+                  if(g_bx_touch_state[k]!=3 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_RedDot_"+IntegerToString(bar_time),bar_time,top,clrRed);}
                   g_bx_touch_state[k]=3;
                }
             }
             else{
                if(bu){
-                  if(g_bx_touch_state[k]!=2 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_Dot",bar_time,top,clrBlue);}
+                  if(g_bx_touch_state[k]!=2 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_Dot_"+IntegerToString(bar_time),bar_time,top,clrBlue);}
                   g_bx_touch_state[k]=2;g_bx_break_up[k]++;
                }else if(bd){
-                  if(g_bx_touch_state[k]!=3 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_RedDot",bar_time,bot,clrRed);}
+                  if(g_bx_touch_state[k]!=3 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_RedDot_"+IntegerToString(bar_time),bar_time,bot,clrRed);}
                   g_bx_touch_state[k]=3;
                }
             }
