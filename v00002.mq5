@@ -317,13 +317,19 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time)
                if(bd){
                   if(g_bx_touch_state[k]!=2 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_Dot",bar_time,bot,clrBlue);}
                   g_bx_touch_state[k]=2;g_bx_break_dn[k]++;
-               }else if(bu)g_bx_touch_state[k]=3;
+               }else if(bu){
+                  if(g_bx_touch_state[k]!=3 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_RedDot",bar_time,top,clrRed);}
+                  g_bx_touch_state[k]=3;
+               }
             }
             else{
                if(bu){
                   if(g_bx_touch_state[k]!=2 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_Dot",bar_time,top,clrBlue);}
                   g_bx_touch_state[k]=2;g_bx_break_up[k]++;
-               }else if(bd)g_bx_touch_state[k]=3;
+               }else if(bd){
+                  if(g_bx_touch_state[k]!=3 && g_bx_is_ext[k]){DrawDot(g_bx_nm[k]+"_RedDot",bar_time,bot,clrRed);}
+                  g_bx_touch_state[k]=3;
+               }
             }
             g_bx_event_time[k]=bar_time;}
       }
