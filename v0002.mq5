@@ -300,7 +300,7 @@ void ShdBxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time
    }
 }
 
-void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time)
+void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time,bool is_history=false)
 {
    if(g_shadow_mode){ShdBxUpdateStats(h,l,c,prev_c,bar_time);return;}
    for(int k=0;k<g_bx_cnt;k++){
@@ -497,12 +497,12 @@ bool AnalyzeTFBoxResult(ENUM_TIMEFRAMES tf,double days_inp,TFBoxResult &res)
    for(int i=si+1;i<n-1;i++){
       bool inside=(h[i]<=st.mb_h)&&(l[i]>=st.mb_l);
       if(!inside){if(h[i]>st.mb_h||l[i]<st.mb_l){st.mb_h=h[i];st.mb_l=l[i];st.mb_i=i;}ProcessBar(i,o,h,l,c,t,st,true);}
-      else{double pc=(i>0)?c[i-1]:c[i];BxUpdateStats(h[i],l[i],c[i],pc,t[i]);}
+      else{double pc=(i>0)?c[i-1]:c[i];BxUpdateStats(h[i],l[i],c[i],pc,t[i],true);}
    }
    int li=n-1;SState sc;sc.CopyFrom(st);
    bool il=(h[li]<=sc.mb_h)&&(l[li]>=sc.mb_l);
    if(!il)ProcessBar(li,o,h,l,c,t,sc,true);
-   else{double pc=(li>0)?c[li-1]:c[li];BxUpdateStats(h[li],l[li],c[li],pc,t[li]);}
+   else{double pc=(li>0)?c[li-1]:c[li];BxUpdateStats(h[li],l[li],c[li],pc,t[li],false);}
    g_shadow_mode=false;
 
    int bk=-1;datetime bt=0;
@@ -694,7 +694,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
    double val_h=high[i],val_l=low[i],val_c=close[i];
    string pfx=is_history?"":"Live_";
    double prev_c=(i>0)?close[i-1]:close[i];
-   BxUpdateStats(val_h,val_l,val_c,prev_c,time[i]);
+   BxUpdateStats(val_h,val_l,val_c,prev_c,time[i],is_history);
 
    double ch_h=state.maj_h; double ch_l=state.maj_l;
    if(state.maj_st==0){
@@ -1031,7 +1031,7 @@ int OnCalculate(const int rates_total,const int prev_calculated,
       if(!inside){
          if(high[i]>g_state_hist.mb_h||low[i]<g_state_hist.mb_l){g_state_hist.mb_h=high[i];g_state_hist.mb_l=low[i];g_state_hist.mb_i=i;}
          ProcessBar(i,open,high,low,close,time,g_state_hist,true);
-      }else{double pc=(i>0)?close[i-1]:close[i];BxUpdateStats(high[i],low[i],close[i],pc,time[i]);}
+      }else{double pc=(i>0)?close[i-1]:close[i];BxUpdateStats(high[i],low[i],close[i],pc,time[i],true);}
    }
 
    ObjectsDeleteAll(0,"Live_");DeleteLine("LiveLeg");
@@ -1040,7 +1040,7 @@ int OnCalculate(const int rates_total,const int prev_calculated,
    if(li>0){
       bool il=(high[li]<=g_state_curr.mb_h)&&(low[li]>=g_state_curr.mb_l);
       if(!il)ProcessBar(li,open,high,low,close,time,g_state_curr,false);
-      else{double pc=(li>0)?close[li-1]:close[li];BxUpdateStats(high[li],low[li],close[li],pc,time[li]);}
+      else{double pc=(li>0)?close[li-1]:close[li];BxUpdateStats(high[li],low[li],close[li],pc,time[li],false);}
    }
 
    if(InpShowMin&&li>0){
