@@ -366,7 +366,7 @@ struct SState{
    double trig_h,trig_l;int lp_i;double lp_p;
    double maj_h;int maj_h_i;double maj_l;int maj_l_i;
    double tmp_h;int tmp_h_i;double tmp_l;int tmp_l_i;
-   int    anc_i;double anc_v;int bos_i;
+   int    anc_i;double anc_v;int bos_i;int bos_count;
    string cur_top_line,cur_bot_line;
    double mb_h,mb_l;int mb_i;
    double t1_h,t1_l;int t1_i;
@@ -383,7 +383,7 @@ struct SState{
       trig_h=s.trig_h;trig_l=s.trig_l;lp_i=s.lp_i;lp_p=s.lp_p;
       maj_h=s.maj_h;maj_h_i=s.maj_h_i;maj_l=s.maj_l;maj_l_i=s.maj_l_i;
       tmp_h=s.tmp_h;tmp_h_i=s.tmp_h_i;tmp_l=s.tmp_l;tmp_l_i=s.tmp_l_i;
-      anc_i=s.anc_i;anc_v=s.anc_v;bos_i=s.bos_i;
+      anc_i=s.anc_i;anc_v=s.anc_v;bos_i=s.bos_i;bos_count=s.bos_count;
       cur_top_line=s.cur_top_line;cur_bot_line=s.cur_bot_line;
       mb_h=s.mb_h;mb_l=s.mb_l;mb_i=s.mb_i;
       t1_h=s.t1_h;t1_l=s.t1_l;t1_i=s.t1_i;
@@ -482,7 +482,7 @@ bool AnalyzeTFBoxResult(ENUM_TIMEFRAMES tf,double days_inp,TFBoxResult &res)
    st.min_h=h[si];st.min_h_i=si;st.min_l=l[si];st.min_l_i=si;
    st.trig_h=h[si];st.trig_l=l[si];st.tmp_h=h[si];st.tmp_h_i=si;
    st.tmp_l=l[si];st.tmp_l_i=si;st.min_tr=(c[si]>o[si])?1:-1;
-   st.anc_i=si;st.anc_v=c[si];st.lp_i=si;st.lp_p=c[si];st.bos_i=si;
+   st.anc_i=si;st.anc_v=c[si];st.lp_i=si;st.lp_p=c[si];st.bos_i=si;st.bos_count=0;
    st.maj_h_i=si;st.maj_l_i=si;st.mb_h=h[si];st.mb_l=l[si];st.mb_i=si;
    st.t1_h=0;st.t1_l=0;st.t1_i=0;st.d1_h=0;st.d1_l=0;st.d1_i=0;
    st.t2_h=0;st.t2_l=0;st.t2_i=0;st.choch_dir=0;
@@ -872,11 +872,12 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
             BxAdvanceTrim(GetTimeSafe(time,state.tmp_h_i));
 
-            // Ani Trend Dönüşü (Fakeout) - Boğa → Ayı (devamlılık olmadan)
-            if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Boğa -> Ayı)"); }
-            DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l,clrYellow);
-
-            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;
+            if(state.bos_count==0){
+               if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Boğa -> Ayı)"); }
+               // Boğa'dan Ayı'ya dönerken (başarısız Boğa trendi) sahte tepeye top atıyoruz
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,state.tmp_h_i),state.tmp_h,clrYellow);
+            }
+            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             if(is_history&&state.has_pot_bear_minor&&InpShowBox)DoDrawBox(time,pfx,state,state.pot_bear_start_i,state.pot_bear_start_p,state.pot_bear_end_p,InpColorBoxBearFaint);
@@ -889,7 +890,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          // BOS devam (bullish continuation): maj_st 1→0
          if(val_c>state.maj_h){
             ResetChochState(state); // Yeni trend bacağı, CHoCH sıfırla
-            state.bos_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
+            state.bos_i=i;state.bos_count++;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_l_i),state.maj_l,InpColorBull,2,STYLE_SOLID);
             state.st_h.Clear();state.maj_st=0;state.anc_i=state.maj_l_i;state.anc_v=state.maj_l;state.tmp_h=val_h;state.tmp_h_i=i;
             BxReset(state,state.maj_l,val_h);
@@ -899,7 +900,14 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          // BOS: Boğa → Ayı (maj_st==1)
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_c<state.maj_l){
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
-            BxAdvanceTrim(GetTimeSafe(time,state.tmp_h_i));state.maj_tr=-1;state.maj_st=0;state.bos_i=i;
+            BxAdvanceTrim(GetTimeSafe(time,state.tmp_h_i));
+
+            if(state.bos_count==0){
+               if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Boğa -> Ayı)"); }
+               // Boğa'dan Ayı'ya dönerken (başarısız Boğa trendi) sahte tepeye top atıyoruz
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,state.tmp_h_i),state.tmp_h,clrYellow);
+            }
+            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             if(is_history&&state.has_pot_bear_minor&&InpShowBox)DoDrawBox(time,pfx,state,state.pot_bear_start_i,state.pot_bear_start_p,state.pot_bear_end_p,InpColorBoxBearFaint);
@@ -927,11 +935,12 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
             BxAdvanceTrim(GetTimeSafe(time,state.tmp_l_i));
 
-            // Ani Trend Dönüşü (Fakeout) - Ayı → Boğa (devamlılık olmadan)
-            if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Ayı -> Boğa)"); }
-            DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h,clrYellow);
-
-            state.maj_tr=1;state.maj_st=0;state.bos_i=i;
+            if(state.bos_count==0){
+               if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Ayı -> Boğa)"); }
+               // Ayı'dan Boğa'ya dönerken (başarısız Ayı trendi) sahte dibe top atıyoruz
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,state.tmp_l_i),state.tmp_l,clrYellow);
+            }
+            state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             if(is_history&&state.has_pot_bull_minor&&InpShowBox)DoDrawBox(time,pfx,state,state.pot_bull_start_i,state.pot_bull_end_p,state.pot_bull_start_p,InpColorBoxBullFaint);
@@ -944,7 +953,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          // BOS devam (bearish continuation): maj_st 1→0
          if(state.maj_l!=EMPTY_VALUE&&val_c<state.maj_l){
             ResetChochState(state); // Yeni trend bacağı, CHoCH sıfırla
-            state.maj_h=state.tmp_h;state.bos_i=i;state.maj_h_i=state.tmp_h_i;
+            state.maj_h=state.tmp_h;state.bos_i=i;state.bos_count++;state.maj_h_i=state.tmp_h_i;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_h_i),state.maj_h,InpColorBear,2,STYLE_SOLID);
             state.st_l.Clear();state.maj_st=0;state.anc_i=state.maj_h_i;state.anc_v=state.maj_h;state.tmp_l=val_l;state.tmp_l_i=i;
             BxReset(state,val_l,state.maj_h);
@@ -954,7 +963,14 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          // BOS: Ayı → Boğa (maj_st==1)
          if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_c>state.maj_h){
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
-            BxAdvanceTrim(GetTimeSafe(time,state.tmp_l_i));state.maj_tr=1;state.maj_st=0;state.bos_i=i;
+            BxAdvanceTrim(GetTimeSafe(time,state.tmp_l_i));
+
+            if(state.bos_count==0){
+               if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Ayı -> Boğa)"); }
+               // Ayı'dan Boğa'ya dönerken (başarısız Ayı trendi) sahte dibe top atıyoruz
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,state.tmp_l_i),state.tmp_l,clrYellow);
+            }
+            state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             if(is_history&&state.has_pot_bull_minor&&InpShowBox)DoDrawBox(time,pfx,state,state.pot_bull_start_i,state.pot_bull_end_p,state.pot_bull_start_p,InpColorBoxBullFaint);
@@ -1008,7 +1024,7 @@ int OnCalculate(const int rates_total,const int prev_calculated,
       g_state_hist.tmp_h=high[si];g_state_hist.tmp_h_i=si;g_state_hist.tmp_l=low[si];g_state_hist.tmp_l_i=si;
       g_state_hist.min_tr=(close[si]>open[si])?1:-1;
       g_state_hist.anc_i=si;g_state_hist.anc_v=close[si];g_state_hist.lp_i=si;g_state_hist.lp_p=close[si];
-      g_state_hist.bos_i=si;g_state_hist.maj_h_i=si;g_state_hist.maj_l_i=si;
+      g_state_hist.bos_i=si;g_state_hist.bos_count=0;g_state_hist.maj_h_i=si;g_state_hist.maj_l_i=si;
       g_state_hist.mb_h=high[si];g_state_hist.mb_l=low[si];g_state_hist.mb_i=si;
       g_state_hist.t1_h=0;g_state_hist.t1_l=0;g_state_hist.t1_i=0;
       g_state_hist.d1_h=0;g_state_hist.d1_l=0;g_state_hist.d1_i=0;
