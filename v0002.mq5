@@ -324,12 +324,6 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time,bo
                   }
                   g_bx_touch_state[k]=2;g_bx_break_dn[k]++;
                }else if(bu){
-                  // İçeriye tekrar girip üstü deldi = Bildirim at
-                  if(!g_bx_notified[k] && g_bx_is_ext[k]){
-                     DrawDot(g_bx_nm[k]+"_Dot",bar_time,top,clrBlue);
-                     if(!is_history && InpAlertPush) SendNotification("🔵 Mavi Top: Kutu İhlali (Yukarı Kırılım)");
-                     g_bx_notified[k]=true;
-                  }
                   g_bx_touch_state[k]=3;
                }
             }
@@ -342,12 +336,6 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time,bo
                   }
                   g_bx_touch_state[k]=2;g_bx_break_up[k]++;
                }else if(bd){
-                  // İçeriye tekrar girip altı deldi = Bildirim at
-                  if(!g_bx_notified[k] && g_bx_is_ext[k]){
-                     DrawDot(g_bx_nm[k]+"_Dot",bar_time,bot,clrBlue);
-                     if(!is_history && InpAlertPush) SendNotification("🔵 Mavi Top: Kutu İhlali (Aşağı Kırılım)");
-                     g_bx_notified[k]=true;
-                  }
                   g_bx_touch_state[k]=3;
                }
             }
@@ -802,10 +790,6 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_l,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_l,sc,3,STYLE_SOLID);
          }
 
-         if(state.bos_count==0){
-            if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Sahte CHoCH (Boğa -> Ayı -> Boğa Beklentisi İptal)"); }
-            DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,state.t2_i),state.t2_h,clrYellow);
-         }
 
          if(!g_shadow_mode&&!is_history){
             static int ld1b=-1;
@@ -843,11 +827,6 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.d1_i),state.d1_h,GetTimeSafe(time,state.t2_i),state.t2_l,InpColorChochPath,1,STYLE_DOT);
             DrawLine(GetUniqueName(pfx+"CHoCH_Path_"),GetTimeSafe(time,state.t2_i),state.t2_l,GetTimeSafe(time,i),state.d1_h,InpColorChochPath,1,STYLE_DOT);
             DrawLine(GetUniqueName(pfx+"CHoCH_Signal_"),GetTimeSafe(time,i),state.d1_h,GetTimeSafe(time,i)+PeriodSeconds()*5,state.d1_h,sc,3,STYLE_SOLID);
-         }
-
-         if(state.bos_count==0){
-            if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Sahte CHoCH (Ayı -> Boğa -> Ayı Beklentisi İptal)"); }
-            DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,state.t2_i),state.t2_l,clrYellow);
          }
 
          if(!g_shadow_mode&&!is_history){
@@ -900,6 +879,11 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
             BxAdvanceTrim(GetTimeSafe(time,state.tmp_h_i));
 
+            if(state.bos_count==0){
+               if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Boğa -> Ayı)"); }
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l,clrYellow);
+            }
+
             state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
@@ -924,6 +908,11 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_c<state.maj_l){
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
             BxAdvanceTrim(GetTimeSafe(time,state.tmp_h_i));
+
+            if(state.bos_count==0){
+               if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Boğa -> Ayı)"); }
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l,clrYellow);
+            }
 
             state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
@@ -953,6 +942,11 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
             BxAdvanceTrim(GetTimeSafe(time,state.tmp_l_i));
 
+            if(state.bos_count==0){
+               if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Ayı -> Boğa)"); }
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h,clrYellow);
+            }
+
             state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
@@ -977,6 +971,11 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_c>state.maj_h){
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
             BxAdvanceTrim(GetTimeSafe(time,state.tmp_l_i));
+
+            if(state.bos_count==0){
+               if(!is_history && InpAlertPush) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Ayı -> Boğa)"); }
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h,clrYellow);
+            }
 
             state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
