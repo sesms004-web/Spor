@@ -110,6 +110,7 @@ bool     g_bx_is_ext[BOX_MAX];
 bool     g_bx_notified[BOX_MAX];
 int      g_bx_cnt=0;
 datetime g_last_yellow_time = 0;
+datetime g_last_red_time = 0;
 
 //--- TFBoxResult
 struct TFBoxResult{
@@ -381,7 +382,7 @@ struct SState{
    double t1_h,t1_l;int t1_i;
    double d1_h,d1_l;int d1_i;
    double t2_h,t2_l;int t2_i;
-   int    choch_dir;
+   int    choch_dir; bool swept_choch;
    int    bx_phase;bool bx_extreme;double bx_swing_h,bx_swing_l;
    bool   has_pot_bull_minor;int pot_bull_start_i;double pot_bull_start_p,pot_bull_end_p;
    bool   has_pot_bear_minor;int pot_bear_start_i;double pot_bear_start_p,pot_bear_end_p;
@@ -398,7 +399,7 @@ struct SState{
       t1_h=s.t1_h;t1_l=s.t1_l;t1_i=s.t1_i;
       d1_h=s.d1_h;d1_l=s.d1_l;d1_i=s.d1_i;
       t2_h=s.t2_h;t2_l=s.t2_l;t2_i=s.t2_i;
-      choch_dir=s.choch_dir;
+      choch_dir=s.choch_dir; swept_choch=s.swept_choch;
       bx_phase=s.bx_phase;bx_extreme=s.bx_extreme;bx_swing_h=s.bx_swing_h;bx_swing_l=s.bx_swing_l;
       has_pot_bull_minor=s.has_pot_bull_minor;pot_bull_start_i=s.pot_bull_start_i;
       pot_bull_start_p=s.pot_bull_start_p;pot_bull_end_p=s.pot_bull_end_p;
@@ -412,7 +413,7 @@ void BxReset(SState &s,double rl,double rh){s.bx_phase=0;s.bx_extreme=false;s.bx
 
 // CHoCH state'ini tamamen sıfırla (BOS noktalarında çağrılır)
 void ResetChochState(SState &s){
-   s.choch_dir=0;
+   s.choch_dir=0; s.swept_choch=false;
    s.t1_h=0;s.t1_l=0;s.t1_i=0;
    s.d1_h=0;s.d1_l=0;s.d1_i=0;
    s.t2_h=0;s.t2_l=0;s.t2_i=0;
@@ -878,7 +879,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             if(InpShowMaj){state.cur_top_line=GetUniqueName(pfx+"HLine_Top_");DrawLine(state.cur_top_line,GetTimeSafe(time,state.maj_h_i),state.maj_h,GetTimeSafe(time,i)+PeriodSeconds(),state.maj_h,InpColorBull,1,STYLE_DASH,true);
                if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0){state.cur_bot_line=GetUniqueName(pfx+"HLine_Bot_");DrawLine(state.cur_bot_line,GetTimeSafe(time,state.maj_l_i),state.maj_l,GetTimeSafe(time,i)+PeriodSeconds(),state.maj_l,InpColorBull,1,STYLE_DASH,true);}}
          }
-         if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;if(InpShowMaj)UpdateLineLevel(state.cur_bot_line,state.maj_l);}
+         if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;state.maj_l_i=i;state.swept_choch=true;if(InpShowMaj)UpdateLineLevel(state.cur_bot_line,state.maj_l);}
          // BOS: Boğa → Ayı (maj_st==0)
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_c<state.maj_l){
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
@@ -898,9 +899,13 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          }
       }else if(state.maj_st==1){
          if(val_l<state.tmp_l){state.tmp_l=val_l;state.tmp_l_i=i;state.has_pot_bull_minor=false;}
-         if(state.maj_h!=EMPTY_VALUE&&val_h>state.maj_h&&val_c<=state.maj_h){state.maj_h=val_h;if(InpShowMaj)UpdateLineLevel(state.cur_top_line,state.maj_h);}
+         if(state.maj_h!=EMPTY_VALUE&&val_h>state.maj_h&&val_c<=state.maj_h){state.maj_h=val_h;state.maj_h_i=i;if(InpShowMaj)UpdateLineLevel(state.cur_top_line,state.maj_h);}
          // BOS devam (bullish continuation): maj_st 1→0
          if(val_c>state.maj_h){
+            if(state.swept_choch){
+               if(!is_history && InpAlertPush && g_last_red_time != time[i]) { SendNotification("🔴 Kırmızı Top: Likidite Alınarak Trend Devamı (Boğa)"); g_last_red_time = time[i]; }
+               DrawDot(GetUniqueName(pfx+"RedDot_"),GetTimeSafe(time,state.maj_l_i),state.maj_l,clrRed);
+            }
             ResetChochState(state); // Yeni trend bacağı, CHoCH sıfırla
             state.bos_i=i;state.bos_count++;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_l_i),state.maj_l,InpColorBull,2,STYLE_SOLID);
@@ -908,7 +913,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             BxReset(state,state.maj_l,val_h);
             CutLine(state.cur_top_line,GetTimeSafe(time,i));CutLine(state.cur_bot_line,GetTimeSafe(time,i));state.cur_top_line="";state.cur_bot_line="";
          }
-         if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;if(InpShowMaj)UpdateLineLevel(state.cur_bot_line,state.maj_l);}
+         if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;state.maj_l_i=i;state.swept_choch=true;if(InpShowMaj)UpdateLineLevel(state.cur_bot_line,state.maj_l);}
          // BOS: Boğa → Ayı (maj_st==1)
          if(state.maj_l!=EMPTY_VALUE&&state.maj_l!=0&&val_c<state.maj_l){
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
@@ -941,7 +946,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             if(InpShowMaj){state.cur_bot_line=GetUniqueName(pfx+"HLine_Bot_");DrawLine(state.cur_bot_line,GetTimeSafe(time,state.maj_l_i),state.maj_l,GetTimeSafe(time,i)+PeriodSeconds(),state.maj_l,InpColorBear,1,STYLE_DASH,true);
                if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0){state.cur_top_line=GetUniqueName(pfx+"HLine_Top_");DrawLine(state.cur_top_line,GetTimeSafe(time,state.maj_h_i),state.maj_h,GetTimeSafe(time,i)+PeriodSeconds(),state.maj_h,InpColorBear,1,STYLE_DASH,true);}}
          }
-         if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_h>state.maj_h&&val_c<=state.maj_h){state.maj_h=val_h;if(InpShowMaj)UpdateLineLevel(state.cur_top_line,state.maj_h);}
+         if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_h>state.maj_h&&val_c<=state.maj_h){state.maj_h=val_h;state.maj_h_i=i;state.swept_choch=true;if(InpShowMaj)UpdateLineLevel(state.cur_top_line,state.maj_h);}
          // BOS: Ayı → Boğa (maj_st==0)
          if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_c>state.maj_h){
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
@@ -961,9 +966,13 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          }
       }else if(state.maj_st==1){
          if(val_h>state.tmp_h){state.tmp_h=val_h;state.tmp_h_i=i;state.has_pot_bear_minor=false;}
-         if(state.maj_l!=EMPTY_VALUE&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;if(InpShowMaj)UpdateLineLevel(state.cur_bot_line,state.maj_l);}
+         if(state.maj_l!=EMPTY_VALUE&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;state.maj_l_i=i;if(InpShowMaj)UpdateLineLevel(state.cur_bot_line,state.maj_l);}
          // BOS devam (bearish continuation): maj_st 1→0
          if(state.maj_l!=EMPTY_VALUE&&val_c<state.maj_l){
+            if(state.swept_choch){
+               if(!is_history && InpAlertPush && g_last_red_time != time[i]) { SendNotification("🔴 Kırmızı Top: Likidite Alınarak Trend Devamı (Ayı)"); g_last_red_time = time[i]; }
+               DrawDot(GetUniqueName(pfx+"RedDot_"),GetTimeSafe(time,state.maj_h_i),state.maj_h,clrRed);
+            }
             ResetChochState(state); // Yeni trend bacağı, CHoCH sıfırla
             state.maj_h=state.tmp_h;state.bos_i=i;state.bos_count++;state.maj_h_i=state.tmp_h_i;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_h_i),state.maj_h,InpColorBear,2,STYLE_SOLID);
@@ -971,7 +980,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             BxReset(state,val_l,state.maj_h);
             CutLine(state.cur_top_line,GetTimeSafe(time,i));CutLine(state.cur_bot_line,GetTimeSafe(time,i));state.cur_top_line="";state.cur_bot_line="";
          }
-         if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_h>state.maj_h&&val_c<=state.maj_h){state.maj_h=val_h;if(InpShowMaj)UpdateLineLevel(state.cur_top_line,state.maj_h);}
+         if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_h>state.maj_h&&val_c<=state.maj_h){state.maj_h=val_h;state.maj_h_i=i;state.swept_choch=true;if(InpShowMaj)UpdateLineLevel(state.cur_top_line,state.maj_h);}
          // BOS: Ayı → Boğa (maj_st==1)
          if(state.maj_h!=EMPTY_VALUE&&state.maj_h!=0&&val_c>state.maj_h){
             ResetChochState(state); // CHoCH setup eski swing'e ait, sıfırla
