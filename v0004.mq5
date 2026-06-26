@@ -9,6 +9,7 @@
 
 //--- Lookback
 input double InpDaysM1  = 1.0;
+input double InpDaysM5  = 5.0;
 input double InpDaysM15 = 15.0;
 input double InpDaysM30 = 30.0;
 input double InpDaysH1  = 60.0;
@@ -134,7 +135,7 @@ double GetDaysForTF(ENUM_TIMEFRAMES tf)
 {
    if(tf==PERIOD_M15)return InpDaysM15; if(tf==PERIOD_M30)return InpDaysM30;
    if(tf==PERIOD_H1) return InpDaysH1;  if(tf==PERIOD_H4) return InpDaysH4;
-   if(tf==PERIOD_D1) return InpDaysD1;  if(tf==PERIOD_M1) return InpDaysM1;
+   if(tf==PERIOD_D1) return InpDaysD1;  if(tf==PERIOD_M1) return InpDaysM1;  if(tf==PERIOD_M5) return InpDaysM5;
    return 15.0;
 }
 
@@ -904,7 +905,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(val_c>state.maj_h){
             if(state.swept_choch){
                if(!is_history && InpAlertPush && g_last_red_time != time[i]) { SendNotification("🔴 Kırmızı Top: Likidite Alınarak Trend Devamı (Boğa)"); g_last_red_time = time[i]; }
-               DrawDot(GetUniqueName(pfx+"RedDot_"),GetTimeSafe(time,state.maj_l_i),state.maj_l,clrRed);
+               DrawDot(GetUniqueName(pfx+"RedDot_"),GetTimeSafe(time,i),val_h,clrRed);
             }
             ResetChochState(state); // Yeni trend bacağı, CHoCH sıfırla
             state.bos_i=i;state.bos_count++;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
@@ -971,7 +972,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(state.maj_l!=EMPTY_VALUE&&val_c<state.maj_l){
             if(state.swept_choch){
                if(!is_history && InpAlertPush && g_last_red_time != time[i]) { SendNotification("🔴 Kırmızı Top: Likidite Alınarak Trend Devamı (Ayı)"); g_last_red_time = time[i]; }
-               DrawDot(GetUniqueName(pfx+"RedDot_"),GetTimeSafe(time,state.maj_h_i),state.maj_h,clrRed);
+               DrawDot(GetUniqueName(pfx+"RedDot_"),GetTimeSafe(time,i),val_l,clrRed);
             }
             ResetChochState(state); // Yeni trend bacağı, CHoCH sıfırla
             state.maj_h=state.tmp_h;state.bos_i=i;state.bos_count++;state.maj_h_i=state.tmp_h_i;
