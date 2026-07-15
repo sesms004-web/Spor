@@ -33,7 +33,8 @@ input color  InpColorBear = clrRed;
 
 
 //--- Base-Drop Kutu Mantığı
-input double InpBigCandleMult = 2.0; // Şiddetli Mum Çarpanı
+input double InpBigCandleMult = 3.0; // Şiddetli Mum Çarpanı
+input double InpMaxWickPct    = 20.0; // Kırılım Yönündeki Fitil Oranı (%)
 input int    InpBaseMaxCandles = 5;  // Maksimum Ufak Mum (Base) Sayısı
 input int    InpBaseAvgLookback = 10; // Ortalama Gövde Bakma Süresi
 
@@ -322,7 +323,8 @@ void ShdBxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time
    for(int k=0;k<g_shd_cnt;k++){
       if(g_shd_state[k]==0)continue;
       double top=g_shd_top[k],bot=g_shd_bot[k];
-      bool im=(h>=bot)&&(l<=top);
+      double wk_sz=(top-bot)*InpWeakZonePct/100.0;
+      bool im=(h>=bot-wk_sz)&&(l<=top+wk_sz);
       int na;if(prev_c>top)na=1;else if(prev_c<bot)na=-1;else na=g_shd_appr[k];
       int ts=g_shd_touch[k];
       if(ts==0){if(im){g_shd_appr[k]=(na!=0)?na:(c>(top+bot)/2.0?1:-1);g_shd_touch[k]=1;g_shd_cnt_in[k]=1;g_shd_ev_t[k]=bar_time;}}
@@ -345,7 +347,8 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time,bo
    for(int k=0;k<g_bx_cnt;k++){
       if(g_bx_state[k]==0)continue;
       double top=g_bx_top[k],bot=g_bx_bot[k];
-      bool im=(h>=bot)&&(l<=top);
+      double wk_sz=(top-bot)*InpWeakZonePct/100.0;
+      bool im=(h>=bot-wk_sz)&&(l<=top+wk_sz);
       int na;if(prev_c>top)na=1;else if(prev_c<bot)na=-1;else na=g_bx_approach[k];
       int ts=g_bx_touch_state[k];
       if(ts==0){if(im){g_bx_approach[k]=(na!=0)?na:(c>(top+bot)/2.0?1:-1);g_bx_touch_state[k]=1;g_bx_inside_cnt[k]=1;g_bx_event_time[k]=bar_time;
@@ -511,6 +514,11 @@ void CheckBaseDropBox(int i, const double &open[], const double &high[], const d
    // Check if current candle is a "Big Violent Candle"
    if(cur_body > avg_body * InpBigCandleMult) {
       bool is_bullish = close[i] > open[i];
+
+      // Fitilsiz direkt gitme kontrolü (Wickless condition)
+      double wick_len = is_bullish ? (high[i] - close[i]) : (close[i] - low[i]);
+      if (wick_len > cur_body * (InpMaxWickPct / 100.0)) return; // Yönündeki fitil çok uzunsa iptal
+
 
       // Look back for "Base" (small candles)
       int base_start = i - 1;

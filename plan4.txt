@@ -1,0 +1,30 @@
+We need to update the plan:
+1. Make the condition for "violent candle" stricter (multiplier = 3.0).
+2. Add a condition for "fitilsiz direkt gitmesi" (going directly without wick). E.g. for a bullish big candle, the upper wick should be very small compared to the body. For a bearish big candle, the lower wick should be very small.
+3. Update the touch logic to stop extending the box when it touches the WEAK ZONE (the outer dotted/faint area), not just the main box.
+Currently, `BxUpdateStats` checks `bool im=(h>=bot)&&(l<=top);` which only checks the main box (`top` to `bot`).
+The Weak Zone extends above `top` by `wk_sz` and below `bot` by `wk_sz`.
+Wait, in `CheckBaseDropBox`, the main box is `box_top` to `box_bot`.
+The weak zone is `top + wk_sz` to `bot - wk_sz`.
+But `BxAdd` is called as `BxAdd(nm, wk_abv, wk_blw, top, bot, false)`.
+Inside `BxUpdateStats`:
+`double top=g_bx_top[k],bot=g_bx_bot[k];`
+It doesn't know about `wk_sz`!
+Let's add `wk_sz` calculation inside `BxUpdateStats` or store it in `g_bx_wk_sz[MAX_BOX]`.
+Currently: `double wk_sz=(top-bot)*InpWeakZonePct/100.0;`
+So the outer boundaries are `top + wk_sz` and `bot - wk_sz`.
+We will change the touch condition to:
+`double wk_sz = (top-bot)*InpWeakZonePct/100.0;`
+`double ext_top = top + wk_sz;`
+`double ext_bot = bot - wk_sz;`
+`bool im = (h >= ext_bot) && (l <= ext_top);`
+When `im` is true, it touches the outer zone. We will stop the box immediately!
+
+Also, to avoid too many boxes, "çok sık veriyor aslında bunu azaltma sadece biraz daha kurallı gitmek lazım ... fitilsiz direkt gitmesi büyük mum bırakması".
+We will add these to `CheckBaseDropBox`:
+- `cur_body > avg_body * 3.0` (or `InpBigCandleMult` set to 3.0 default).
+- For Bullish: `(high[i] - close[i]) < cur_body * 0.2` (upper wick is very small).
+- For Bearish: `(close[i] - low[i]) < cur_body * 0.2` (lower wick is very small).
+
+Let's modify `InpBigCandleMult` default to `3.0`.
+Let's add a new input `InpMaxWickPct = 20.0`.
