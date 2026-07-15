@@ -1,0 +1,23 @@
+Based on instructions, the plan is:
+1. In `BxAdvanceTrim(datetime t)`:
+   Change `if(g_bx_touch_state[k]==1)continue;` to `if(g_bx_touch_state[k]>0){ ObjectSetInteger(0,g_bx_nm[k],OBJPROP_TIME,1,g_bx_event_time[k]); g_bx_state[k]=0; continue; }` (and similarly for `wk_abv` and `wk_blw`). This stops the box right where it was touched.
+2. In `ProcessBar`:
+   Comment out or remove the old `DoDrawBox` calls for `bx_phase` and `pot_bear_minor`/`pot_bull_minor` if the user wants them hidden ("zikzak sonrası kutu yapiyo ya kutuyu gizle"). Actually I will remove or comment them out, and create a new function `CheckBaseDropBox(i, open, high, low, close, time, state, pfx, is_history)`.
+3. `CheckBaseDropBox`:
+   Keep a rolling average of candle body size (e.g. `g_avg_body`).
+   If current candle `i` body is `> g_avg_body * 2.0` (strong candle):
+     Look back at `i-1, i-2...` up to e.g. 5 candles.
+     Find the "base" which consists of small candles (`body < g_avg_body`).
+     If we find a valid base:
+       Box top = highest high of base, Box bot = lowest low of base.
+       Draw the box using `DoDrawBox`.
+4. "2 swing güncel olarak çizmeni istiyorum" (Draw 2 swings currently):
+   To implement "only keep the last 2 lines", we can modify the `DrawLine` call for Minor/Major. Currently it does `DrawLine(GetUniqueName(pfx+"Minor_")...)`.
+   Instead of using `GetUniqueName`, we can manage a small array of 2 object names for Minor and 2 for Major. When a new swing is drawn, we cycle them. Or, we can just delete all minor/major lines on every tick and redraw the LAST 2 from the stack.
+   But wait, `ProcessBar` is called on historical bars sequentially.
+   The easiest way is: during `is_history`, DO NOT DRAW any minor/major lines. Only populate the `CStack`.
+   Then, at the end of `OnCalculate`, we can draw the last 2 swings from `g_state_curr.st_h` and `st_l`!
+   Wait, the historical `ProcessBar` draws lines! Yes! And it does so by creating unique names!
+   So if we want to ONLY draw the last 2, we shouldn't draw anything during history (set `InpShowMin=false` and `InpShowMaj=false` for historical processing), and instead at the end of `OnCalculate` (or inside `ProcessBar` if `!is_history`), we draw the last 2!
+   Wait, if we do that, we need a way to draw the last 2 swings.
+   Let's check how `ProcessBar` draws lines.

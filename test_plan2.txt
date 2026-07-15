@@ -1,0 +1,36 @@
+Let's see how we will modify ProcessBar and state.
+We need a way to track the average body size to know what a "big violent candle" is.
+We can just use a simple lookback, e.g., last 10 candles average body size `avg_body`.
+If current candle body > `avg_body * 2.0` (or similar factor, we can make it an input `InpBigCandleMult = 2.0`), it's a "big candle".
+If the PREVIOUS candles were small (`body < avg_body`), they form the "base".
+We find the base by looking back from `i-1` while the body is small. The highest high and lowest low of these base candles form the Box!
+Wait, they said: "zikzak kısımları al filan ilk öncelikle onları gizle arkada çalışsın ama gizli şekilde kutulara güncelleme getiriyoruz 2 swing güncel olarak çizmeni istiyorum" (Take the zigzag parts etc., first of all hide them, let them work in background, but we bring an update to boxes, I want you to draw 2 swings currently).
+This implies:
+1. The boxes shouldn't necessarily be based on the Base-Drop logic INSTEAD of zigzag. Wait, "zikzak kısımları al filan ilk öncelikle onları gizle... kutulara güncelleme getiriyoruz... ufak mumdan sonra büyük mum geldi mi oraya bir bölge çiziyoruz".
+They are saying: hide the regular zigzag (or keep only 2 swings), AND update the box drawing logic to be: small candles followed by a big candle = draw a box there.
+So, the previous zigzag-based box logic (minor structure / major structure extreme boxes) should be replaced or augmented?
+"kutu çizerken zikzak kısımları al filan ilk öncelikle onları gizle arkada çalışsın ama gizli şekilde kutulara güncelleme getiriyoruz"
+"When drawing boxes, take the zigzag parts etc., first of all hide them let them work in background but secretly we are bringing an update to boxes... This is how the boxes will work: After a small candle or small candles (could be 3, 5, 10), if a big long violent candle comes, we draw a zone there."
+This sounds like we REPLACING the old extreme box logic with this new Order Block (Base-Rally/Base-Drop) logic.
+Or, we use the zigzag swings to IDENTIFY the area, and THEN look for the Base-Drop in that area?
+Usually, SMC order blocks are found near the extremes of the zigzag swings.
+But the user said: "ufak mumdan sonra büyük uzun şiddetli mum geldi mi oraya bir bölge çiziyoruz" without explicit restriction to zigzag extremes, OR maybe the zigzag is just there to identify the trend.
+Let's ask for final clarification or just implement it generally. Since the user said "1. De evet kur" (Yes set it up for 1 - big candle definition), "2. De zikzak gizleme ya zikzak sonrası kutu yapiyo ya kutuyu gizle" (In 2, the zigzag hiding, well after zigzag it makes a box, hide the box), "3. De doğru başla" (In 3, correct, start).
+
+Wait: "2. De zikzak gizleme ya zikzak sonrası kutu yapiyo ya kutuyu gizle"
+"hide the box that it makes after zigzag".
+Oh! The user means: HIDE the old boxes (the ones drawn by the zigzag logic). And we will draw the NEW boxes based on the Base-Drop (small candles -> big candle) logic!
+So:
+- Hide old zigzag boxes (or just don't draw them).
+- Draw new boxes using the Base-Rally / Drop logic.
+- Keep only 2 swings of the zigzag visible (or hide all zigzags? "zikzak kısımları al filan ilk öncelikle onları gizle... 2 swing güncel olarak çizmeni istiyorum" - Hide all, but draw the latest 2 swings of zigzag).
+- Stop the new box from extending when price touches it.
+
+Let's do this:
+1. Hide minor and major lines except the last 2 lines. I can just create a rolling buffer of line names for Minor and Major lines, and when a new one is added, delete the oldest one.
+2. Hide old zigzag-based boxes. The current code has `InpShowBox = true`, we can either turn it off or remove `DoDrawBox` calls for the old `bx_extreme` boxes. Actually, I can just not call `DoDrawBox` for the old logic, and instead call `DoDrawBox` for the new logic!
+3. New Box Logic: Every bar, check if it's a "big candle".
+Big candle: `body > avg_body * InpBigCandleMult`.
+If it's a big bullish candle, look back at the base (1 to N small candles). The lowest low to highest high of the base becomes a Bullish Box.
+If it's a big bearish candle, the base becomes a Bearish Box.
+And use `DoDrawBox` for it! Then the rest of the code (MTF, alerts, touches) will work seamlessly!

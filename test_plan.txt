@@ -1,0 +1,25 @@
+Okay, let's refine the logic based on the user's instructions:
+1. They want to hide the older lines (zigzags/swings), showing only the latest 2 swings. Actually, they said "zikzak kısımlarını gizle arkada çalışsın ama gizli şekilde... 2 swing güncel olarak çizmeni istiyorum" (Hide the zigzags, let them run in the background, but draw 2 swings currently).
+In the current code `InpShowMin` and `InpShowMaj` handle showing Minor and Major lines. I can update the drawing logic to ONLY draw the last 2 segments, and hide the history ones, or modify `DrawLine` for minor/major to delete old ones and keep only the latest 2 names. Let's look at how we can implement drawing only 2 swings. We can just keep track of the names of the last 2 lines and delete older ones, or we just redraw the whole thing and only the last 2 parts are drawn.
+Wait, drawing minor/major lines uses `GetUniqueName(pfx+"Minor_")` which means it creates a new unique line for every segment. I can keep a rolling buffer of line names and delete older ones!
+2. They want to stop extending the box when it's touched.
+In `BxAdvanceTrim(datetime t)`:
+```
+      if(g_bx_state[k]==1){
+         if(g_bx_touch_state[k]==1) {
+            // STOP EXTENDING! So we SET the time to the event time or `t`!
+            if(ObjectFind(0,g_bx_nm[k])>=0)       ObjectSetInteger(0,g_bx_nm[k],       OBJPROP_TIME,1,g_bx_event_time[k]);
+            // And then what? We should NOT keep it in state 1 perhaps, or just not 'continue' and keep extending it to `t`?
+            // If we want it to stop extending right AT THE TOUCH TIME, we do:
+            // ObjectSetInteger(..., OBJPROP_TIME, 1, g_bx_event_time[k]);
+            // and change state so it doesn't get processed anymore?
+            // But if it stops extending, it should just stop.
+         }
+```
+Currently, `if(g_bx_touch_state[k]==1)continue;` skips the line `ObjectSetInteger(0,g_bx_nm[k],OBJPROP_TIME,1,t);`, meaning the right side of the box STOPS at its previous time (which is the time `BxAdvanceTrim` was last called BEFORE the touch). But the user says it's extending and they want it to stop. Wait, in `MQL5`, if you draw a rectangle with `time2 = D'2099.12.31 00:00'`, it goes to infinity. `BxAdvanceTrim` sets the `time2` to `t` to STOP it from going to infinity! Ah!
+So if we `continue`, it stays at `2099.12.31`! That's why it extends forever!
+To fix this, we should change `if(g_bx_touch_state[k]==1)continue;` to `if(g_bx_touch_state[k]>0){ ObjectSetInteger(..., time2, g_bx_event_time[k]); g_bx_state[k] = 0; }`!
+3. "Ufak mumdan sonra büyük uzun şiddetli mum geldi mi oraya bir bölge çiziyoruz". (Draw a box after a small candle(s) followed by a strong candle).
+We need to implement this logic. Small candle followed by big candle.
+Let's add this detection in `ProcessBar`. A big candle can be defined as `MathAbs(c - o) > ATR` or `MathAbs(c - o) > 2 * avg(body)`.
+Then the small candle(s) before it (the base) is the box.

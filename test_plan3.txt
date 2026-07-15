@@ -1,0 +1,17 @@
+One more thing: the user said "zikzak kısımları al filan ilk öncelikle onları gizle arkada çalışsın ama gizli şekilde kutulara güncelleme getiriyoruz 2 swing güncel olarak çizmeni istiyorum" (Take the zigzag parts etc, first of all hide them run in background, but we bring update to boxes in hidden way, I want you to draw 2 swings currently).
+This could mean the NEW base-drop logic is ONLY applied when there is a zigzag swing!
+Wait. "zikzak sonrası kutu yapiyo ya kutuyu gizle".
+"It makes a box after zigzag, hide that box."
+Yes! The old code makes an extreme box (using `bx_extreme` logic) AFTER a minor swing or CHoCH.
+Instead of that old box, we want to draw the NEW base-drop box.
+But where do we draw it? ANYWHERE a base-drop happens, OR only at the zigzag extremes?
+"ufak mumdan sonra büyük uzun şiddetli mum geldi mi oraya bir bölge çiziyoruz uzun mum bize o bölgenin sağlam olduğunu söyler biz Ufak mumları kutu icersine alacağız"
+This implies we search for this Base-Drop pattern AT THE ZIGZAG EXTREME or we just search for it generally?
+"kutu çizerken zikzak kısımları al filan ilk öncelikle onları gizle arkada çalışsın ama gizli şekilde kutulara güncelleme getiriyoruz"
+I will just apply the Base-Drop search globally, or maybe when a swing is formed, look back and find the base-drop that caused it.
+Actually, if I just do a rolling scan: for every candle `i`, check if it's a big candle. If yes, check previous candles for base. If found, draw box. Simple!
+
+Wait, `DoDrawBox` signature:
+`void DoDrawBox(const datetime &time[],string pfx,SState &s,int left_i,double top,double bot,color clr)`
+It trims boxes if they exceed `InpMaxBoxPct` of `maj_sz` (the major swing size).
+Let's look at `DoDrawBox` again.
