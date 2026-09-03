@@ -36,6 +36,7 @@ input color  InpColorWeakBull     = C'0,25,55';
 input color  InpColorWeakBear     = C'55,15,0';
 
 input bool InpAlertPush = false;
+input bool InpAlertPopup = false;
 
 //=====================================================================
 // GLOBALS
@@ -389,8 +390,14 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             BxAdvanceTrim(GetTimeSafe(time,state.tmp_h_i));
 
             if(state.bos_count==0){
-               if(!is_history && InpAlertPush && g_last_yellow_time != time[i]) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Boğa -> Ayı)"); g_last_yellow_time = time[i]; }
-               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l,clrYellow);
+               if(!is_history && g_last_yellow_time != time[i]) {
+                  string msg = StringFormat("%s %s - 🟡 Sarı Top: Ani Trend Dönüşü (Boğa -> Ayı)", Symbol(), EnumToString(Period()));
+                  if(InpAlertPush) SendNotification(msg);
+                  if(InpAlertPopup) Alert(msg);
+                  g_last_yellow_time = time[i];
+               }
+               double atr_gap = (val_h-val_l)*0.5; if(atr_gap==0) atr_gap = Point()*20;
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l - atr_gap,clrYellow);
             }
 
             state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.is_mitigated=false;
@@ -415,8 +422,14 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             BxAdvanceTrim(GetTimeSafe(time,state.tmp_h_i));
 
             if(state.bos_count==0){
-               if(!is_history && InpAlertPush && g_last_yellow_time != time[i]) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Boğa -> Ayı)"); g_last_yellow_time = time[i]; }
-               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l,clrYellow);
+               if(!is_history && g_last_yellow_time != time[i]) {
+                  string msg = StringFormat("%s %s - 🟡 Sarı Top: Ani Trend Dönüşü (Boğa -> Ayı)", Symbol(), EnumToString(Period()));
+                  if(InpAlertPush) SendNotification(msg);
+                  if(InpAlertPopup) Alert(msg);
+                  g_last_yellow_time = time[i];
+               }
+               double atr_gap = (val_h-val_l)*0.5; if(atr_gap==0) atr_gap = Point()*20;
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l - atr_gap,clrYellow);
             }
 
             state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.is_mitigated=false;
@@ -445,8 +458,14 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             BxAdvanceTrim(GetTimeSafe(time,state.tmp_l_i));
 
             if(state.bos_count==0){
-               if(!is_history && InpAlertPush && g_last_yellow_time != time[i]) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Ayı -> Boğa)"); g_last_yellow_time = time[i]; }
-               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h,clrYellow);
+               if(!is_history && g_last_yellow_time != time[i]) {
+                  string msg = StringFormat("%s %s - 🟡 Sarı Top: Ani Trend Dönüşü (Ayı -> Boğa)", Symbol(), EnumToString(Period()));
+                  if(InpAlertPush) SendNotification(msg);
+                  if(InpAlertPopup) Alert(msg);
+                  g_last_yellow_time = time[i];
+               }
+               double atr_gap = (val_h-val_l)*0.5; if(atr_gap==0) atr_gap = Point()*20;
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h + atr_gap,clrYellow);
             }
 
             state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.is_mitigated=false;
@@ -471,8 +490,14 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             BxAdvanceTrim(GetTimeSafe(time,state.tmp_l_i));
 
             if(state.bos_count==0){
-               if(!is_history && InpAlertPush && g_last_yellow_time != time[i]) { SendNotification("🟡 Sarı Top: Ani Trend Dönüşü (Ayı -> Boğa)"); g_last_yellow_time = time[i]; }
-               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h,clrYellow);
+               if(!is_history && g_last_yellow_time != time[i]) {
+                  string msg = StringFormat("%s %s - 🟡 Sarı Top: Ani Trend Dönüşü (Ayı -> Boğa)", Symbol(), EnumToString(Period()));
+                  if(InpAlertPush) SendNotification(msg);
+                  if(InpAlertPopup) Alert(msg);
+                  g_last_yellow_time = time[i];
+               }
+               double atr_gap = (val_h-val_l)*0.5; if(atr_gap==0) atr_gap = Point()*20;
+               DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h + atr_gap,clrYellow);
             }
 
             state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.is_mitigated=false;
