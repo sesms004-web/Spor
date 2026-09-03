@@ -110,6 +110,17 @@ public:
    void   CopyFrom(CStack &s){ArrayCopy(m_v,s.m_v);ArrayCopy(m_i,s.m_i);}
 };
 
+class CStringStack{
+private:string m_v[];
+public:
+   CStringStack(){ArrayResize(m_v,0);}
+   void   Clear(){ArrayResize(m_v,0);}
+   int    Size(){return ArraySize(m_v);}
+   void   Push(string v){int s=ArraySize(m_v);ArrayResize(m_v,s+1);m_v[s]=v;}
+   string GetVal(int i){return m_v[i];}
+   void   CopyFrom(CStringStack &s){ArrayCopy(m_v,s.m_v);}
+};
+
 struct SState{
    int    min_tr,maj_tr,maj_st;
    double min_h;int min_h_i;double min_l;int min_l_i;
@@ -124,6 +135,7 @@ struct SState{
    bool   has_pot_bull_minor;int pot_bull_start_i;double pot_bull_start_p,pot_bull_end_p;
    bool   has_pot_bear_minor;int pot_bear_start_i;double pot_bear_start_p,pot_bear_end_p;
    CStack st_h,st_l;
+   CStringStack active_boxes;
    void CopyFrom(SState &s){
       min_tr=s.min_tr;maj_tr=s.maj_tr;maj_st=s.maj_st;
       min_h=s.min_h;min_h_i=s.min_h_i;min_l=s.min_l;min_l_i=s.min_l_i;
@@ -138,11 +150,23 @@ struct SState{
       pot_bull_start_p=s.pot_bull_start_p;pot_bull_end_p=s.pot_bull_end_p;
       has_pot_bear_minor=s.has_pot_bear_minor;pot_bear_start_i=s.pot_bear_start_i;
       pot_bear_start_p=s.pot_bear_start_p;pot_bear_end_p=s.pot_bear_end_p;
-      st_h.CopyFrom(s.st_h);st_l.CopyFrom(s.st_l);}
+      st_h.CopyFrom(s.st_h);st_l.CopyFrom(s.st_l);active_boxes.CopyFrom(s.active_boxes);}
 };
 
 SState g_state_hist,g_state_curr;
 void BxReset(SState &s,double rl,double rh){s.bx_phase=0;s.bx_extreme=false;s.bx_swing_l=rl;s.bx_swing_h=rh;}
+
+
+void BxAdvanceTrim(SState &s, datetime t)
+{
+   for(int k=0; k<s.active_boxes.Size(); k++){
+      string nm = s.active_boxes.GetVal(k);
+      if(ObjectFind(0, nm) >= 0) {
+         ObjectSetInteger(0, nm, OBJPROP_TIME, 1, t);
+      }
+   }
+   s.active_boxes.Clear();
+}
 
 void DoDrawBox(const datetime &time[],string pfx,SState &s,int left_i,double top,double bot,color clr)
 {
@@ -170,6 +194,7 @@ void DoDrawBox(const datetime &time[],string pfx,SState &s,int left_i,double top
    DrawRect(nm,t_left,top,D'2099.12.31 00:00',bot,clr);
    DrawWeakRect(wk_abv,t_left,top+wk_sz,top,wk_clr);
    DrawWeakRect(wk_blw,t_left,bot,bot-wk_sz,wk_clr);
+   s.active_boxes.Push(nm); s.active_boxes.Push(wk_abv); s.active_boxes.Push(wk_blw);
 }
 
 void ProcessBar(int i,const double &open[],const double &high[],const double &low[],
@@ -228,7 +253,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(act!=EMPTY_VALUE&&val_l<act){
             state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_h_i),state.maj_h,InpColorBull,2,STYLE_SOLID);
-            state.st_l.Clear();state.st_h.Clear();state.maj_st=1;
+            BxAdvanceTrim(state, GetTimeSafe(time, state.maj_h_i)); state.st_l.Clear();state.st_h.Clear();state.maj_st=1;
             state.anc_i=state.maj_h_i;state.anc_v=state.maj_h;state.tmp_l=val_l;state.tmp_l_i=i;
             CutLine(state.cur_top_line,GetTimeSafe(time,i));CutLine(state.cur_bot_line,GetTimeSafe(time,i));
             if(InpShowMaj){state.cur_top_line=GetUniqueName(pfx+"HLine_Top_");DrawLine(state.cur_top_line,GetTimeSafe(time,state.maj_h_i),state.maj_h,GetTimeSafe(time,i)+PeriodSeconds(),state.maj_h,InpColorBull,1,STYLE_DASH,true);
@@ -248,7 +273,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             }
             state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
-            state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
+            BxAdvanceTrim(state, GetTimeSafe(time, state.tmp_h_i)); state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             if(state.has_pot_bear_minor&&InpShowBox)DoDrawBox(time,pfx,state,state.pot_bear_start_i,state.pot_bear_start_p,state.pot_bear_end_p,InpColorBoxBearFaint);
             BxReset(state,val_l,state.tmp_h);state.has_pot_bear_minor=false;
             CutLine(state.cur_top_line,GetTimeSafe(time,i));CutLine(state.cur_bot_line,GetTimeSafe(time,i));state.cur_top_line="";state.cur_bot_line="";
@@ -258,7 +283,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(state.maj_h!=EMPTY_VALUE&&val_h>state.maj_h&&val_c<=state.maj_h){state.maj_h=val_h;state.maj_h_i=i;if(InpShowMaj)UpdateLineLevel(state.cur_top_line,state.maj_h);}
          // BOS devam (bullish continuation): maj_st 1→0
          if(state.maj_h!=EMPTY_VALUE&&val_c>state.maj_h){
-            state.maj_l=state.tmp_l;state.bos_i=i;state.bos_count++;state.maj_l_i=state.tmp_l_i;
+            BxAdvanceTrim(state, GetTimeSafe(time, state.tmp_l_i)); state.maj_l=state.tmp_l;state.bos_i=i;state.bos_count++;state.maj_l_i=state.tmp_l_i;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_l_i),state.maj_l,InpColorBull,2,STYLE_SOLID);
             state.st_h.Clear();state.maj_st=0;state.anc_i=state.maj_l_i;state.anc_v=state.maj_l;state.tmp_h=val_h;state.tmp_h_i=i;
             BxReset(state,state.maj_l,val_h);
@@ -278,7 +303,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             }
             state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
-            state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
+            BxAdvanceTrim(state, GetTimeSafe(time, state.tmp_h_i)); state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             if(state.has_pot_bear_minor&&InpShowBox)DoDrawBox(time,pfx,state,state.pot_bear_start_i,state.pot_bear_start_p,state.pot_bear_end_p,InpColorBoxBearFaint);
             BxReset(state,val_l,state.tmp_h);state.has_pot_bear_minor=false;
             CutLine(state.cur_top_line,GetTimeSafe(time,i));CutLine(state.cur_bot_line,GetTimeSafe(time,i));state.cur_top_line="";state.cur_bot_line="";
@@ -291,7 +316,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(act!=EMPTY_VALUE&&val_h>act){
             state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_l_i),state.maj_l,InpColorBear,2,STYLE_SOLID);
-            state.st_h.Clear();state.st_l.Clear();state.maj_st=1;
+            BxAdvanceTrim(state, GetTimeSafe(time, state.maj_l_i)); state.st_h.Clear();state.st_l.Clear();state.maj_st=1;
             state.anc_i=state.maj_l_i;state.anc_v=state.maj_l;state.tmp_h=val_h;state.tmp_h_i=i;
             CutLine(state.cur_top_line,GetTimeSafe(time,i));CutLine(state.cur_bot_line,GetTimeSafe(time,i));
             if(InpShowMaj){state.cur_bot_line=GetUniqueName(pfx+"HLine_Bot_");DrawLine(state.cur_bot_line,GetTimeSafe(time,state.maj_l_i),state.maj_l,GetTimeSafe(time,i)+PeriodSeconds(),state.maj_l,InpColorBear,1,STYLE_DASH,true);
@@ -311,7 +336,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             }
             state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
-            state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
+            BxAdvanceTrim(state, GetTimeSafe(time, state.tmp_l_i)); state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             if(state.has_pot_bull_minor&&InpShowBox)DoDrawBox(time,pfx,state,state.pot_bull_start_i,state.pot_bull_end_p,state.pot_bull_start_p,InpColorBoxBullFaint);
             BxReset(state,state.tmp_l,val_h);state.has_pot_bull_minor=false;
             CutLine(state.cur_top_line,GetTimeSafe(time,i));CutLine(state.cur_bot_line,GetTimeSafe(time,i));state.cur_top_line="";state.cur_bot_line="";
@@ -321,7 +346,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(state.maj_l!=EMPTY_VALUE&&val_l<state.maj_l&&val_c>=state.maj_l){state.maj_l=val_l;state.maj_l_i=i;if(InpShowMaj)UpdateLineLevel(state.cur_bot_line,state.maj_l);}
          // BOS devam (bearish continuation): maj_st 1→0
          if(state.maj_l!=EMPTY_VALUE&&val_c<state.maj_l){
-            state.maj_h=state.tmp_h;state.bos_i=i;state.bos_count++;state.maj_h_i=state.tmp_h_i;
+            BxAdvanceTrim(state, GetTimeSafe(time, state.tmp_h_i)); state.maj_h=state.tmp_h;state.bos_i=i;state.bos_count++;state.maj_h_i=state.tmp_h_i;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_h_i),state.maj_h,InpColorBear,2,STYLE_SOLID);
             state.st_l.Clear();state.maj_st=0;state.anc_i=state.maj_h_i;state.anc_v=state.maj_h;state.tmp_l=val_l;state.tmp_l_i=i;
             BxReset(state,val_l,state.maj_h);
@@ -341,7 +366,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
             }
             state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
-            state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
+            BxAdvanceTrim(state, GetTimeSafe(time, state.tmp_l_i)); state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             if(state.has_pot_bull_minor&&InpShowBox)DoDrawBox(time,pfx,state,state.pot_bull_start_i,state.pot_bull_end_p,state.pot_bull_start_p,InpColorBoxBullFaint);
             BxReset(state,state.tmp_l,val_h);state.has_pot_bull_minor=false;
             CutLine(state.cur_top_line,GetTimeSafe(time,i));CutLine(state.cur_bot_line,GetTimeSafe(time,i));state.cur_top_line="";state.cur_bot_line="";
@@ -390,7 +415,7 @@ int OnCalculate(const int rates_total,const int prev_calculated,
       g_state_hist.maj_h=high[si]+atr*0.1;g_state_hist.maj_l=low[si]-atr*0.1;
       g_state_hist.maj_tr=g_state_hist.min_tr;g_state_hist.maj_st=1;
       g_state_hist.cur_top_line="";g_state_hist.cur_bot_line="";
-      g_state_hist.st_h.Clear();g_state_hist.st_l.Clear();
+      g_state_hist.st_h.Clear();g_state_hist.st_l.Clear();g_state_hist.active_boxes.Clear();
       BxReset(g_state_hist,low[si],high[si]);
       g_state_hist.has_pot_bull_minor=false;g_state_hist.has_pot_bear_minor=false;
       g_state_hist.pot_bull_start_i=0;g_state_hist.pot_bull_start_p=0;g_state_hist.pot_bull_end_p=0;
