@@ -144,7 +144,17 @@ void BxDeleteAll()
 void BxAdd(string nm,string wk_abv,string wk_blw,double top,double bot,bool is_ext=false)
 {
 
-   if(g_bx_cnt>=BOX_MAX)return;
+   if(g_bx_cnt>=BOX_MAX){
+      for(int i=1; i<BOX_MAX; i++){
+         g_bx_nm[i-1]=g_bx_nm[i]; g_bx_wk_abv_nm[i-1]=g_bx_wk_abv_nm[i]; g_bx_wk_blw_nm[i-1]=g_bx_wk_blw_nm[i];
+         g_bx_top[i-1]=g_bx_top[i]; g_bx_bot[i-1]=g_bx_bot[i]; g_bx_state[i-1]=g_bx_state[i];
+         g_bx_touch_state[i-1]=g_bx_touch_state[i]; g_bx_approach[i-1]=g_bx_approach[i];
+         g_bx_inside_cnt[i-1]=g_bx_inside_cnt[i]; g_bx_event_time[i-1]=g_bx_event_time[i];
+         g_bx_break_up[i-1]=g_bx_break_up[i]; g_bx_break_dn[i-1]=g_bx_break_dn[i];
+         g_bx_is_ext[i-1]=g_bx_is_ext[i]; g_bx_notified[i-1]=g_bx_notified[i];
+      }
+      g_bx_cnt=BOX_MAX-1;
+   }
    g_bx_nm[g_bx_cnt]=nm;g_bx_wk_abv_nm[g_bx_cnt]=wk_abv;g_bx_wk_blw_nm[g_bx_cnt]=wk_blw;
    g_bx_top[g_bx_cnt]=top;g_bx_bot[g_bx_cnt]=bot;
    g_bx_state[g_bx_cnt]=2;g_bx_touch_state[g_bx_cnt]=0;g_bx_approach[g_bx_cnt]=0;
@@ -170,13 +180,14 @@ void BxAdvanceTrim(datetime t)
    }
 }
 
-void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time,bool is_history=false)
+bool BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time,bool is_history=false)
 {
-
+   bool touched_any = false;
    for(int k=0;k<g_bx_cnt;k++){
       if(g_bx_state[k]==0)continue;
       double top=g_bx_top[k],bot=g_bx_bot[k];
       bool im=(h>=bot)&&(l<=top);
+      if(im) touched_any = true;
       int na;if(prev_c>top)na=1;else if(prev_c<bot)na=-1;else na=g_bx_approach[k];
       int ts=g_bx_touch_state[k];
       if(ts==0){if(im){g_bx_approach[k]=(na!=0)?na:(c>(top+bot)/2.0?1:-1);g_bx_touch_state[k]=1;g_bx_inside_cnt[k]=1;g_bx_event_time[k]=bar_time;}}
@@ -213,6 +224,7 @@ void BxUpdateStats(double h,double l,double c,double prev_c,datetime bar_time,bo
       }
       else{if(im){g_bx_approach[k]=(na!=0)?na:(c>(top+bot)/2.0?1:-1);g_bx_touch_state[k]=1;g_bx_inside_cnt[k]=1;g_bx_event_time[k]=bar_time;}}
    }
+   return touched_any;
 }
 
 //=====================================================================
@@ -250,7 +262,7 @@ struct SState{
    int    bx_phase;bool bx_extreme;double bx_swing_h,bx_swing_l;
    bool   has_pot_bull_minor;int pot_bull_start_i;double pot_bull_start_p,pot_bull_end_p;
    bool   has_pot_bear_minor;int pot_bear_start_i;double pot_bear_start_p,pot_bear_end_p;
-   bool   has_made_pullback;
+   bool   is_mitigated;
    CStack st_h,st_l;
    void CopyFrom(SState &s){
       min_tr=s.min_tr;maj_tr=s.maj_tr;maj_st=s.maj_st;
@@ -270,7 +282,7 @@ struct SState{
       pot_bull_start_p=s.pot_bull_start_p;pot_bull_end_p=s.pot_bull_end_p;
       has_pot_bear_minor=s.has_pot_bear_minor;pot_bear_start_i=s.pot_bear_start_i;
       pot_bear_start_p=s.pot_bear_start_p;pot_bear_end_p=s.pot_bear_end_p;
-      has_made_pullback=s.has_made_pullback;
+      is_mitigated=s.is_mitigated;
       st_h.CopyFrom(s.st_h);st_l.CopyFrom(s.st_l);}
 };
 
@@ -327,7 +339,8 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
    double val_h=high[i],val_l=low[i],val_c=close[i];
    string pfx=is_history?"":"Live_";
    double prev_c=(i>0)?close[i-1]:close[i];
-   BxUpdateStats(val_h,val_l,val_c,prev_c,time[i],is_history);
+   bool touched = BxUpdateStats(val_h,val_l,val_c,prev_c,time[i],is_history);
+   if(touched) state.is_mitigated = true;
 
    double ch_h=state.maj_h; double ch_l=state.maj_l;
    if(state.maj_st==0){
@@ -354,7 +367,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(state.maj_tr==-1&&!state.has_pot_bull_minor&&si>=state.tmp_l_i)
          {state.has_pot_bull_minor=true;state.pot_bull_start_i=si;state.pot_bull_start_p=sp;state.pot_bull_end_p=pp;}
          if(is_history&&InpShowBox&&state.maj_st==0&&state.maj_tr==1){
-            if(state.bx_phase==0||state.bx_phase==2){if(state.has_made_pullback)DoDrawBox(time,pfx,state,si,pp,sp,InpColorBoxBull);state.bx_phase=1;state.bx_extreme=false;state.bx_swing_h=pp;state.bx_swing_l=sp;}
+            if(state.bx_phase==0||state.bx_phase==2){if(state.is_mitigated)DoDrawBox(time,pfx,state,si,pp,sp,InpColorBoxBull);state.bx_phase=1;state.bx_extreme=false;state.bx_swing_h=pp;state.bx_swing_l=sp;}
             else if(pp>state.bx_swing_h){state.bx_extreme=true;state.bx_swing_h=pp;}
          }
          if(state.maj_st==0&&state.maj_tr==-1&&state.bx_phase==1){
@@ -373,7 +386,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                if(state.d1_l!=0&&state.t2_h==0){state.t2_h=state.min_h;state.t2_i=state.min_h_i;}
             }
          }
-         state.min_tr=-1;state.lp_i=pi;state.lp_p=pp;state.min_l=val_l;state.min_l_i=i;state.trig_h=val_h;state.has_made_pullback=true;
+         state.min_tr=-1;state.lp_i=pi;state.lp_p=pp;state.min_l=val_l;state.min_l_i=i;state.trig_h=val_h;
       }
    }else{
       double ot=state.trig_h;
@@ -384,7 +397,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(state.maj_tr==1&&!state.has_pot_bear_minor&&si>=state.tmp_h_i)
          {state.has_pot_bear_minor=true;state.pot_bear_start_i=si;state.pot_bear_start_p=sp;state.pot_bear_end_p=tp;}
          if(is_history&&InpShowBox&&state.maj_st==0&&state.maj_tr==-1){
-            if(state.bx_phase==0||state.bx_phase==2){if(state.has_made_pullback)DoDrawBox(time,pfx,state,si,sp,tp,InpColorBoxBear);state.bx_phase=1;state.bx_extreme=false;state.bx_swing_h=sp;state.bx_swing_l=tp;}
+            if(state.bx_phase==0||state.bx_phase==2){if(state.is_mitigated)DoDrawBox(time,pfx,state,si,sp,tp,InpColorBoxBear);state.bx_phase=1;state.bx_extreme=false;state.bx_swing_h=sp;state.bx_swing_l=tp;}
             else if(tp<state.bx_swing_l){state.bx_extreme=true;state.bx_swing_l=tp;}
          }
          if(state.maj_st==0&&state.maj_tr==1&&state.bx_phase==1){
@@ -403,7 +416,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                if(state.d1_h!=0&&state.t2_l==0){state.t2_l=state.min_l;state.t2_i=state.min_l_i;}
             }
          }
-         state.min_tr=1;state.lp_i=ti;state.lp_p=tp;state.min_h=val_h;state.min_h_i=i;state.trig_l=val_l;state.has_made_pullback=true;
+         state.min_tr=1;state.lp_i=ti;state.lp_p=tp;state.min_h=val_h;state.min_h_i=i;state.trig_l=val_l;
       }
    }
 
@@ -467,7 +480,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l,clrYellow);
             }
 
-            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.has_made_pullback=false;
+            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.is_mitigated=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             BxReset(state,val_l,state.tmp_h);state.has_pot_bear_minor=false;
@@ -483,7 +496,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"RedDot_"),GetTimeSafe(time,i),val_h,clrRed);
             }
             ResetChochState(state); // Yeni trend bacağı, CHoCH sıfırla
-            state.bos_i=i;state.bos_count++;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;state.has_made_pullback=false;
+            state.bos_i=i;state.bos_count++;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;state.is_mitigated=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_l_i),state.maj_l,InpColorBull,2,STYLE_SOLID);
             state.st_h.Clear();state.maj_st=0;state.anc_i=state.maj_l_i;state.anc_v=state.maj_l;state.tmp_h=val_h;state.tmp_h_i=i;
             BxReset(state,state.maj_l,val_h);
@@ -500,7 +513,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l,clrYellow);
             }
 
-            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.has_made_pullback=false;
+            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.is_mitigated=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             BxReset(state,val_l,state.tmp_h);state.has_pot_bear_minor=false;
@@ -532,7 +545,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h,clrYellow);
             }
 
-            state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.has_made_pullback=false;
+            state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.is_mitigated=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             BxReset(state,state.tmp_l,val_h);state.has_pot_bull_minor=false;
@@ -548,7 +561,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"RedDot_"),GetTimeSafe(time,i),val_l,clrRed);
             }
             ResetChochState(state); // Yeni trend bacağı, CHoCH sıfırla
-            state.maj_h=state.tmp_h;state.bos_i=i;state.bos_count++;state.maj_h_i=state.tmp_h_i;state.has_made_pullback=false;
+            state.maj_h=state.tmp_h;state.bos_i=i;state.bos_count++;state.maj_h_i=state.tmp_h_i;state.is_mitigated=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_h_i),state.maj_h,InpColorBear,2,STYLE_SOLID);
             state.st_l.Clear();state.maj_st=0;state.anc_i=state.maj_h_i;state.anc_v=state.maj_h;state.tmp_l=val_l;state.tmp_l_i=i;
             BxReset(state,val_l,state.maj_h);
@@ -565,7 +578,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h,clrYellow);
             }
 
-            state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.has_made_pullback=false;
+            state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.is_mitigated=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             BxReset(state,state.tmp_l,val_h);state.has_pot_bull_minor=false;
@@ -622,7 +635,7 @@ int OnCalculate(const int rates_total,const int prev_calculated,
       g_state_hist.has_pot_bull_minor=false;g_state_hist.has_pot_bear_minor=false;
       g_state_hist.pot_bull_start_i=0;g_state_hist.pot_bull_start_p=0;g_state_hist.pot_bull_end_p=0;
       g_state_hist.pot_bear_start_i=0;g_state_hist.pot_bear_start_p=0;g_state_hist.pot_bear_end_p=0;
-      g_state_hist.has_made_pullback=true;
+      g_state_hist.is_mitigated=true;
       limit=si+1;
       if(limit<rates_total){g_state_hist.mb_h=high[limit-1];g_state_hist.mb_l=low[limit-1];g_state_hist.mb_i=limit-1;}
    }else{limit=prev_calculated-1;}
@@ -632,7 +645,7 @@ int OnCalculate(const int rates_total,const int prev_calculated,
       if(!inside){
          if(high[i]>g_state_hist.mb_h||low[i]<g_state_hist.mb_l){g_state_hist.mb_h=high[i];g_state_hist.mb_l=low[i];g_state_hist.mb_i=i;}
          ProcessBar(i,open,high,low,close,time,g_state_hist,true);
-      }else{double pc=(i>0)?close[i-1]:close[i];BxUpdateStats(high[i],low[i],close[i],pc,time[i],true);}
+      }else{double pc=(i>0)?close[i-1]:close[i];bool t=BxUpdateStats(high[i],low[i],close[i],pc,time[i],true);if(t)g_state_hist.is_mitigated=true;}
    }
 
    ObjectsDeleteAll(0,"Live_");DeleteLine("LiveLeg");
@@ -641,7 +654,7 @@ int OnCalculate(const int rates_total,const int prev_calculated,
    if(li>0){
       bool il=(high[li]<=g_state_curr.mb_h)&&(low[li]>=g_state_curr.mb_l);
       if(!il)ProcessBar(li,open,high,low,close,time,g_state_curr,false);
-      else{double pc=(li>0)?close[li-1]:close[li];BxUpdateStats(high[li],low[li],close[li],pc,time[li],false);}
+      else{double pc=(li>0)?close[li-1]:close[li];bool t=BxUpdateStats(high[li],low[li],close[li],pc,time[li],false);if(t)g_state_curr.is_mitigated=true;}
    }
 
    if(InpShowMin&&li>0){
