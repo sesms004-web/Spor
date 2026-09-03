@@ -250,6 +250,7 @@ struct SState{
    int    bx_phase;bool bx_extreme;double bx_swing_h,bx_swing_l;
    bool   has_pot_bull_minor;int pot_bull_start_i;double pot_bull_start_p,pot_bull_end_p;
    bool   has_pot_bear_minor;int pot_bear_start_i;double pot_bear_start_p,pot_bear_end_p;
+   bool   has_made_pullback;
    CStack st_h,st_l;
    void CopyFrom(SState &s){
       min_tr=s.min_tr;maj_tr=s.maj_tr;maj_st=s.maj_st;
@@ -269,6 +270,7 @@ struct SState{
       pot_bull_start_p=s.pot_bull_start_p;pot_bull_end_p=s.pot_bull_end_p;
       has_pot_bear_minor=s.has_pot_bear_minor;pot_bear_start_i=s.pot_bear_start_i;
       pot_bear_start_p=s.pot_bear_start_p;pot_bear_end_p=s.pot_bear_end_p;
+      has_made_pullback=s.has_made_pullback;
       st_h.CopyFrom(s.st_h);st_l.CopyFrom(s.st_l);}
 };
 
@@ -352,7 +354,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(state.maj_tr==-1&&!state.has_pot_bull_minor&&si>=state.tmp_l_i)
          {state.has_pot_bull_minor=true;state.pot_bull_start_i=si;state.pot_bull_start_p=sp;state.pot_bull_end_p=pp;}
          if(is_history&&InpShowBox&&state.maj_st==0&&state.maj_tr==1){
-            if(state.bx_phase==0||state.bx_phase==2){DoDrawBox(time,pfx,state,si,pp,sp,InpColorBoxBull);state.bx_phase=1;state.bx_extreme=false;state.bx_swing_h=pp;state.bx_swing_l=sp;}
+            if(state.bx_phase==0||state.bx_phase==2){if(state.has_made_pullback)DoDrawBox(time,pfx,state,si,pp,sp,InpColorBoxBull);state.bx_phase=1;state.bx_extreme=false;state.bx_swing_h=pp;state.bx_swing_l=sp;}
             else if(pp>state.bx_swing_h){state.bx_extreme=true;state.bx_swing_h=pp;}
          }
          if(state.maj_st==0&&state.maj_tr==-1&&state.bx_phase==1){
@@ -371,7 +373,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                if(state.d1_l!=0&&state.t2_h==0){state.t2_h=state.min_h;state.t2_i=state.min_h_i;}
             }
          }
-         state.min_tr=-1;state.lp_i=pi;state.lp_p=pp;state.min_l=val_l;state.min_l_i=i;state.trig_h=val_h;
+         state.min_tr=-1;state.lp_i=pi;state.lp_p=pp;state.min_l=val_l;state.min_l_i=i;state.trig_h=val_h;state.has_made_pullback=true;
       }
    }else{
       double ot=state.trig_h;
@@ -382,7 +384,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
          if(state.maj_tr==1&&!state.has_pot_bear_minor&&si>=state.tmp_h_i)
          {state.has_pot_bear_minor=true;state.pot_bear_start_i=si;state.pot_bear_start_p=sp;state.pot_bear_end_p=tp;}
          if(is_history&&InpShowBox&&state.maj_st==0&&state.maj_tr==-1){
-            if(state.bx_phase==0||state.bx_phase==2){DoDrawBox(time,pfx,state,si,sp,tp,InpColorBoxBear);state.bx_phase=1;state.bx_extreme=false;state.bx_swing_h=sp;state.bx_swing_l=tp;}
+            if(state.bx_phase==0||state.bx_phase==2){if(state.has_made_pullback)DoDrawBox(time,pfx,state,si,sp,tp,InpColorBoxBear);state.bx_phase=1;state.bx_extreme=false;state.bx_swing_h=sp;state.bx_swing_l=tp;}
             else if(tp<state.bx_swing_l){state.bx_extreme=true;state.bx_swing_l=tp;}
          }
          if(state.maj_st==0&&state.maj_tr==1&&state.bx_phase==1){
@@ -401,7 +403,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                if(state.d1_h!=0&&state.t2_l==0){state.t2_l=state.min_l;state.t2_i=state.min_l_i;}
             }
          }
-         state.min_tr=1;state.lp_i=ti;state.lp_p=tp;state.min_h=val_h;state.min_h_i=i;state.trig_l=val_l;
+         state.min_tr=1;state.lp_i=ti;state.lp_p=tp;state.min_h=val_h;state.min_h_i=i;state.trig_l=val_l;state.has_made_pullback=true;
       }
    }
 
@@ -465,7 +467,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l,clrYellow);
             }
 
-            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
+            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.has_made_pullback=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             BxReset(state,val_l,state.tmp_h);state.has_pot_bear_minor=false;
@@ -481,7 +483,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"RedDot_"),GetTimeSafe(time,i),val_h,clrRed);
             }
             ResetChochState(state); // Yeni trend bacağı, CHoCH sıfırla
-            state.bos_i=i;state.bos_count++;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
+            state.bos_i=i;state.bos_count++;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;state.has_made_pullback=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_l_i),state.maj_l,InpColorBull,2,STYLE_SOLID);
             state.st_h.Clear();state.maj_st=0;state.anc_i=state.maj_l_i;state.anc_v=state.maj_l;state.tmp_h=val_h;state.tmp_h_i=i;
             BxReset(state,state.maj_l,val_h);
@@ -498,7 +500,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_l,clrYellow);
             }
 
-            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
+            state.maj_tr=-1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.has_made_pullback=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_h_i),state.tmp_h,InpColorBull,2,STYLE_SOLID);
             state.st_l.Clear();state.anc_i=state.tmp_h_i;state.anc_v=state.tmp_h;state.tmp_l=val_l;state.tmp_l_i=i;state.maj_h=state.tmp_h;state.maj_h_i=state.tmp_h_i;
             BxReset(state,val_l,state.tmp_h);state.has_pot_bear_minor=false;
@@ -530,7 +532,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h,clrYellow);
             }
 
-            state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
+            state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.has_made_pullback=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             BxReset(state,state.tmp_l,val_h);state.has_pot_bull_minor=false;
@@ -546,7 +548,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"RedDot_"),GetTimeSafe(time,i),val_l,clrRed);
             }
             ResetChochState(state); // Yeni trend bacağı, CHoCH sıfırla
-            state.maj_h=state.tmp_h;state.bos_i=i;state.bos_count++;state.maj_h_i=state.tmp_h_i;
+            state.maj_h=state.tmp_h;state.bos_i=i;state.bos_count++;state.maj_h_i=state.tmp_h_i;state.has_made_pullback=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.maj_h_i),state.maj_h,InpColorBear,2,STYLE_SOLID);
             state.st_l.Clear();state.maj_st=0;state.anc_i=state.maj_h_i;state.anc_v=state.maj_h;state.tmp_l=val_l;state.tmp_l_i=i;
             BxReset(state,val_l,state.maj_h);
@@ -563,7 +565,7 @@ void ProcessBar(int i,const double &open[],const double &high[],const double &lo
                DrawDot(GetUniqueName(pfx+"YellowDot_"),GetTimeSafe(time,i),val_h,clrYellow);
             }
 
-            state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;
+            state.maj_tr=1;state.maj_st=0;state.bos_i=i;state.bos_count=0;state.has_made_pullback=false;
             if(InpShowMaj)DrawLine(GetUniqueName(pfx+"Major_"),GetTimeSafe(time,state.anc_i),state.anc_v,GetTimeSafe(time,state.tmp_l_i),state.tmp_l,InpColorBear,2,STYLE_SOLID);
             state.st_h.Clear();state.anc_i=state.tmp_l_i;state.anc_v=state.tmp_l;state.tmp_h=val_h;state.tmp_h_i=i;state.maj_l=state.tmp_l;state.maj_l_i=state.tmp_l_i;
             BxReset(state,state.tmp_l,val_h);state.has_pot_bull_minor=false;
@@ -620,6 +622,7 @@ int OnCalculate(const int rates_total,const int prev_calculated,
       g_state_hist.has_pot_bull_minor=false;g_state_hist.has_pot_bear_minor=false;
       g_state_hist.pot_bull_start_i=0;g_state_hist.pot_bull_start_p=0;g_state_hist.pot_bull_end_p=0;
       g_state_hist.pot_bear_start_i=0;g_state_hist.pot_bear_start_p=0;g_state_hist.pot_bear_end_p=0;
+      g_state_hist.has_made_pullback=true;
       limit=si+1;
       if(limit<rates_total){g_state_hist.mb_h=high[limit-1];g_state_hist.mb_l=low[limit-1];g_state_hist.mb_i=limit-1;}
    }else{limit=prev_calculated-1;}
