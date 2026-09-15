@@ -1,0 +1,637 @@
+//@version=5
+indicator("Structure by bboukberko", shorttitle="Structure", overlay=true, max_lines_count=500, max_boxes_count=500)
+
+// --- Inputs ---
+grp_lookback = "--- LOOKBACK ---"
+i_days = input.float(1.0, "Lookback Days (Main)", group=grp_lookback)
+
+grp_choch = "--- CHoCH ---"
+i_minPullbackPct = input.float(40.0, "Min Pullback %", group=grp_choch)
+i_maxPullbackPct = input.float(100.0, "Max Pullback %", group=grp_choch)
+c_chochStrong = input.color(color.purple, "CHoCH Strong Color", group=grp_choch)
+c_chochWeak = input.color(color.red, "CHoCH Weak Color", group=grp_choch)
+c_chochPath = input.color(color.gray, "CHoCH Path Color", group=grp_choch)
+i_showChoch = input.bool(true, "Show CHoCH", group=grp_choch)
+
+grp_struct = "--- STRUCTURE ---"
+i_showMin = input.bool(true, "Show Minor", group=grp_struct)
+i_showMaj = input.bool(true, "Show Major", group=grp_struct)
+c_min = input.color(color.red, "Minor Color", group=grp_struct)
+c_bear = input.color(color.red, "Bearish Major Color", group=grp_struct)
+c_bull = input.color(color.green, "Bullish Major Color", group=grp_struct)
+
+grp_box = "--- BASE-DROP BOX ---"
+i_bigCandleMult = input.float(1.6, "Big Candle Multiplier", group=grp_box)
+i_baseMaxCandles = input.int(5, "Base Max Candles", group=grp_box)
+i_baseAvgLookback = input.int(10, "Base Avg Lookback", group=grp_box)
+i_showBox = input.bool(true, "Show Box", group=grp_box)
+i_boxTrendFilter = input.bool(true, "Trend Filter for Boxes", group=grp_box)
+i_minBreakoutPct = input.float(50.0, "Min Breakout Distance %", group=grp_box)
+i_minBaseHeightTicks = input.int(10, "Min Base Height (Ticks)", group=grp_box)
+i_maxBoxPct = input.float(20.0, "Max Box Pct", group=grp_box)
+i_weakZonePct = input.float(50.0, "Weak Zone Pct", group=grp_box)
+c_boxBull = input.color(color.blue, "Bull Box Color", group=grp_box)
+c_boxBear = input.color(color.red, "Bear Box Color", group=grp_box)
+c_weakBull = input.color(color.rgb(0,25,55), "Weak Bull Box Color", group=grp_box)
+c_weakBear = input.color(color.rgb(55,15,0), "Weak Bear Box Color", group=grp_box)
+
+// --- State Variables (SState in MQL5) ---
+var int min_tr = na
+var int maj_tr = na
+var int maj_st = na
+var float min_h = na
+var int min_h_i = na
+var float min_l = na
+var int min_l_i = na
+var float trig_h = na
+var float trig_l = na
+var int lp_i = na
+var float lp_p = na
+var float maj_h = na
+var int maj_h_i = na
+var float maj_l = na
+var int maj_l_i = na
+var float tmp_h = na
+var int tmp_h_i = na
+var float tmp_l = na
+var int tmp_l_i = na
+var int anc_i = na
+var float anc_v = na
+var int bos_i = na
+var int bos_count = 0
+var float mb_h = na
+var float mb_l = na
+var int mb_i = na
+var float t1_h = na
+var float t1_l = na
+var int t1_i = na
+var float d1_h = na
+var float d1_l = na
+var int d1_i = na
+var float t2_h = na
+var float t2_l = na
+var int t2_i = na
+var int choch_dir = 0
+var bool swept_choch = false
+var int bx_phase = 0
+var bool bx_extreme = false
+var float bx_swing_h = na
+var float bx_swing_l = na
+
+var bool has_pot_bull_minor = false
+var int pot_bull_start_i = na
+var float pot_bull_start_p = na
+var float pot_bull_end_p = na
+var bool has_pot_bear_minor = false
+var int pot_bear_start_i = na
+var float pot_bear_start_p = na
+var float pot_bear_end_p = na
+
+var line cur_top_line = line.new(na, na, na, na)
+var line cur_bot_line = line.new(na, na, na, na)
+
+// --- Initialization ---
+// Box Tracking Arrays
+var box[] active_boxes = array.new_box()
+var box[] active_wk_abv = array.new_box()
+var box[] active_wk_blw = array.new_box()
+var float[] active_box_top = array.new_float()
+var float[] active_box_bot = array.new_float()
+
+if barstate.isfirst
+    min_tr := close > open ? 1 : -1
+    maj_tr := min_tr
+    maj_st := 1
+    min_h := high
+    min_h_i := bar_index
+    min_l := low
+    min_l_i := bar_index
+    trig_h := high
+    trig_l := low
+    tmp_h := high
+    tmp_h_i := bar_index
+    tmp_l := low
+    tmp_l_i := bar_index
+    anc_i := bar_index
+    anc_v := close
+    lp_i := bar_index
+    lp_p := close
+    bos_i := bar_index
+    bos_count := 0
+    mb_h := high
+    mb_l := low
+    mb_i := bar_index
+    t1_h := 0
+    t1_l := 0
+    t1_i := 0
+    d1_h := 0
+    d1_l := 0
+    d1_i := 0
+    t2_h := 0
+    t2_l := 0
+    t2_i := 0
+    choch_dir := 0
+
+    float atr = high - low == 0 ? syminfo.mintick * 10 : high - low
+    maj_h := high + atr * 0.1
+    maj_l := low - atr * 0.1
+    bx_phase := 0
+    bx_extreme := false
+    bx_swing_l := low
+    bx_swing_h := high
+
+// Array for history of minor structures
+var float[] st_h_val = array.new_float(0)
+var int[] st_h_idx = array.new_int(0)
+var float[] st_l_val = array.new_float(0)
+var int[] st_l_idx = array.new_int(0)
+
+// Helper functions
+
+draw_minor_line(x1, y1, x2, y2) =>
+    if i_showMin
+        line.new(x1, y1, x2, y2, color=c_min, style=line.style_solid)
+
+draw_major_line(x1, y1, x2, y2, c) =>
+    if i_showMaj
+        line.new(x1, y1, x2, y2, color=c, width=2, style=line.style_solid)
+
+draw_choch_line(x1, y1, x2, y2, is_strong) =>
+    if i_showChoch
+        line.new(x1, y1, x2, y2, color=is_strong ? c_chochStrong : c_chochWeak, width=3)
+        // Draw path
+        line.new(t1_i, y1, x1, y1, color=c_chochPath, width=1, style=line.style_dotted)
+
+// Main Processing Logic
+bool is_inside = high <= mb_h and low >= mb_l
+
+if not is_inside
+    if high > mb_h or low < mb_l
+        mb_h := high
+        mb_l := low
+        mb_i := bar_index
+
+    val_h = high
+    val_l = low
+    val_c = close
+
+    // Base Drop Logic & Box Trimming
+    if i_showBox
+        // 1. Trim active boxes if price touches them
+        if array.size(active_boxes) > 0
+            for i = array.size(active_boxes) - 1 to 0
+                float top = array.get(active_box_top, i)
+                float bot = array.get(active_box_bot, i)
+                if high >= bot and low <= top
+                    // Price touched the box! Halt its extension.
+                    box.set_right(array.get(active_boxes, i), bar_index)
+                    box.set_right(array.get(active_wk_abv, i), bar_index)
+                    box.set_right(array.get(active_wk_blw, i), bar_index)
+
+                    // Remove from active tracking so it doesn't extend anymore
+                    array.remove(active_boxes, i)
+                    array.remove(active_wk_abv, i)
+                    array.remove(active_wk_blw, i)
+                    array.remove(active_box_top, i)
+                    array.remove(active_box_bot, i)
+                else
+                    // Extend box to current bar
+                    box.set_right(array.get(active_boxes, i), bar_index + 5)
+                    box.set_right(array.get(active_wk_abv, i), bar_index + 5)
+                    box.set_right(array.get(active_wk_blw, i), bar_index + 5)
+
+        // 2. Identify New Boxes
+        if bar_index > i_baseAvgLookback + i_baseMaxCandles
+            float sum_body = 0
+            for j = 1 to i_baseAvgLookback
+                sum_body := sum_body + math.abs(close[j] - open[j])
+            float avg_body = sum_body / i_baseAvgLookback
+
+            if avg_body > 0
+                float cur_body = math.abs(close - open)
+                if cur_body > avg_body * i_bigCandleMult
+                    bool is_bullish = close > open
+                    int base_start = 1
+                    int base_count = 0
+                    float box_top = -1
+                    float box_bot = -1
+
+                    // Look back to find a "Base" (small candles stalling)
+                    while base_count < i_baseMaxCandles and base_start <= i_baseAvgLookback + i_baseMaxCandles
+                        float body = math.abs(close[base_start] - open[base_start])
+                        if body < avg_body
+                            if box_top == -1 or high[base_start] > box_top
+                                box_top := high[base_start]
+                            if box_bot == -1 or low[base_start] < box_bot
+                                box_bot := low[base_start]
+                            base_count += 1
+                            base_start += 1
+                        else
+                            break
+
+                    // Ensure the big candle actually broke OUT of the base by a minimum distance
+                    bool strong_breakout = false
+                    if base_count > 0
+                        float base_height = box_top - box_bot
+                        bool is_base_large_enough = (base_height / syminfo.mintick) >= i_minBaseHeightTicks
+
+                        if is_base_large_enough
+                            float req_break_dist = base_height * (i_minBreakoutPct / 100.0)
+
+                            if is_bullish and (close - box_top) >= req_break_dist
+                                // Apply Trend Filter: Only bullish boxes if major trend is bullish
+                                if not i_boxTrendFilter or maj_tr == 1
+                                    strong_breakout := true
+                            if not is_bullish and (box_bot - close) >= req_break_dist
+                                // Apply Trend Filter: Only bearish boxes if major trend is bearish
+                                if not i_boxTrendFilter or maj_tr == -1
+                                    strong_breakout := true
+
+                    // Verify no overlap with active boxes
+                    bool is_overlapping = false
+                    if strong_breakout and array.size(active_boxes) > 0
+                        for k = 0 to array.size(active_boxes) - 1
+                            float a_top = array.get(active_box_top, k)
+                            float a_bot = array.get(active_box_bot, k)
+                            if not (box_top < a_bot or box_bot > a_top) // They overlap
+                                is_overlapping := true
+                                break
+
+                    if strong_breakout and not is_overlapping
+                        color box_clr = is_bullish ? c_boxBull : c_boxBear
+                        color wk_clr = is_bullish ? c_weakBull : c_weakBear
+                        float wk_sz = (box_top - box_bot) * i_weakZonePct / 100.0
+
+                        box b_main = box.new(bar_index - base_start + 1, box_top, bar_index + 5, box_bot, border_color=box_clr, bgcolor=color.new(box_clr, 90))
+                        box b_abv = box.new(bar_index - base_start + 1, box_top + wk_sz, bar_index + 5, box_top, border_color=wk_clr, bgcolor=color.new(wk_clr, 90))
+                        box b_blw = box.new(bar_index - base_start + 1, box_bot, bar_index + 5, box_bot - wk_sz, border_color=wk_clr, bgcolor=color.new(wk_clr, 90))
+
+                        array.push(active_boxes, b_main)
+                        array.push(active_wk_abv, b_abv)
+                        array.push(active_wk_blw, b_blw)
+                        array.push(active_box_top, box_top)
+                        array.push(active_box_bot, box_bot)
+
+    // Pullback Pct calculation
+    float ch_h = maj_h
+    float ch_l = maj_l
+    if maj_st == 0
+        if maj_tr == 1 and not na(tmp_h) and tmp_h != 0
+            ch_h := tmp_h
+        if maj_tr == -1 and not na(tmp_l) and tmp_l != 0
+            ch_l := tmp_l
+
+    float p_pct = 0
+    if not na(ch_h) and not na(ch_l) and ch_h != ch_l and ch_h != 0 and ch_l != 0
+        float rng = ch_h - ch_l
+        if rng > 0
+            if maj_tr == 1 and val_l >= ch_l
+                p_pct := ((ch_h - val_l) / rng) * 100.0
+            if maj_tr == -1 and val_h <= ch_h
+                p_pct := ((val_h - ch_l) / rng) * 100.0
+
+    bool in_pb = p_pct >= i_minPullbackPct and p_pct <= i_maxPullbackPct
+
+    // Minor Structure processing
+    if min_tr == 1
+        float ot = trig_l
+        if val_h > min_h
+            min_h := val_h
+            min_h_i := bar_index
+            trig_l := val_l
+
+        if val_l < ot
+            int pi = min_h_i
+            float pp = min_h
+            int si = lp_i
+            float sp = lp_p
+            draw_minor_line(si, sp, pi, pp)
+
+            if maj_tr == -1 and not has_pot_bull_minor and si >= tmp_l_i
+                has_pot_bull_minor := true
+                pot_bull_start_i := si
+                pot_bull_start_p := sp
+                pot_bull_end_p := pp
+
+            if maj_st == 0 and maj_tr == -1 and bx_phase == 1
+                if bx_extreme and pp > bx_swing_h
+                    bx_phase := 2
+                    bx_extreme := false
+                else
+                    bx_swing_h := pp
+
+            array.push(st_h_val, pp)
+            array.push(st_h_idx, pi)
+
+            if maj_tr == 1 and maj_st == 0 and pp < tmp_h and array.size(st_l_val) > 0
+                if array.get(st_l_idx, array.size(st_l_idx)-1) > bos_i
+                    array.pop(st_l_val)
+                    array.pop(st_l_idx)
+
+            if choch_dir == -1 and t2_h != 0
+                choch_dir := 0
+            if choch_dir == 1 and t2_l != 0 and min_h <= d1_h
+                choch_dir := 0
+            if choch_dir != 0 and not in_pb
+                choch_dir := 0
+
+            if maj_tr == -1 and in_pb
+                if choch_dir == 0 or choch_dir == 1
+                    t1_h := min_h
+                    t1_l := min_l
+                    t1_i := min_h_i
+                    d1_h := 0
+                    d1_l := 0
+                    d1_i := 0
+                    t2_h := 0
+                    t2_l := 0
+                    t2_i := 0
+                    choch_dir := -1
+                else if choch_dir == -1
+                    if d1_l == 0
+                        d1_l := min_l
+                        d1_i := min_l_i
+                    if d1_l != 0 and t2_h == 0
+                        t2_h := min_h
+                        t2_i := min_h_i
+
+            min_tr := -1
+            lp_i := pi
+            lp_p := pp
+            min_l := val_l
+            min_l_i := bar_index
+            trig_h := val_h
+
+    else
+        float ot = trig_h
+        if val_l < min_l
+            min_l := val_l
+            min_l_i := bar_index
+            trig_h := val_h
+
+        if val_h > ot
+            int ti = min_l_i
+            float tp = min_l
+            int si = lp_i
+            float sp = lp_p
+            draw_minor_line(si, sp, ti, tp)
+
+            if maj_tr == 1 and not has_pot_bear_minor and si >= tmp_h_i
+                has_pot_bear_minor := true
+                pot_bear_start_i := si
+                pot_bear_start_p := sp
+                pot_bear_end_p := tp
+
+            if maj_st == 0 and maj_tr == 1 and bx_phase == 1
+                if bx_extreme and tp < bx_swing_l
+                    bx_phase := 2
+                    bx_extreme := false
+                else
+                    bx_swing_l := tp
+
+            array.push(st_l_val, tp)
+            array.push(st_l_idx, ti)
+
+            if maj_tr == -1 and maj_st == 0 and tp > tmp_l and array.size(st_h_val) > 0
+                if array.get(st_h_idx, array.size(st_h_idx)-1) > bos_i
+                    array.pop(st_h_val)
+                    array.pop(st_h_idx)
+
+            if choch_dir == 1 and t2_l != 0
+                choch_dir := 0
+            if choch_dir == -1 and t2_h != 0 and min_l >= d1_l
+                choch_dir := 0
+            if choch_dir != 0 and not in_pb
+                choch_dir := 0
+
+            if maj_tr == 1 and in_pb
+                if choch_dir == 0 or choch_dir == -1
+                    t1_l := min_l
+                    t1_h := min_h
+                    t1_i := min_l_i
+                    d1_l := 0
+                    d1_h := 0
+                    d1_i := 0
+                    t2_l := 0
+                    t2_h := 0
+                    t2_i := 0
+                    choch_dir := 1
+                else if choch_dir == 1
+                    if d1_h == 0
+                        d1_h := min_h
+                        d1_i := min_h_i
+                    if d1_h != 0 and t2_l == 0
+                        t2_l := min_l
+                        t2_i := min_l_i
+
+            min_tr := 1
+            lp_i := ti
+            lp_p := tp
+            min_h := val_h
+            min_h_i := bar_index
+            trig_l := val_l
+
+    // CHoCH Trigger Logic
+    if choch_dir == -1 and t2_h != 0 and d1_l != 0
+        if val_c < d1_l and in_pb
+            bool is_strong = t2_h > t1_h
+            draw_choch_line(bar_index, d1_l, bar_index+5, d1_l, is_strong)
+            choch_dir := 0
+
+    if choch_dir == 1 and t2_l != 0 and d1_h != 0
+        if val_c > d1_h and in_pb
+            bool is_strong = t2_l < t1_l
+            draw_choch_line(bar_index, d1_h, bar_index+5, d1_h, is_strong)
+            choch_dir := 0
+
+    // Major Structure Logic
+    if maj_tr == 1
+        if maj_st == 0
+            if val_h > tmp_h
+                tmp_h := val_h
+                tmp_h_i := bar_index
+                has_pot_bear_minor := false
+            if not na(maj_l) and val_l < maj_l and val_c >= maj_l
+                maj_l := val_l
+                maj_l_i := bar_index
+            if not na(maj_l) and val_c < maj_l
+                choch_dir := 0
+                swept_choch := false
+                t1_h := 0
+                t1_l := 0
+                t1_i := 0
+                d1_h := 0
+                d1_l := 0
+                d1_i := 0
+                t2_h := 0
+                t2_l := 0
+                t2_i := 0
+                maj_h := tmp_h
+                maj_h_i := tmp_h_i
+                bos_i := bar_index
+                bos_count += 1
+                draw_major_line(anc_i, anc_v, maj_h_i, maj_h, c_bull)
+                array.clear(st_l_val)
+                array.clear(st_l_idx)
+                maj_st := 1
+                anc_i := maj_h_i
+                anc_v := maj_h
+                tmp_l := val_l
+                tmp_l_i := bar_index
+                bx_phase := 0
+                bx_swing_l := val_l
+                bx_swing_h := maj_h
+        else if maj_st == 1
+            if val_l < tmp_l
+                tmp_l := val_l
+                tmp_l_i := bar_index
+                has_pot_bull_minor := false
+            if not na(maj_h) and maj_h != 0 and val_h > maj_h and val_c <= maj_h
+                maj_h := val_h
+                maj_h_i := bar_index
+                swept_choch := true
+            if not na(maj_h) and maj_h != 0 and val_c > maj_h
+                choch_dir := 0
+                swept_choch := false
+                t1_h := 0
+                t1_l := 0
+                t1_i := 0
+                d1_h := 0
+                d1_l := 0
+                d1_i := 0
+                t2_h := 0
+                t2_l := 0
+                t2_i := 0
+                maj_tr := -1
+                maj_st := 0
+                bos_i := bar_index
+                bos_count := 0
+                draw_major_line(anc_i, anc_v, tmp_h_i, tmp_h, c_bull)
+                array.clear(st_h_val)
+                array.clear(st_h_idx)
+                anc_i := tmp_h_i
+                anc_v := tmp_h
+                tmp_l := val_l
+                tmp_l_i := bar_index
+                maj_h := tmp_h
+                maj_h_i := tmp_h_i
+                bx_phase := 0
+                bx_swing_l := tmp_h
+                bx_swing_h := val_l
+                has_pot_bear_minor := false
+
+    else if maj_tr == -1
+        if maj_st == 0
+            if val_l < tmp_l
+                tmp_l := val_l
+                tmp_l_i := bar_index
+                has_pot_bull_minor := false
+            if not na(maj_h) and maj_h != 0 and val_h > maj_h and val_c <= maj_h
+                maj_h := val_h
+                maj_h_i := bar_index
+            if not na(maj_h) and maj_h != 0 and val_c > maj_h
+                choch_dir := 0
+                swept_choch := false
+                t1_h := 0
+                t1_l := 0
+                t1_i := 0
+                d1_h := 0
+                d1_l := 0
+                d1_i := 0
+                t2_h := 0
+                t2_l := 0
+                t2_i := 0
+                maj_l := tmp_l
+                maj_l_i := tmp_l_i
+                bos_i := bar_index
+                bos_count += 1
+                draw_major_line(anc_i, anc_v, maj_l_i, maj_l, c_bear)
+                array.clear(st_h_val)
+                array.clear(st_h_idx)
+                maj_st := 1
+                anc_i := maj_l_i
+                anc_v := maj_l
+                tmp_h := val_h
+                tmp_h_i := bar_index
+                bx_phase := 0
+                bx_swing_l := maj_l
+                bx_swing_h := val_h
+        else if maj_st == 1
+            if val_h > tmp_h
+                tmp_h := val_h
+                tmp_h_i := bar_index
+                has_pot_bear_minor := false
+            if not na(maj_l) and val_l < maj_l and val_c >= maj_l
+                maj_l := val_l
+                maj_l_i := bar_index
+            if not na(maj_l) and val_c < maj_l
+                choch_dir := 0
+                swept_choch := false
+                t1_h := 0
+                t1_l := 0
+                t1_i := 0
+                d1_h := 0
+                d1_l := 0
+                d1_i := 0
+                t2_h := 0
+                t2_l := 0
+                t2_i := 0
+                maj_h := tmp_h
+                maj_h_i := tmp_h_i
+                bos_i := bar_index
+                bos_count += 1
+                draw_major_line(anc_i, anc_v, maj_h_i, maj_h, c_bear)
+                array.clear(st_l_val)
+                array.clear(st_l_idx)
+                maj_st := 0
+                anc_i := maj_h_i
+                anc_v := maj_h
+                tmp_l := val_l
+                tmp_l_i := bar_index
+                bx_phase := 0
+                bx_swing_l := val_l
+                bx_swing_h := maj_h
+            if not na(maj_h) and maj_h != 0 and val_h > maj_h and val_c <= maj_h
+                maj_h := val_h
+                maj_h_i := bar_index
+                swept_choch := true
+            if not na(maj_h) and maj_h != 0 and val_c > maj_h
+                choch_dir := 0
+                swept_choch := false
+                t1_h := 0
+                t1_l := 0
+                t1_i := 0
+                d1_h := 0
+                d1_l := 0
+                d1_i := 0
+                t2_h := 0
+                t2_l := 0
+                t2_i := 0
+                maj_tr := 1
+                maj_st := 0
+                bos_i := bar_index
+                bos_count := 0
+                draw_major_line(anc_i, anc_v, tmp_l_i, tmp_l, c_bear)
+                array.clear(st_h_val)
+                array.clear(st_h_idx)
+                anc_i := tmp_l_i
+                anc_v := tmp_l
+                tmp_h := val_h
+                tmp_h_i := bar_index
+                maj_l := tmp_l
+                maj_l_i := tmp_l_i
+                bx_phase := 0
+                bx_swing_l := tmp_l
+                bx_swing_h := val_h
+                has_pot_bull_minor := false
+
+var line live_leg_line = line.new(na, na, na, na, color=c_min, style=line.style_solid)
+if barstate.islast
+    if min_tr == 1
+        if i_showMin
+            line.set_xy1(live_leg_line, lp_i, lp_p)
+            line.set_xy2(live_leg_line, min_h_i, min_h)
+    else
+        if i_showMin
+            line.set_xy1(live_leg_line, lp_i, lp_p)
+            line.set_xy2(live_leg_line, min_l_i, min_l)
