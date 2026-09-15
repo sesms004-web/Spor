@@ -260,6 +260,12 @@ struct SState
 SState g_state_hist;
 SState g_state_curr;
 
+
+int g_min_counter = 0;
+int g_maj_counter = 0;
+int g_choch_counter = 0;
+int g_box_counter = 0;
+
 bool g_is_live = false;
 
 // --- Helper Functions ---
@@ -279,38 +285,44 @@ void DrawLine(string name, datetime time1, double price1, datetime time2, double
    ObjectSetInteger(0, name, OBJPROP_STYLE, style);
    ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, ray_right);
    ObjectSetInteger(0, name, OBJPROP_BACK, true);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, false);
    if(g_is_live) AddLiveObject(name);
   }
 
 void DrawMinorLine(datetime time1, double price1, datetime time2, double price2)
   {
    if(!i_showMin) return;
-   string name = "str_min_" + IntegerToString((int)time2);
+   if(!g_is_live) g_min_counter = (g_min_counter + 1) % 500;
+   string name = "str_min_" + IntegerToString(g_is_live ? 999999 : g_min_counter);
    DrawLine(name, time1, price1, time2, price2, c_min, 1, STYLE_SOLID);
   }
 
 void DrawMajorLine(datetime time1, double price1, datetime time2, double price2, color clr)
   {
    if(!i_showMaj) return;
-   string name = "str_maj_" + IntegerToString((int)time2);
+   if(!g_is_live) g_maj_counter = (g_maj_counter + 1) % 500;
+   string name = "str_maj_" + IntegerToString(g_is_live ? 999999 : g_maj_counter);
    DrawLine(name, time1, price1, time2, price2, clr, 2, STYLE_SOLID);
   }
 
 void DrawChochLine(datetime time1, double price1, datetime time2, double price2, bool is_strong, datetime path_t1, double path_p1)
   {
    if(!i_showChoch) return;
-   string name = "str_choch_" + IntegerToString((int)time2);
+   if(!g_is_live) g_choch_counter = (g_choch_counter + 1) % 500;
+   string name = "str_choch_" + IntegerToString(g_is_live ? 999999 : g_choch_counter);
    color clr = is_strong ? c_chochStrong : c_chochWeak;
    DrawLine(name, time1, price1, time2, price2, clr, 3, STYLE_SOLID);
 
-   string path_name = "str_choch_path_" + IntegerToString((int)time2);
+   string path_name = "str_choch_path_" + IntegerToString(g_is_live ? 999999 : g_choch_counter);
    DrawLine(path_name, path_t1, path_p1, time1, price1, c_chochPath, 1, STYLE_DOT);
   }
 
 string DrawBox(datetime time1, double price1, datetime time2, double price2, color border_clr, color bg_clr)
   {
-   string name = "bx_" + IntegerToString((int)time1) + "_" + DoubleToString(price1, 5) + "_" + DoubleToString(price2, 5);
+   if(!g_is_live) g_box_counter = (g_box_counter + 1) % 1500;
+   static int live_box_sub = 0;
+   if(g_is_live) live_box_sub++;
+   string name = "bx_" + IntegerToString(g_is_live ? (999000 + (live_box_sub%1000)) : g_box_counter);
    if(ObjectFind(0, name) < 0)
       ObjectCreate(0, name, OBJ_RECTANGLE, 0, time1, price1, time2, price2);
    else
@@ -323,7 +335,7 @@ string DrawBox(datetime time1, double price1, datetime time2, double price2, col
    ObjectSetInteger(0, name, OBJPROP_COLOR, border_clr);
    ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg_clr);
    ObjectSetInteger(0, name, OBJPROP_BACK, true);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, false);
    ObjectSetInteger(0, name, OBJPROP_FILL, true);
    if(g_is_live) AddLiveObject(name);
    return name;
@@ -425,6 +437,11 @@ int OnCalculate(const int rates_total,
       g_state_hist.st_h_idx.Clear();
       g_state_hist.st_l_val.Clear();
       g_state_hist.st_l_idx.Clear();
+
+      g_min_counter = 0;
+      g_maj_counter = 0;
+      g_choch_counter = 0;
+      g_box_counter = 0;
 
       limit = i_baseAvgLookback + i_baseMaxCandles + 1;
      }
