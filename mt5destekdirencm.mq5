@@ -30,7 +30,7 @@ input int i_baseAvgLookback = 10; // Base Avg Lookback
 input bool i_showBox = true; // Show Box
 input bool i_boxTrendFilter = true; // Trend Filter for Boxes
 input double i_minBreakoutPct = 50.0; // Min Breakout Distance %
-input int i_minBaseHeightTicks = 10; // Min Base Height (Ticks)
+input int i_minBaseHeightTicks = 0; // Min Base Height (Ticks)
 input double i_maxBoxPct = 20.0; // Max Box Pct
 input double i_weakZonePct = 50.0; // Weak Zone Pct
 input color c_boxBull = clrBlue; // Bull Box Color
@@ -292,34 +292,40 @@ void DrawLine(string name, datetime time1, double price1, datetime time2, double
 void DrawMinorLine(datetime time1, double price1, datetime time2, double price2)
   {
    if(!i_showMin) return;
-   if(!g_is_live) g_min_counter = (g_min_counter + 1) % 500;
-   string name = "str_min_" + IntegerToString(g_is_live ? 999999 : g_min_counter);
+   if(!g_is_live) g_min_counter = (g_min_counter + 1) % 5000;
+   static int live_min_sub = 0;
+   if(g_is_live) live_min_sub++;
+   string name = "str_min_" + IntegerToString(g_is_live ? (999000 + (live_min_sub%1000)) : g_min_counter);
    DrawLine(name, time1, price1, time2, price2, c_min, 1, STYLE_SOLID);
   }
 
 void DrawMajorLine(datetime time1, double price1, datetime time2, double price2, color clr)
   {
    if(!i_showMaj) return;
-   if(!g_is_live) g_maj_counter = (g_maj_counter + 1) % 500;
-   string name = "str_maj_" + IntegerToString(g_is_live ? 999999 : g_maj_counter);
+   if(!g_is_live) g_maj_counter = (g_maj_counter + 1) % 5000;
+   static int live_maj_sub = 0;
+   if(g_is_live) live_maj_sub++;
+   string name = "str_maj_" + IntegerToString(g_is_live ? (999000 + (live_maj_sub%1000)) : g_maj_counter);
    DrawLine(name, time1, price1, time2, price2, clr, 2, STYLE_SOLID);
   }
 
 void DrawChochLine(datetime time1, double price1, datetime time2, double price2, bool is_strong, datetime path_t1, double path_p1)
   {
    if(!i_showChoch) return;
-   if(!g_is_live) g_choch_counter = (g_choch_counter + 1) % 500;
-   string name = "str_choch_" + IntegerToString(g_is_live ? 999999 : g_choch_counter);
+   if(!g_is_live) g_choch_counter = (g_choch_counter + 1) % 5000;
+   static int live_choch_sub = 0;
+   if(g_is_live) live_choch_sub++;
+   string name = "str_choch_" + IntegerToString(g_is_live ? (999000 + (live_choch_sub%1000)) : g_choch_counter);
    color clr = is_strong ? c_chochStrong : c_chochWeak;
    DrawLine(name, time1, price1, time2, price2, clr, 3, STYLE_SOLID);
 
-   string path_name = "str_choch_path_" + IntegerToString(g_is_live ? 999999 : g_choch_counter);
+   string path_name = "str_choch_path_" + IntegerToString(g_is_live ? (999000 + (live_choch_sub%1000)) : g_choch_counter);
    DrawLine(path_name, path_t1, path_p1, time1, price1, c_chochPath, 1, STYLE_DOT);
   }
 
 string DrawBox(datetime time1, double price1, datetime time2, double price2, color border_clr, color bg_clr)
   {
-   if(!g_is_live) g_box_counter = (g_box_counter + 1) % 1500;
+   if(!g_is_live) g_box_counter = (g_box_counter + 1) % 15000;
    static int live_box_sub = 0;
    if(g_is_live) live_box_sub++;
    string name = "bx_" + IntegerToString(g_is_live ? (999000 + (live_box_sub%1000)) : g_box_counter);
@@ -443,7 +449,7 @@ int OnCalculate(const int rates_total,
       g_choch_counter = 0;
       g_box_counter = 0;
 
-      limit = i_baseAvgLookback + i_baseMaxCandles + 1;
+      limit = 1;
      }
 
    ClearLiveObjects();
@@ -509,9 +515,11 @@ int OnCalculate(const int rates_total,
               }
 
             // Create
-            double sum_body = 0;
-            for(int j=1; j<=i_baseAvgLookback; j++)
-               sum_body += MathAbs(close[i-j] - open[i-j]);
+            if(i > i_baseAvgLookback + i_baseMaxCandles)
+            {
+               double sum_body = 0;
+               for(int j=1; j<=i_baseAvgLookback; j++)
+                  sum_body += MathAbs(close[i-j] - open[i-j]);
             double avg_body = sum_body / i_baseAvgLookback;
 
             if(avg_body > 0)
@@ -590,6 +598,7 @@ int OnCalculate(const int rates_total,
                     }
                  }
               }
+            }
            }
 
          // Pullback Pct calculation
